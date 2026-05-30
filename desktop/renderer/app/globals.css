@@ -1,0 +1,39 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #05070b;
+  color: #f8fafc;
+  overflow: hidden;
+}
+
+.drag-region {
+  -webkit-app-region: drag;
+}
+
+.no-drag {
+  -webkit-app-region: no-drag;
+}
+
+.rail-lines {
+  background-image:
+    linear-gradient(rgba(255,255,255,.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.045) 1px, transparent 1px),
+    linear-gradient(120deg, rgba(239,59,45,.12), transparent 36%, rgba(57,199,255,.09));
+  background-size: 48px 48px, 48px 48px, 100% 100%;
+}
+
+.launcher-panel {
+  border: 1px solid rgba(255,255,255,.08);
+  background: linear-gradient(145deg, rgba(12,21,36,.96), rgba(5,7,11,.96));
+}

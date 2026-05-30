@@ -1,0 +1,49 @@
+from django.urls import include, path
+from rest_framework.routers import DefaultRouter
+
+from .views import (
+    AssetViewSet,
+    CategoryViewSet,
+    DownloadListView,
+    LoginView,
+    OrderCreateView,
+    PaymentVerifyView,
+    PurchaseListView,
+    RegisterView,
+    ReviewCreateView,
+    WishlistView,
+    AdminAssetViewSet,
+    AdminCategoryViewSet,
+    AdminOrderViewSet,
+    AdminReviewViewSet,
+    AdminUserViewSet,
+    admin_settings,
+    admin_stats,
+    asset_download_by_id,
+    current_user,
+)
+
+router = DefaultRouter()
+router.register("assets", AssetViewSet, basename="asset")
+router.register("categories", CategoryViewSet, basename="category")
+router.register("admin/assets", AdminAssetViewSet, basename="admin-asset")
+router.register("admin/categories", AdminCategoryViewSet, basename="admin-category")
+router.register("admin/orders", AdminOrderViewSet, basename="admin-order")
+router.register("admin/users", AdminUserViewSet, basename="admin-user")
+router.register("admin/reviews", AdminReviewViewSet, basename="admin-review")
+
+urlpatterns = [
+    path("assets/<int:pk>/download/", asset_download_by_id, name="asset-download-by-id"),
+    path("", include(router.urls)),
+    path("auth/register/", RegisterView.as_view(), name="register"),
+    path("auth/login/", LoginView.as_view(), name="login"),
+    path("auth/me/", current_user, name="current-user"),
+    path("orders/create/", OrderCreateView.as_view(), name="order-create"),
+    path("payments/verify/", PaymentVerifyView.as_view(), name="payment-verify"),
+    path("user/purchases/", PurchaseListView.as_view(), name="purchases"),
+    path("user/downloads/", DownloadListView.as_view(), name="downloads"),
+    path("reviews/", ReviewCreateView.as_view(), name="review-create"),
+    path("wishlist/", WishlistView.as_view(), name="wishlist"),
+    path("admin/stats/", admin_stats, name="admin-stats"),
+    path("admin/settings/", admin_settings, name="admin-settings"),
+]

@@ -1,0 +1,14 @@
+{
+  "expo": {
+    "name": "MSTS-GJS Store",
+    "slug": "msts-gjs-production-store",
+    "scheme": "mstsgjs",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "assetBundlePatterns": ["**/*"],
+    "ios": { "supportsTablet": true },
+    "android": { "adaptiveIcon": { "backgroundColor": "#05070b" } },
+    "plugins": ["expo-router"]
+  }
+}

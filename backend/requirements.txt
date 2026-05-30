@@ -1,0 +1,14 @@
+Django>=4.2
+gunicorn
+psycopg2-binary
+djangorestframework
+django-cors-headers
+django-environ
+djangorestframework-simplejwt
+whitenoise
+cloudinary
+boto3
+django-storages
+razorpay
+stripe
+Pillow

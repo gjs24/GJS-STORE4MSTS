@@ -1,0 +1,60 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  background: #05070b;
+  color: #f8fafc;
+}
+
+.rail-grid {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  background-size: 44px 44px;
+}
+
+.cinematic-panel {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(145deg, rgba(19, 34, 56, 0.9), rgba(5, 7, 11, 0.96));
+}
+
+.admin-rail-bg {
+  background:
+    radial-gradient(circle at 18% 12%, rgba(239, 59, 45, 0.20), transparent 28%),
+    radial-gradient(circle at 88% 22%, rgba(255, 138, 31, 0.12), transparent 26%),
+    linear-gradient(135deg, #05070b 0%, #071321 46%, #05070b 100%);
+}
+
+.admin-grid-bg {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+    linear-gradient(120deg, rgba(239, 59, 45, 0.08), transparent 44%, rgba(255, 138, 31, 0.08));
+  background-size: 42px 42px, 42px 42px, 100% 100%;
+}
+
+.glass-card {
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: linear-gradient(145deg, rgba(12, 21, 36, 0.72), rgba(5, 7, 11, 0.78));
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.34);
+  backdrop-filter: blur(18px);
+}
+
+.red-glow {
+  box-shadow: 0 0 34px rgba(239, 59, 45, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.14);
+}
+
+@keyframes rail-drift {
+  0% { transform: translate3d(0, 0, 0); opacity: 0.5; }
+  50% { opacity: 0.82; }
+  100% { transform: translate3d(-42px, 42px, 0); opacity: 0.5; }
+}
+
+.animated-rail-layer {
+  animation: rail-drift 18s linear infinite;
+}

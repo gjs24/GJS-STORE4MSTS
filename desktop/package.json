@@ -1,0 +1,78 @@
+{
+  "name": "gjs-railforge-launcher",
+  "version": "1.0.0",
+  "private": true,
+  "description": "GJS RailForge Launcher desktop store for MSTS and Open Rails assets.",
+  "author": "GJS Production",
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "dev": "concurrently \"next dev renderer -p 3010\" \"wait-on http://localhost:3010 && cross-env ELECTRON_RENDERER_URL=http://localhost:3010 electron .\"",
+    "build:renderer": "next build renderer",
+    "build:electron": "tsc -p tsconfig.electron.json",
+    "build": "npm run build:renderer && npm run build:electron",
+    "dist": "npm run build && electron-builder --win nsis",
+    "dist:portable": "npm run build && electron-builder --win portable",
+    "lint": "next lint renderer"
+  },
+  "dependencies": {
+    "electron-updater": "^6.3.9",
+    "lucide-react": "^0.468.0",
+    "next": "14.2.5",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.10",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "autoprefixer": "^10.4.19",
+    "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3",
+    "electron": "^31.2.1",
+    "electron-builder": "^24.13.3",
+    "eslint": "^8.57.0",
+    "eslint-config-next": "14.2.5",
+    "postcss": "^8.4.39",
+    "tailwindcss": "^3.4.4",
+    "typescript": "^5.5.3",
+    "wait-on": "^7.2.0"
+  },
+  "build": {
+    "appId": "com.gjsproduction.railforge",
+    "productName": "GJS RailForge Launcher",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist-electron/**/*",
+      "renderer/out/**/*",
+      "renderer/public/**/*",
+      "renderer/package.json",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "assets",
+        "to": "assets"
+      }
+    ],
+    "win": {
+      "target": ["nsis"],
+      "artifactName": "GJS-RailForge-Launcher-${version}-Setup.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "GJS RailForge Launcher"
+    },
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://downloads.gjsproduction.example/railforge/"
+      }
+    ]
+  }
+}
