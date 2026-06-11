@@ -96,6 +96,7 @@ export default function AdminAssetsPage() {
               <span className="text-xs text-slate-400">v{asset.version} / {asset.simulator_type.replace("_", " ")}</span>
               <span className="mt-2 flex gap-2">
                 {asset.is_featured ? <Badge variant="warning">Featured</Badge> : null}
+                {asset.is_upcoming ? <Badge variant="muted">Upcoming</Badge> : null}
                 <Badge variant={asset.is_free ? "success" : "default"}>{asset.is_free ? "Free" : "Premium"}</Badge>
                 <Badge variant={asset.has_file ? "success" : "warning"}>{asset.has_file ? "File uploaded" : "No file"}</Badge>
               </span>

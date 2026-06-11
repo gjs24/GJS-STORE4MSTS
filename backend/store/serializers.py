@@ -79,6 +79,7 @@ class AssetListSerializer(serializers.ModelSerializer):
             "is_free",
             "is_published",
             "is_featured",
+            "is_upcoming",
             "thumbnail",
             "has_file",
             "download_count",

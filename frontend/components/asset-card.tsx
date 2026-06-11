@@ -14,7 +14,9 @@ export function AssetCard({ asset }: { asset: Asset }) {
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-black/20" />
         <span className="absolute left-3 top-3 rounded bg-black/70 px-2 py-1 text-xs text-white">{asset.simulator_type.replace("_", " ")}</span>
-        <span className="absolute right-3 top-3 rounded bg-rail-red px-2 py-1 text-xs font-semibold">{asset.is_free ? "FREE" : `INR ${asset.price}`}</span>
+        <span className="absolute right-3 top-3 rounded bg-rail-red px-2 py-1 text-xs font-semibold">
+          {asset.is_upcoming ? "COMING SOON" : asset.is_free ? "FREE" : `INR ${asset.price}`}
+        </span>
       </div>
       <div className="space-y-3 p-4">
         <div>

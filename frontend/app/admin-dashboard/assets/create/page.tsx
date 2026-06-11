@@ -36,6 +36,7 @@ export default function CreateAssetPage() {
       formData.set("is_free", String(isFree));
       formData.set("is_published", String(formData.get("is_published") === "on"));
       formData.set("is_featured", String(formData.get("is_featured") === "on"));
+      formData.set("is_upcoming", String(formData.get("is_upcoming") === "on"));
       if (file instanceof File && file.size === 0) {
         formData.delete("download_file");
       }
@@ -110,6 +111,11 @@ export default function CreateAssetPage() {
           <span className="text-sm text-slate-300">Preview video URL</span>
           <input name="preview_video_url" placeholder="https://youtube.com/..." className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-3" />
         </label>
+        <label className="block">
+          <span className="text-sm text-slate-300">Product card / home image</span>
+          <input name="thumbnail" type="file" accept="image/*" className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-3 text-sm" />
+          <span className="mt-1 block text-xs text-slate-500">This image appears on the home page, asset cards, and product detail hero.</span>
+        </label>
         <label className="flex items-center gap-3 rounded border border-white/10 bg-black/30 px-3 py-3">
           <input name="is_published" type="checkbox" defaultChecked />
           <span>Visible to users</span>
@@ -117,6 +123,10 @@ export default function CreateAssetPage() {
         <label className="flex items-center gap-3 rounded border border-white/10 bg-black/30 px-3 py-3">
           <input name="is_featured" type="checkbox" />
           <span>Feature on homepage</span>
+        </label>
+        <label className="flex items-center gap-3 rounded border border-white/10 bg-black/30 px-3 py-3">
+          <input name="is_upcoming" type="checkbox" />
+          <span>Upcoming product / coming soon</span>
         </label>
         <textarea name="requirements" placeholder="Requirements" rows={4} className="rounded border border-white/10 bg-black/40 px-3 py-3" />
         <textarea name="installation_steps" placeholder="Installation steps" rows={4} className="rounded border border-white/10 bg-black/40 px-3 py-3" />

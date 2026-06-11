@@ -67,6 +67,10 @@ export function AssetActions({ asset }: { asset: Asset }) {
   }
 
   async function handlePrimaryAction() {
+    if (asset.is_upcoming) {
+      setMessage("This product is coming soon. Downloads and checkout will open after release.");
+      return;
+    }
     if (!(await requireLogin())) return;
     setBusy(true);
     setMessage(asset.is_free ? "Preparing secure download..." : "Creating your order...");
@@ -142,7 +146,7 @@ export function AssetActions({ asset }: { asset: Asset }) {
       <div className="flex flex-wrap gap-3">
         <button onClick={handlePrimaryAction} disabled={busy} className="rounded bg-rail-red px-5 py-3 font-semibold text-white disabled:opacity-60">
           {asset.is_free || asset.can_download ? <Download className="mr-2 inline" size={18} /> : <ShoppingCart className="mr-2 inline" size={18} />}
-          {asset.is_free || asset.can_download ? "Download package" : `Buy for INR ${asset.price}`}
+          {asset.is_upcoming ? "Coming soon" : asset.is_free || asset.can_download ? "Download package" : `Buy for INR ${asset.price}`}
         </button>
         <button onClick={handleWishlist} disabled={busy} className="rounded border border-white/15 px-5 py-3 font-semibold disabled:opacity-60">
           <Heart className="mr-2 inline" size={18} /> Wishlist

@@ -30,7 +30,9 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ sl
           <div className="absolute bottom-4 left-4 flex flex-wrap gap-2 text-xs">
             <span className="rounded bg-black/75 px-3 py-2 text-white">{asset.simulator_type.replace("_", " ")}</span>
             <span className="rounded bg-black/75 px-3 py-2 text-white">{asset.file_size}</span>
-            <span className="rounded bg-rail-red px-3 py-2 font-semibold text-white">{asset.is_free ? "Free release" : `INR ${asset.price}`}</span>
+            <span className="rounded bg-rail-red px-3 py-2 font-semibold text-white">
+              {asset.is_upcoming ? "Coming soon" : asset.is_free ? "Free release" : `INR ${asset.price}`}
+            </span>
           </div>
         </div>
         <div>

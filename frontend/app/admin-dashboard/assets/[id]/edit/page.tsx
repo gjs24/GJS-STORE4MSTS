@@ -45,6 +45,7 @@ export default function EditAssetPage({ params }: { params: Promise<{ id: string
     formData.set("is_free", String(isFree));
     formData.set("is_published", String(formData.get("is_published") === "on"));
     formData.set("is_featured", String(formData.get("is_featured") === "on"));
+    formData.set("is_upcoming", String(formData.get("is_upcoming") === "on"));
 
     if (file instanceof File && file.size === 0) {
       formData.delete("download_file");
@@ -126,6 +127,13 @@ export default function EditAssetPage({ params }: { params: Promise<{ id: string
           <span className="text-sm text-slate-300">Preview video URL</span>
           <input name="preview_video_url" defaultValue={asset.preview_video_url || ""} className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-3" />
         </label>
+        <label className="block">
+          <span className="text-sm text-slate-300">Replace product card / home image</span>
+          <input name="thumbnail" type="file" accept="image/*" className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-3 text-sm" />
+          <span className="mt-1 block text-xs text-slate-500">
+            Leave empty to keep the current image. This image appears on the home page, asset cards, and product detail hero.
+          </span>
+        </label>
         <div className="grid gap-3 md:grid-cols-2">
           <label className="flex items-center gap-3 rounded border border-white/10 bg-black/30 px-3 py-3">
             <input name="is_published" type="checkbox" defaultChecked={asset.is_published !== false} />
@@ -134,6 +142,10 @@ export default function EditAssetPage({ params }: { params: Promise<{ id: string
           <label className="flex items-center gap-3 rounded border border-white/10 bg-black/30 px-3 py-3">
             <input name="is_featured" type="checkbox" defaultChecked={asset.is_featured} />
             <span>Feature on homepage</span>
+          </label>
+          <label className="flex items-center gap-3 rounded border border-white/10 bg-black/30 px-3 py-3">
+            <input name="is_upcoming" type="checkbox" defaultChecked={asset.is_upcoming} />
+            <span>Upcoming product / coming soon</span>
           </label>
         </div>
         <textarea name="requirements" defaultValue={asset.requirements || ""} placeholder="Requirements" rows={4} className="rounded border border-white/10 bg-black/40 px-3 py-3" />

@@ -187,6 +187,22 @@ Installation steps
 Download file: .zip, .rar, or .7z
 ```
 
+Set the product card/home image with:
+
+```text
+Product card / home image
+```
+
+This image appears on the home page, asset cards, and product detail page.
+
+To show a product in the home page upcoming section, enable:
+
+```text
+Upcoming product / coming soon
+```
+
+Upcoming products are visible to users but checkout and downloads are blocked until you edit the asset and turn this option off.
+
 Important: Render free service storage is not permanent. Uploaded files stored in `backend/media/` can disappear after redeploy. For real paid files, configure Cloudinary or S3.
 
 ## Useful Test URLs

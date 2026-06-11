@@ -23,6 +23,7 @@ export type Asset = {
   is_free: boolean;
   is_published?: boolean;
   is_featured: boolean;
+  is_upcoming?: boolean;
   thumbnail?: string;
   has_file?: boolean;
   download_file?: string | null;
@@ -99,6 +100,7 @@ export const fallbackAssets: Asset[] = [
     is_free: false,
     is_published: true,
     is_featured: true,
+    is_upcoming: false,
     download_count: 1240,
     average_rating: 4.8,
     review_count: 42,
@@ -120,6 +122,7 @@ export const fallbackAssets: Asset[] = [
     is_free: true,
     is_published: true,
     is_featured: true,
+    is_upcoming: false,
     download_count: 3580,
     average_rating: 4.6,
     review_count: 87
@@ -137,6 +140,7 @@ export const fallbackAssets: Asset[] = [
     is_free: false,
     is_published: true,
     is_featured: false,
+    is_upcoming: false,
     download_count: 860,
     average_rating: 4.5,
     review_count: 25

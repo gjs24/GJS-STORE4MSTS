@@ -4,7 +4,11 @@ import { AssetCard } from "@/components/asset-card";
 import { getAssets, getCategories } from "@/lib/api";
 
 export default async function HomePage() {
-  const [assets, categories] = await Promise.all([getAssets("/assets/?featured=true"), getCategories()]);
+  const [assets, upcomingAssets, categories] = await Promise.all([
+    getAssets("/assets/?featured=true"),
+    getAssets("/assets/?upcoming=true"),
+    getCategories()
+  ]);
 
   return (
     <section className="rail-grid min-h-screen">
@@ -46,6 +50,23 @@ export default async function HomePage() {
           <Link href="/assets" className="text-sm text-rail-amber">View all</Link>
         </div>
         <div className="grid gap-5 md:grid-cols-3">{assets.map((asset) => <AssetCard key={asset.id} asset={asset} />)}</div>
+      </div>
+
+      <div className="mx-auto max-w-7xl px-4 pb-12">
+        <div className="mb-6 flex items-end justify-between">
+          <div>
+            <p className="text-sm font-semibold uppercase text-rail-amber">Coming soon</p>
+            <h2 className="text-3xl font-bold">Upcoming products</h2>
+          </div>
+          <Link href="/assets?upcoming=true" className="text-sm text-rail-amber">Preview all</Link>
+        </div>
+        {upcomingAssets.length ? (
+          <div className="grid gap-5 md:grid-cols-3">{upcomingAssets.slice(0, 3).map((asset) => <AssetCard key={asset.id} asset={asset} />)}</div>
+        ) : (
+          <div className="rounded border border-white/10 bg-white/[0.03] p-5 text-sm text-slate-400">
+            No upcoming products announced yet.
+          </div>
+        )}
       </div>
 
       <div className="mx-auto max-w-7xl px-4 pb-16">

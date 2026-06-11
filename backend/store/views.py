@@ -83,6 +83,7 @@ class AssetViewSet(viewsets.ModelViewSet):
         price = self.request.query_params.get("price")
         version = self.request.query_params.get("version")
         featured = self.request.query_params.get("featured")
+        upcoming = self.request.query_params.get("upcoming")
 
         if search:
             qs = qs.filter(Q(title__icontains=search) | Q(description__icontains=search))
@@ -98,6 +99,8 @@ class AssetViewSet(viewsets.ModelViewSet):
             qs = qs.filter(version__icontains=version)
         if featured == "true":
             qs = qs.filter(is_featured=True)
+        if upcoming == "true":
+            qs = qs.filter(is_upcoming=True)
         return qs.annotate(review_count=Count("reviews", filter=Q(reviews__is_approved=True)))
 
     @action(detail=True, methods=["post"], permission_classes=[permissions.IsAuthenticated], throttle_classes=[UserRateThrottle])
@@ -112,6 +115,8 @@ class OrderCreateView(generics.CreateAPIView):
 
     def create(self, request, *args, **kwargs):
         asset = get_object_or_404(Asset, id=request.data.get("asset_id"), is_published=True)
+        if asset.is_upcoming:
+            return Response({"detail": "This asset is marked as upcoming and is not available for purchase yet."}, status=status.HTTP_400_BAD_REQUEST)
         existing_paid_order = Order.objects.filter(user=request.user, asset=asset, status=Order.Status.PAID).first()
         if existing_paid_order:
             return Response(OrderSerializer(existing_paid_order, context={"request": request}).data, status=status.HTTP_200_OK)
@@ -287,6 +292,8 @@ class AdminReviewViewSet(viewsets.ModelViewSet):
 
 
 def create_download_response(request, asset):
+    if asset.is_upcoming:
+        return Response({"detail": "This asset is marked as upcoming and is not available for download yet."}, status=status.HTTP_403_FORBIDDEN)
     allowed = asset.is_free or Order.objects.filter(user=request.user, asset=asset, status=Order.Status.PAID).exists()
     if not allowed:
         return Response({"detail": "Purchase required before downloading this asset."}, status=status.HTTP_403_FORBIDDEN)
