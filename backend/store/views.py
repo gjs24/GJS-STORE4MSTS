@@ -1,4 +1,5 @@
 import hmac
+import logging
 from pathlib import PurePath
 
 from django.conf import settings
@@ -29,6 +30,8 @@ from .serializers import (
     UserSerializer,
     WishlistSerializer,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class RegisterView(generics.CreateAPIView):
@@ -248,6 +251,36 @@ class AdminAssetViewSet(viewsets.ModelViewSet):
     def list(self, request, *args, **kwargs):
         assets = self.get_queryset().annotate(review_count=Count("reviews", filter=Q(reviews__is_approved=True)))
         return Response(AssetListSerializer(assets, many=True, context={"request": request}).data)
+
+    def create(self, request, *args, **kwargs):
+        try:
+            return super().create(request, *args, **kwargs)
+        except Exception as exc:
+            logger.exception("Admin asset upload failed")
+            return Response(
+                {"detail": f"Asset upload failed while saving files: {type(exc).__name__}. Check Cloudinary storage settings, file size, and file type."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    def update(self, request, *args, **kwargs):
+        try:
+            return super().update(request, *args, **kwargs)
+        except Exception as exc:
+            logger.exception("Admin asset update failed")
+            return Response(
+                {"detail": f"Asset update failed while saving files: {type(exc).__name__}. Check Cloudinary storage settings, file size, and file type."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    def partial_update(self, request, *args, **kwargs):
+        try:
+            return super().partial_update(request, *args, **kwargs)
+        except Exception as exc:
+            logger.exception("Admin asset update failed")
+            return Response(
+                {"detail": f"Asset update failed while saving files: {type(exc).__name__}. Check Cloudinary storage settings, file size, and file type."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
     @action(detail=True, methods=["post"])
     def feature(self, request, pk=None):
