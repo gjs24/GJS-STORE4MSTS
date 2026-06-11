@@ -4,11 +4,11 @@ import { motion } from "framer-motion";
 import { Download, TrainFront } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { railwayCards } from "@/lib/admin-dashboard-data";
+import { railwayCards, type RailwayCard } from "@/lib/admin-dashboard-data";
 import { cn } from "@/lib/utils";
 
-export function RailwayAssetCards() {
-  if (railwayCards.length === 0) {
+export function RailwayAssetCards({ assets = railwayCards }: { assets?: RailwayCard[] }) {
+  if (assets.length === 0) {
     return (
       <div className="glass-card rounded-lg p-6 text-sm text-slate-400">
         No featured assets yet. Upload products and mark them featured to show marketplace highlights.
@@ -18,7 +18,7 @@ export function RailwayAssetCards() {
 
   return (
     <div className="grid gap-4 xl:grid-cols-3">
-      {railwayCards.map((asset, index) => (
+      {assets.map((asset, index) => (
         <motion.div
           key={asset.title}
           initial={{ opacity: 0, y: 18 }}

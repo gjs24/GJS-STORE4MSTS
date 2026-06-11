@@ -8,18 +8,18 @@ import { AdminLayout } from "@/components/admin-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { adminDelete, adminGet, adminPatch, adminPost } from "@/lib/admin-api";
-import { fallbackAssets, type Asset } from "@/lib/api";
+import type { Asset } from "@/lib/api";
 
 type AssetFilter = "all" | "published" | "hidden" | "free" | "premium" | "featured";
 
 export default function AdminAssetsPage() {
-  const [assets, setAssets] = useState<Asset[]>(fallbackAssets);
+  const [assets, setAssets] = useState<Asset[]>([]);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<AssetFilter>("all");
   const [message, setMessage] = useState("");
 
   useEffect(() => {
-    adminGet<Asset[]>("/admin/assets/", fallbackAssets).then(setAssets);
+    adminGet<Asset[]>("/admin/assets/", []).then(setAssets);
   }, []);
 
   const filteredAssets = useMemo(() => {
@@ -88,6 +88,7 @@ export default function AdminAssetsPage() {
         <div className="grid gap-2 bg-white/10 p-3 text-xs uppercase text-slate-400 md:grid-cols-[1.4fr_120px_120px_120px_130px_190px]">
           <span>Asset</span><span>Category</span><span>Price</span><span>Visibility</span><span>Downloads</span><span>Actions</span>
         </div>
+        {filteredAssets.length === 0 ? <div className="p-5 text-sm text-slate-400">No assets yet. Create your first downloadable product.</div> : null}
         {filteredAssets.map((asset) => (
           <div key={asset.id} className="grid items-center gap-2 border-t border-white/10 p-4 text-sm md:grid-cols-[1.4fr_120px_120px_120px_130px_190px]">
             <span>

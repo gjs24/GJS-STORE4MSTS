@@ -4,21 +4,13 @@ import { Download, Gauge, HardDrive, ShieldCheck, type LucideIcon } from "lucide
 import { AdminLoginNote } from "@/components/admin-login-note";
 import { AdminLayout } from "@/components/admin-table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
 const downloadStats: Array<[string, string, LucideIcon]> = [
-  ["Active Downloads", "128", Download],
-  ["Bandwidth Today", "842 GB", Gauge],
-  ["Cache Stored", "2.8 TB", HardDrive],
-  ["Verified Files", "98.7%", ShieldCheck]
-];
-
-const downloadRows = [
-  { asset: "WAP-7 Locomotive", user: "Aarav Sharma", size: "485 MB", progress: 100, status: "Completed" },
-  { asset: "Bhopal-Jabalpur Route", user: "Rohan Verma", size: "1.8 GB", progress: 64, status: "Downloading" },
-  { asset: "ICF Coach Pack", user: "Meera Nair", size: "340 MB", progress: 100, status: "Verified" },
-  { asset: "Premium Horn Sounds", user: "Kabir Singh", size: "160 MB", progress: 41, status: "Paused" }
+  ["Active Downloads", "0", Download],
+  ["Bandwidth Today", "0 GB", Gauge],
+  ["Cache Stored", "0 GB", HardDrive],
+  ["Verified Files", "0", ShieldCheck]
 ];
 
 export default function AdminDownloadsPage() {
@@ -41,23 +33,10 @@ export default function AdminDownloadsPage() {
           <CardTitle>Download Queue</CardTitle>
           <Button variant="secondary" size="sm">Export logs</Button>
         </CardHeader>
-        <CardContent className="space-y-4">
-          {downloadRows.map((row) => (
-            <div key={`${row.asset}-${row.user}`} className="rounded border border-white/10 bg-white/[0.03] p-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <p className="font-bold">{row.asset}</p>
-                  <p className="text-sm text-slate-400">{row.user} / {row.size}</p>
-                </div>
-                <Badge variant={row.status === "Completed" || row.status === "Verified" ? "success" : row.status === "Paused" ? "warning" : "default"}>
-                  {row.status}
-                </Badge>
-              </div>
-              <div className="mt-4 h-2 overflow-hidden rounded bg-black/45">
-                <div className="h-full rounded bg-gradient-to-r from-rail-red to-rail-amber" style={{ width: `${row.progress}%` }} />
-              </div>
-            </div>
-          ))}
+        <CardContent>
+          <div className="rounded border border-white/10 bg-white/[0.03] p-5 text-sm text-slate-500">
+            No download activity yet. Customer download logs will appear after users download assets.
+          </div>
         </CardContent>
       </Card>
     </AdminLayout>

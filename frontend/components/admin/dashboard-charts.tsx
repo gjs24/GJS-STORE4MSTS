@@ -17,7 +17,7 @@ import {
   YAxis
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { orderStatus, salesOverview } from "@/lib/admin-dashboard-data";
+import { orderStatus, salesOverview, type OrderStatusPoint, type SalesPoint } from "@/lib/admin-dashboard-data";
 
 const tooltipStyle = {
   background: "rgba(5,7,11,.94)",
@@ -26,7 +26,7 @@ const tooltipStyle = {
   color: "#fff"
 };
 
-export function SalesOverviewChart() {
+export function SalesOverviewChart({ data = salesOverview }: { data?: SalesPoint[] }) {
   return (
     <Card className="min-h-[390px]">
       <CardHeader>
@@ -37,10 +37,10 @@ export function SalesOverviewChart() {
       </CardHeader>
       <CardContent className="h-[310px]">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={salesOverview}>
+          <LineChart data={data}>
             <CartesianGrid stroke="rgba(255,255,255,.07)" vertical={false} />
             <XAxis dataKey="month" stroke="#64748b" tickLine={false} axisLine={false} />
-            <YAxis stroke="#64748b" tickLine={false} axisLine={false} />
+            <YAxis stroke="#64748b" tickLine={false} axisLine={false} allowDecimals={false} />
             <Tooltip contentStyle={tooltipStyle} />
             <Line type="monotone" dataKey="sales" stroke="#ef3b2d" strokeWidth={3} dot={false} />
             <Line type="monotone" dataKey="revenue" stroke="#ff8a1f" strokeWidth={3} dot={false} />
@@ -51,7 +51,10 @@ export function SalesOverviewChart() {
   );
 }
 
-export function OrdersDonutChart() {
+export function OrdersDonutChart({ data = orderStatus }: { data?: OrderStatusPoint[] }) {
+  const total = data.reduce((sum, item) => sum + item.value, 0);
+  const chartData = total ? data : [{ name: "No orders", value: 1, color: "#334155" }];
+
   return (
     <Card className="min-h-[390px]">
       <CardHeader>
@@ -63,14 +66,14 @@ export function OrdersDonutChart() {
       <CardContent className="h-[310px]">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
-            <Pie data={orderStatus} dataKey="value" nameKey="name" innerRadius={72} outerRadius={112} paddingAngle={4}>
-              {orderStatus.map((entry) => <Cell key={entry.name} fill={entry.color} />)}
+            <Pie data={chartData} dataKey="value" nameKey="name" innerRadius={72} outerRadius={112} paddingAngle={4}>
+              {chartData.map((entry) => <Cell key={entry.name} fill={entry.color} />)}
             </Pie>
             <Tooltip contentStyle={tooltipStyle} />
           </PieChart>
         </ResponsiveContainer>
         <div className="-mt-10 grid grid-cols-3 gap-2 text-center text-xs text-slate-400">
-          {orderStatus.map((item) => (
+          {data.map((item) => (
             <div key={item.name}>
               <span className="mx-auto mb-1 block h-2 w-2 rounded-full" style={{ backgroundColor: item.color }} />
               {item.name} {item.value}%
@@ -82,7 +85,7 @@ export function OrdersDonutChart() {
   );
 }
 
-export function DownloadsAnalyticsChart() {
+export function DownloadsAnalyticsChart({ data = salesOverview }: { data?: SalesPoint[] }) {
   return (
     <Card>
       <CardHeader>
@@ -93,7 +96,7 @@ export function DownloadsAnalyticsChart() {
       </CardHeader>
       <CardContent className="h-[270px]">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={salesOverview}>
+          <AreaChart data={data}>
             <defs>
               <linearGradient id="downloadsGradient" x1="0" x2="0" y1="0" y2="1">
                 <stop offset="5%" stopColor="#39c7ff" stopOpacity={0.45} />
@@ -102,7 +105,7 @@ export function DownloadsAnalyticsChart() {
             </defs>
             <CartesianGrid stroke="rgba(255,255,255,.07)" vertical={false} />
             <XAxis dataKey="month" stroke="#64748b" tickLine={false} axisLine={false} />
-            <YAxis stroke="#64748b" tickLine={false} axisLine={false} />
+            <YAxis stroke="#64748b" tickLine={false} axisLine={false} allowDecimals={false} />
             <Tooltip contentStyle={tooltipStyle} />
             <Area type="monotone" dataKey="downloads" stroke="#39c7ff" fill="url(#downloadsGradient)" strokeWidth={3} />
           </AreaChart>
@@ -112,7 +115,7 @@ export function DownloadsAnalyticsChart() {
   );
 }
 
-export function MonthlyRevenueChart() {
+export function MonthlyRevenueChart({ data = salesOverview }: { data?: SalesPoint[] }) {
   return (
     <Card>
       <CardHeader>
@@ -123,10 +126,10 @@ export function MonthlyRevenueChart() {
       </CardHeader>
       <CardContent className="h-[270px]">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={salesOverview}>
+          <BarChart data={data}>
             <CartesianGrid stroke="rgba(255,255,255,.07)" vertical={false} />
             <XAxis dataKey="month" stroke="#64748b" tickLine={false} axisLine={false} />
-            <YAxis stroke="#64748b" tickLine={false} axisLine={false} />
+            <YAxis stroke="#64748b" tickLine={false} axisLine={false} allowDecimals={false} />
             <Tooltip contentStyle={tooltipStyle} />
             <Bar dataKey="revenue" radius={[6, 6, 0, 0]} fill="#ff8a1f" />
           </BarChart>

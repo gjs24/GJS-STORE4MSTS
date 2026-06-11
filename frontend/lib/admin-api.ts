@@ -1,6 +1,6 @@
 "use client";
 
-import { API_URL, fallbackAssets, type Asset } from "./api";
+import { API_URL, type Asset } from "./api";
 
 export type AdminStats = {
   total_users: number;
@@ -121,10 +121,10 @@ export const fallbackStats: AdminStats = {
   total_downloads: 0,
   total_sales: 0,
   latest_orders: [],
-  asset_count: fallbackAssets.length,
+  asset_count: 0,
   review_count: 0,
   pending_orders: 0,
-  featured_assets: fallbackAssets.filter((asset) => asset.is_featured).length,
-  free_assets: fallbackAssets.filter((asset) => asset.is_free).length,
-  premium_assets: fallbackAssets.filter((asset) => !asset.is_free).length
+  featured_assets: 0,
+  free_assets: 0,
+  premium_assets: 0
 };

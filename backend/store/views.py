@@ -292,6 +292,11 @@ def create_download_response(request, asset):
         return Response({"detail": "Purchase required before downloading this asset."}, status=status.HTTP_403_FORBIDDEN)
     if not asset.download_file:
         return Response({"detail": "Download file is not available yet."}, status=status.HTTP_404_NOT_FOUND)
+    if not asset.download_file.storage.exists(asset.download_file.name):
+        return Response(
+            {"detail": "Download file is missing from storage. Please re-upload this asset file from the admin dashboard."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
 
     DownloadLog.objects.create(
         user=request.user,

@@ -1,6 +1,8 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
+import { BadgeIndianRupee, Boxes, Download, Eye, ShoppingCart, Users } from "lucide-react";
 import { AdminLoginNote } from "@/components/admin-login-note";
 import { AdminLayout } from "@/components/admin-table";
 import {
@@ -15,9 +17,131 @@ import { QuickActions } from "@/components/admin/quick-actions";
 import { RailwayAssetCards } from "@/components/admin/railway-asset-cards";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { metrics } from "@/lib/admin-dashboard-data";
+import { adminGet, fallbackStats, type AdminOrder, type AdminStats, type AdminUser } from "@/lib/admin-api";
+import { salesOverview, type AdminOrderRow, type DashboardMetric, type RailwayCard, type SalesPoint, type TopAsset, type UserRow } from "@/lib/admin-dashboard-data";
+import type { Asset } from "@/lib/api";
+
+function formatNumber(value: number) {
+  return new Intl.NumberFormat("en-IN").format(value);
+}
+
+function formatMoney(value: string | number) {
+  return `INR ${new Intl.NumberFormat("en-IN").format(Number(value) || 0)}`;
+}
+
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat("en-IN", { day: "2-digit", month: "short" }).format(new Date(value));
+}
+
+function orderStatusLabel(status: AdminOrder["status"]): AdminOrderRow["status"] {
+  if (status === "PAID") return "Paid";
+  if (status === "PENDING") return "Pending";
+  return "Failed";
+}
+
+function monthIndex(value: string) {
+  return new Date(value).getMonth();
+}
 
 export default function AdminDashboardPage() {
+  const [stats, setStats] = useState<AdminStats>(fallbackStats);
+  const [orders, setOrders] = useState<AdminOrder[]>([]);
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [assets, setAssets] = useState<Asset[]>([]);
+
+  useEffect(() => {
+    Promise.all([
+      adminGet<AdminStats>("/admin/stats/", fallbackStats),
+      adminGet<AdminOrder[]>("/admin/orders/", []),
+      adminGet<AdminUser[]>("/admin/users/", []),
+      adminGet<Asset[]>("/admin/assets/", [])
+    ]).then(([nextStats, nextOrders, nextUsers, nextAssets]) => {
+      setStats(nextStats);
+      setOrders(nextOrders);
+      setUsers(nextUsers);
+      setAssets(nextAssets);
+    });
+  }, []);
+
+  const metrics = useMemo<DashboardMetric[]>(() => [
+    { label: "Total Users", value: stats.total_users, displayValue: formatNumber(stats.total_users), change: stats.total_users ? "Live user count" : "Start phase", tone: "cyan", icon: Users },
+    { label: "Total Orders", value: orders.length, displayValue: formatNumber(orders.length), change: orders.length ? "Live orders" : "No orders yet", tone: "amber", icon: ShoppingCart },
+    { label: "Total Sales", value: Number(stats.total_sales) || 0, displayValue: formatMoney(stats.total_sales), change: Number(stats.total_sales) ? "Paid revenue" : "No revenue yet", tone: "red", icon: BadgeIndianRupee },
+    { label: "Total Downloads", value: stats.total_downloads, displayValue: formatNumber(stats.total_downloads), change: stats.total_downloads ? "Live downloads" : "No downloads yet", tone: "emerald", icon: Download },
+    { label: "Total Assets", value: stats.asset_count, displayValue: formatNumber(stats.asset_count), change: stats.asset_count ? `${stats.featured_assets} featured` : "No assets yet", tone: "amber", icon: Boxes },
+    { label: "Page Views", value: 0, displayValue: "0", change: "Not tracked", tone: "cyan", icon: Eye }
+  ], [orders.length, stats]);
+
+  const monthlyData = useMemo<SalesPoint[]>(() => {
+    const months = salesOverview.map((point) => ({ ...point }));
+    orders.forEach((order) => {
+      const index = monthIndex(order.created_at);
+      if (index >= 0 && months[index]) {
+        months[index].sales += 1;
+        if (order.status === "PAID") {
+          months[index].revenue += Number(order.amount) || 0;
+        }
+      }
+    });
+    if (stats.total_downloads && months[new Date().getMonth()]) {
+      months[new Date().getMonth()].downloads = stats.total_downloads;
+    }
+    return months;
+  }, [orders, stats.total_downloads]);
+
+  const statusData = useMemo(() => {
+    const paid = orders.filter((order) => order.status === "PAID").length;
+    const pending = orders.filter((order) => order.status === "PENDING").length;
+    const failed = orders.filter((order) => order.status === "FAILED" || order.status === "REFUNDED").length;
+    const total = paid + pending + failed;
+    const pct = (value: number) => (total ? Math.round((value / total) * 100) : 0);
+    return [
+      { name: "Paid", value: pct(paid), color: "#22c55e" },
+      { name: "Pending", value: pct(pending), color: "#ff8a1f" },
+      { name: "Failed", value: pct(failed), color: "#ef3b2d" }
+    ];
+  }, [orders]);
+
+  const latestOrderRows = useMemo(() => orders.slice(0, 5).map((order) => ({
+    id: `#${order.id}`,
+    user: order.user?.username || "User",
+    asset: order.asset?.title || "Asset",
+    amount: `${order.currency} ${order.amount}`,
+    status: orderStatusLabel(order.status),
+    date: formatDate(order.created_at)
+  })), [orders]);
+
+  const recentUserRows = useMemo<UserRow[]>(() => users.slice(0, 4).map((user) => ({
+    name: `${user.first_name} ${user.last_name}`.trim() || user.username,
+    email: user.email,
+    city: "Registered",
+    purchases: orders.filter((order) => order.user?.id === user.id && order.status === "PAID").length,
+    joined: formatDate(user.date_joined)
+  })), [orders, users]);
+
+  const topAssetRows = useMemo<TopAsset[]>(() => [...assets]
+    .sort((a, b) => b.download_count - a.download_count)
+    .slice(0, 5)
+    .map((asset) => ({
+      name: asset.title,
+      category: asset.category?.name || "Asset",
+      simulator: asset.simulator_type.replace("_", " "),
+      downloads: asset.download_count,
+      revenue: formatMoney(orders.filter((order) => order.asset?.id === asset.id && order.status === "PAID").reduce((sum, order) => sum + (Number(order.amount) || 0), 0)),
+      status: asset.is_featured ? "Featured" : asset.is_free ? "Free" : "Premium"
+    })), [assets, orders]);
+
+  const featuredCards = useMemo<RailwayCard[]>(() => assets
+    .filter((asset) => asset.is_featured)
+    .slice(0, 3)
+    .map((asset) => ({
+      title: asset.title,
+      category: asset.category?.name || "Asset",
+      price: asset.is_free ? "Free" : `INR ${asset.price}`,
+      downloads: formatNumber(asset.download_count),
+      accent: "from-red-500/35 to-orange-400/10"
+    })), [assets]);
+
   return (
     <AdminLayout title="Dashboard">
       <AdminLoginNote />
@@ -64,25 +188,25 @@ export default function AdminDashboardPage() {
             </div>
             <Button variant="ghost">Manage featured</Button>
           </div>
-          <RailwayAssetCards />
+          <RailwayAssetCards assets={featuredCards} />
         </section>
 
         <section className="grid gap-5 xl:grid-cols-[1.45fr_.85fr]">
-          <SalesOverviewChart />
-          <OrdersDonutChart />
+          <SalesOverviewChart data={monthlyData} />
+          <OrdersDonutChart data={statusData} />
         </section>
 
         <section className="grid gap-5 xl:grid-cols-2">
-          <DownloadsAnalyticsChart />
-          <MonthlyRevenueChart />
+          <DownloadsAnalyticsChart data={monthlyData} />
+          <MonthlyRevenueChart data={monthlyData} />
         </section>
 
         <section className="grid gap-5 xl:grid-cols-[1.35fr_.8fr]">
-          <LatestOrdersTable />
-          <RecentUsersTable />
+          <LatestOrdersTable orders={latestOrderRows} />
+          <RecentUsersTable users={recentUserRows} />
         </section>
 
-        <TopDownloadedAssetsTable />
+        <TopDownloadedAssetsTable assets={topAssetRows} />
       </div>
     </AdminLayout>
   );
