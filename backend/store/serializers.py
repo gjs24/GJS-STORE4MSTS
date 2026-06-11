@@ -99,6 +99,11 @@ class AssetListSerializer(serializers.ModelSerializer):
     def get_thumbnail(self, obj):
         if not obj.thumbnail:
             return None
+        try:
+            if not obj.thumbnail.storage.exists(obj.thumbnail.name):
+                return None
+        except Exception:
+            return None
         url = obj.thumbnail.url
         if url.startswith("http://") or url.startswith("https://"):
             return url

@@ -5,6 +5,8 @@ from django.core.validators import FileExtensionValidator, MinValueValidator, Ma
 from django.db import models
 from django.utils.text import slugify
 
+from .storage import RawAssetStorage
+
 
 class Category(models.Model):
     name = models.CharField(max_length=120, unique=True)
@@ -53,6 +55,7 @@ class Asset(models.Model):
         upload_to="assets/files/",
         blank=True,
         null=True,
+        storage=RawAssetStorage(),
         validators=[FileExtensionValidator(["zip", "rar", "7z"])],
     )
     download_count = models.PositiveIntegerField(default=0)
@@ -85,7 +88,7 @@ class AssetImage(models.Model):
 
 class AssetFile(models.Model):
     asset = models.ForeignKey(Asset, related_name="files", on_delete=models.CASCADE)
-    file = models.FileField(upload_to="assets/files/", validators=[FileExtensionValidator(["zip", "rar", "7z"])])
+    file = models.FileField(upload_to="assets/files/", storage=RawAssetStorage(), validators=[FileExtensionValidator(["zip", "rar", "7z"])])
     version = models.CharField(max_length=40)
     file_size = models.CharField(max_length=40)
     is_active = models.BooleanField(default=True)
@@ -179,6 +182,7 @@ class UpdateLog(models.Model):
         upload_to="assets/updates/",
         blank=True,
         null=True,
+        storage=RawAssetStorage(),
         validators=[FileExtensionValidator(["zip", "rar", "7z"])],
     )
     created_at = models.DateTimeField(auto_now_add=True)

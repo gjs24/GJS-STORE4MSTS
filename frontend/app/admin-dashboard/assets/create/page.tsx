@@ -31,6 +31,7 @@ export default function CreateAssetPage() {
       const price = isFree ? "0.00" : String(formData.get("price") || "0");
       const category = Number(formData.get("category"));
       const file = formData.get("download_file");
+      const thumbnail = formData.get("thumbnail");
 
       formData.set("price", price);
       formData.set("is_free", String(isFree));
@@ -39,6 +40,9 @@ export default function CreateAssetPage() {
       formData.set("is_upcoming", String(formData.get("is_upcoming") === "on"));
       if (file instanceof File && file.size === 0) {
         formData.delete("download_file");
+      }
+      if (thumbnail instanceof File && thumbnail.size === 0) {
+        formData.delete("thumbnail");
       }
 
       if (!title || !formData.get("short_description") || !formData.get("description") || !category) {

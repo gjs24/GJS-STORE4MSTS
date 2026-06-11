@@ -117,6 +117,8 @@ SIMPLE_JWT = {
 RAZORPAY_KEY_ID = env("RAZORPAY_KEY_ID", default="")
 RAZORPAY_KEY_SECRET = env("RAZORPAY_KEY_SECRET", default="")
 STRIPE_SECRET_KEY = env("STRIPE_SECRET_KEY", default="")
+CLOUDINARY_URL = env("CLOUDINARY_URL", default="")
+CLOUDINARY_CONFIGURED = bool(CLOUDINARY_URL)
 
-if env("CLOUDINARY_URL", default=""):
+if CLOUDINARY_CONFIGURED:
     DEFAULT_FILE_STORAGE = "cloudinary_storage.storage.MediaCloudinaryStorage"

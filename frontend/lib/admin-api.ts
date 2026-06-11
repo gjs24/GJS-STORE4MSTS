@@ -88,13 +88,23 @@ export async function adminPost<T>(path: string, body?: unknown): Promise<T> {
   return res.json();
 }
 
+async function parseAdminError(res: Response, fallback: string) {
+  const data = await res.json().catch(() => null);
+  if (!data || typeof data !== "object") return fallback;
+  if ("detail" in data && typeof data.detail === "string") return data.detail;
+  const messages = Object.entries(data)
+    .map(([field, value]) => `${field}: ${Array.isArray(value) ? value.join(", ") : String(value)}`)
+    .join(" ");
+  return messages || fallback;
+}
+
 export async function adminPostForm<T>(path: string, body: FormData): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
     method: "POST",
     headers: adminHeaders(),
     body
   });
-  if (!res.ok) throw new Error("Upload failed");
+  if (!res.ok) throw new Error(await parseAdminError(res, "Upload failed"));
   return res.json();
 }
 
@@ -104,7 +114,7 @@ export async function adminPatchForm<T>(path: string, body: FormData): Promise<T
     headers: adminHeaders(),
     body
   });
-  if (!res.ok) throw new Error("Upload failed");
+  if (!res.ok) throw new Error(await parseAdminError(res, "Upload failed"));
   return res.json();
 }
 
