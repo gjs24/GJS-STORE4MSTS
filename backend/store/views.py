@@ -6,6 +6,7 @@ from django.db.models import Count, Q, Sum
 from django.shortcuts import get_object_or_404
 from rest_framework import generics, permissions, status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes, throttle_classes
+from rest_framework.exceptions import APIException
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.throttling import UserRateThrottle
@@ -122,7 +123,37 @@ class OrderCreateView(generics.CreateAPIView):
         asset = serializer.validated_data["asset"]
         status_value = Order.Status.PAID if asset.is_free else Order.Status.PENDING
         order = serializer.save(user=self.request.user, amount=asset.price, currency="INR", status=status_value)
-        Payment.objects.get_or_create(order=order, defaults={"provider": Payment.Provider.MANUAL, "status": status_value.lower()})
+        payment_defaults = {"provider": Payment.Provider.MANUAL, "status": status_value.lower()}
+        if not asset.is_free and settings.RAZORPAY_KEY_ID and settings.RAZORPAY_KEY_SECRET:
+            try:
+                import razorpay
+
+                client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
+                provider_order = client.order.create(
+                    {
+                        "amount": int(asset.price * 100),
+                        "currency": "INR",
+                        "receipt": f"order_{order.id}",
+                        "notes": {
+                            "order_id": str(order.id),
+                            "asset_id": str(asset.id),
+                            "user_id": str(self.request.user.id),
+                        },
+                    }
+                )
+            except Exception as exc:
+                order.status = Order.Status.FAILED
+                order.save(update_fields=["status"])
+                raise APIException("Could not create Razorpay order. Please try again.") from exc
+
+            order.provider_order_id = provider_order["id"]
+            order.save(update_fields=["provider_order_id"])
+            payment_defaults = {
+                "provider": Payment.Provider.RAZORPAY,
+                "status": provider_order.get("status", "created"),
+                "raw_response": provider_order,
+            }
+        Payment.objects.get_or_create(order=order, defaults=payment_defaults)
 
 
 class PaymentVerifyView(generics.GenericAPIView):

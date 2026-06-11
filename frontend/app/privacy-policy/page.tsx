@@ -20,6 +20,7 @@ export default function PrivacyPolicyPage() {
           items: [
             "Name, email address, phone number, login/account details, and support messages.",
             "Billing details, payment status, order history, download history, and product access records.",
+            "Razorpay/payment transaction details such as order ID, payment ID, payment signature, refund status, and gateway response needed for payment verification and support.",
             "Technical details such as device, browser, IP address, and activity needed to secure accounts and downloads."
           ]
         },

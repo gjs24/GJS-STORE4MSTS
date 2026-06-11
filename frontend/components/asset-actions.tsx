@@ -6,6 +6,54 @@ import { CheckCircle2, Download, Heart, Lock, ShoppingCart } from "lucide-react"
 import type { Asset } from "@/lib/api";
 import { addToWishlist, createOrder, downloadAsset, isLoggedIn, verifyDebugPayment } from "@/lib/store-api";
 
+const RAZORPAY_KEY_ID = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || "";
+
+type RazorpaySuccessResponse = {
+  razorpay_payment_id: string;
+  razorpay_order_id: string;
+  razorpay_signature: string;
+};
+
+type RazorpayOptions = {
+  key: string;
+  amount: number;
+  currency: string;
+  name: string;
+  description: string;
+  order_id: string;
+  handler: (response: RazorpaySuccessResponse) => void;
+  prefill?: { name?: string; email?: string };
+  theme?: { color?: string };
+  modal?: { ondismiss?: () => void };
+};
+
+declare global {
+  interface Window {
+    Razorpay?: new (options: RazorpayOptions) => { open: () => void };
+  }
+}
+
+function loadRazorpayCheckout() {
+  return new Promise<void>((resolve, reject) => {
+    if (window.Razorpay) {
+      resolve();
+      return;
+    }
+    const existingScript = document.querySelector<HTMLScriptElement>("script[src='https://checkout.razorpay.com/v1/checkout.js']");
+    if (existingScript) {
+      existingScript.addEventListener("load", () => resolve(), { once: true });
+      existingScript.addEventListener("error", () => reject(new Error("Could not load Razorpay Checkout.")), { once: true });
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("Could not load Razorpay Checkout."));
+    document.body.appendChild(script);
+  });
+}
+
 export function AssetActions({ asset }: { asset: Asset }) {
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
@@ -25,7 +73,36 @@ export function AssetActions({ asset }: { asset: Asset }) {
     try {
       if (!asset.is_free && !asset.can_download) {
         const order = await createOrder(asset.id);
-        if (order.status === "PENDING") {
+        if (order.status === "PENDING" && order.provider_order_id && RAZORPAY_KEY_ID) {
+          const providerOrderId = order.provider_order_id;
+          setMessage("Opening Razorpay secure checkout...");
+          await loadRazorpayCheckout();
+          await new Promise<void>((resolve, reject) => {
+            const checkout = new window.Razorpay!({
+              key: RAZORPAY_KEY_ID,
+              amount: Math.round(Number(order.amount) * 100),
+              currency: order.currency,
+              name: "MSTS-GJS Production Store",
+              description: asset.title,
+              order_id: providerOrderId,
+              handler: async (response) => {
+                try {
+                  await verifyDebugPayment(order.id, {
+                    provider: "RAZORPAY",
+                    provider_payment_id: response.razorpay_payment_id,
+                    provider_signature: response.razorpay_signature
+                  });
+                  resolve();
+                } catch (error) {
+                  reject(error);
+                }
+              },
+              theme: { color: "#dc2626" },
+              modal: { ondismiss: () => reject(new Error("Payment was cancelled before completion.")) }
+            });
+            checkout.open();
+          });
+        } else if (order.status === "PENDING") {
           await verifyDebugPayment(order.id);
         }
         setMessage("Purchase confirmed. Preparing secure download...");

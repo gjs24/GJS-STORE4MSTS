@@ -8,6 +8,7 @@ export type StoreOrder = {
   amount: string;
   currency: string;
   status: "PENDING" | "PAID" | "FAILED" | "REFUNDED";
+  provider_order_id?: string;
   created_at: string;
 };
 
@@ -62,11 +63,19 @@ export async function createOrder(assetId: number): Promise<StoreOrder> {
   return res.json();
 }
 
-export async function verifyDebugPayment(orderId: number): Promise<StoreOrder> {
+export async function verifyDebugPayment(
+  orderId: number,
+  payment?: { provider: "RAZORPAY" | "MANUAL"; provider_payment_id?: string; provider_signature?: string }
+): Promise<StoreOrder> {
   const res = await fetch(`${API_URL}/payments/verify/`, {
     method: "POST",
     headers: { ...authHeaders(), "Content-Type": "application/json" },
-    body: JSON.stringify({ order_id: orderId, provider: "MANUAL", provider_payment_id: `dev-${orderId}` })
+    body: JSON.stringify({
+      order_id: orderId,
+      provider: payment?.provider || "MANUAL",
+      provider_payment_id: payment?.provider_payment_id || `dev-${orderId}`,
+      provider_signature: payment?.provider_signature || ""
+    })
   });
   if (!res.ok) throw new Error(await parseError(res, "Payment verification failed."));
   return res.json();

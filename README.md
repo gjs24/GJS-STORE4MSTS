@@ -134,6 +134,7 @@ For all local URLs and user/admin testing flow, see [URL_FLOW.md](URL_FLOW.md).
 
 ## Detailed Guides
 
+- [GitHub Upload Checklist](GITHUB_UPLOAD_CHECKLIST.md) - explains what is safe to push and what must stay private.
 - [Project Structure Guide](PROJECT_STRUCTURE_GUIDE.md) - explains the folders and important files.
 - [Website Guide](WEBSITE_GUIDE.md) - explains how to run and use the website/admin dashboard.
 - [Desktop App Guide](DESKTOP_APP_GUIDE.md) - explains how to run and build the Windows desktop app.
