@@ -3,7 +3,7 @@
 ## Backend
 1. Provision PostgreSQL and create a database.
 2. Configure environment variables from `.env.example`.
-3. Use a production WSGI server such as Gunicorn behind Nginx.
+3. Use Python 3.12 and a production WSGI server such as Gunicorn behind Nginx.
 4. Run:
 
 ```bash
