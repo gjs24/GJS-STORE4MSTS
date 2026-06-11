@@ -58,7 +58,12 @@ export function adminHeaders(): Record<string, string> {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+function hasAdminToken() {
+  return typeof window !== "undefined" && Boolean(localStorage.getItem("accessToken"));
+}
+
 export async function adminGet<T>(path: string, fallback: T): Promise<T> {
+  if (!hasAdminToken()) return fallback;
   try {
     const res = await fetch(`${API_URL}${path}`, { headers: adminHeaders(), cache: "no-store" });
     if (!res.ok) throw new Error("Admin request failed");
@@ -69,6 +74,7 @@ export async function adminGet<T>(path: string, fallback: T): Promise<T> {
 }
 
 export async function adminPatch<T>(path: string, body: unknown): Promise<T> {
+  if (!hasAdminToken()) throw new Error("Admin login required.");
   const res = await fetch(`${API_URL}${path}`, {
     method: "PATCH",
     headers: { ...adminHeaders(), "Content-Type": "application/json" },
@@ -79,6 +85,7 @@ export async function adminPatch<T>(path: string, body: unknown): Promise<T> {
 }
 
 export async function adminPost<T>(path: string, body?: unknown): Promise<T> {
+  if (!hasAdminToken()) throw new Error("Admin login required.");
   const res = await fetch(`${API_URL}${path}`, {
     method: "POST",
     headers: { ...adminHeaders(), "Content-Type": "application/json" },
@@ -99,6 +106,7 @@ async function parseAdminError(res: Response, fallback: string) {
 }
 
 export async function adminPostForm<T>(path: string, body: FormData): Promise<T> {
+  if (!hasAdminToken()) throw new Error("Admin login required.");
   const res = await fetch(`${API_URL}${path}`, {
     method: "POST",
     headers: adminHeaders(),
@@ -109,6 +117,7 @@ export async function adminPostForm<T>(path: string, body: FormData): Promise<T>
 }
 
 export async function adminPatchForm<T>(path: string, body: FormData): Promise<T> {
+  if (!hasAdminToken()) throw new Error("Admin login required.");
   const res = await fetch(`${API_URL}${path}`, {
     method: "PATCH",
     headers: adminHeaders(),
@@ -119,6 +128,7 @@ export async function adminPatchForm<T>(path: string, body: FormData): Promise<T
 }
 
 export async function adminDelete(path: string): Promise<void> {
+  if (!hasAdminToken()) throw new Error("Admin login required.");
   const res = await fetch(`${API_URL}${path}`, {
     method: "DELETE",
     headers: adminHeaders()

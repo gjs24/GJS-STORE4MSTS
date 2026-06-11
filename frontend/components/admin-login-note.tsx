@@ -2,11 +2,21 @@
 
 import Link from "next/link";
 import { ShieldAlert } from "lucide-react";
-import { getStoredUser } from "@/lib/api";
+import { useEffect, useState } from "react";
+import { getStoredUser, type CurrentUser } from "@/lib/api";
 
 export function AdminLoginNote() {
-  const hasToken = typeof window !== "undefined" && Boolean(localStorage.getItem("accessToken"));
-  const parsedUser = getStoredUser();
+  const [ready, setReady] = useState(false);
+  const [hasToken, setHasToken] = useState(false);
+  const [parsedUser, setParsedUser] = useState<CurrentUser | null>(null);
+
+  useEffect(() => {
+    setHasToken(Boolean(localStorage.getItem("accessToken")));
+    setParsedUser(getStoredUser());
+    setReady(true);
+  }, []);
+
+  if (!ready) return null;
   if (hasToken && parsedUser?.is_staff) return null;
 
   if (hasToken && parsedUser && !parsedUser.is_staff) {
