@@ -9,6 +9,8 @@ const policyLinks = [
   ["Contact Us", "/contact"]
 ];
 
+const supportEmail = process.env.NEXT_PUBLIC_SUPPORT_EMAIL || "gjs2721@gmail.com";
+
 export function SiteFooter() {
   return (
     <footer className="border-t border-white/10 bg-rail-black">
@@ -45,7 +47,7 @@ export function SiteFooter() {
           <div className="mt-4 space-y-3 text-sm text-slate-400">
             <p className="flex gap-2">
               <Mail className="mt-0.5 h-4 w-4 text-rail-amber" />
-              support@msts-gjs.example
+              {supportEmail}
             </p>
             <p className="flex gap-2">
               <ShieldCheck className="mt-0.5 h-4 w-4 text-rail-amber" />

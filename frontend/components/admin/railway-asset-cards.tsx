@@ -8,6 +8,14 @@ import { railwayCards } from "@/lib/admin-dashboard-data";
 import { cn } from "@/lib/utils";
 
 export function RailwayAssetCards() {
+  if (railwayCards.length === 0) {
+    return (
+      <div className="glass-card rounded-lg p-6 text-sm text-slate-400">
+        No featured assets yet. Upload products and mark them featured to show marketplace highlights.
+      </div>
+    );
+  }
+
   return (
     <div className="grid gap-4 xl:grid-cols-3">
       {railwayCards.map((asset, index) => (

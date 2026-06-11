@@ -35,6 +35,13 @@ export function LatestOrdersTable() {
             </tr>
           </thead>
           <tbody className="divide-y divide-white/10">
+            {latestOrders.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="py-8 text-center text-slate-500">
+                  No orders yet. Paid orders will appear here after checkout.
+                </td>
+              </tr>
+            ) : null}
             {latestOrders.map((order) => (
               <tr key={order.id} className="text-slate-300 hover:bg-white/[0.03]">
                 <td className="py-3 font-semibold text-white">{order.id}</td>
@@ -59,6 +66,11 @@ export function RecentUsersTable() {
         <CardTitle>Recent Users</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        {recentUsers.length === 0 ? (
+          <div className="rounded border border-white/10 bg-white/[0.03] p-5 text-sm text-slate-500">
+            No registered users yet.
+          </div>
+        ) : null}
         {recentUsers.map((user) => (
           <div key={user.email} className="flex items-center justify-between gap-3 rounded border border-white/10 bg-white/[0.03] p-3">
             <div className="flex items-center gap-3">
@@ -98,6 +110,13 @@ export function TopDownloadedAssetsTable() {
             </tr>
           </thead>
           <tbody className="divide-y divide-white/10">
+            {topAssets.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="py-8 text-center text-slate-500">
+                  No asset downloads yet. Upload assets to start tracking downloads.
+                </td>
+              </tr>
+            ) : null}
             {topAssets.map((asset) => (
               <tr key={asset.name} className="text-slate-300 hover:bg-white/[0.03]">
                 <td className="py-3 font-semibold text-white">{asset.name}</td>
