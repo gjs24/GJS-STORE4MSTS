@@ -62,6 +62,7 @@ class AssetListSerializer(serializers.ModelSerializer):
     category = CategorySerializer(read_only=True)
     average_rating = serializers.SerializerMethodField()
     has_file = serializers.SerializerMethodField()
+    thumbnail = serializers.SerializerMethodField()
     review_count = serializers.IntegerField(read_only=True, default=0)
 
     class Meta:
@@ -94,6 +95,15 @@ class AssetListSerializer(serializers.ModelSerializer):
 
     def get_has_file(self, obj):
         return bool(obj.download_file)
+
+    def get_thumbnail(self, obj):
+        if not obj.thumbnail:
+            return None
+        url = obj.thumbnail.url
+        if url.startswith("http://") or url.startswith("https://"):
+            return url
+        request = self.context.get("request")
+        return request.build_absolute_uri(url) if request else url
 
 
 class AssetDetailSerializer(AssetListSerializer):
