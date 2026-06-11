@@ -1,7 +1,9 @@
 import hmac
+from pathlib import PurePath
 
 from django.conf import settings
 from django.contrib.auth.models import User
+from django.http import FileResponse
 from django.db.models import Count, Q, Sum
 from django.shortcuts import get_object_or_404
 from rest_framework import generics, permissions, status, viewsets
@@ -299,7 +301,8 @@ def create_download_response(request, asset):
     )
     asset.download_count += 1
     asset.save(update_fields=["download_count"])
-    return Response({"download_url": request.build_absolute_uri(asset.download_file.url)})
+    filename = PurePath(asset.download_file.name).name
+    return FileResponse(asset.download_file.open("rb"), as_attachment=True, filename=filename)
 
 
 @api_view(["POST"])

@@ -25,6 +25,12 @@ export type WishlistItem = {
   created_at: string;
 };
 
+export type DownloadResult = {
+  url: string;
+  filename?: string;
+  revoke?: () => void;
+};
+
 function token() {
   return typeof window === "undefined" ? "" : localStorage.getItem("accessToken") || "";
 }
@@ -45,6 +51,11 @@ async function parseError(res: Response, fallback: string) {
     return "Please login again to continue.";
   }
   return data.detail || data.non_field_errors?.[0] || fallback;
+}
+
+function filenameFromDisposition(disposition: string | null) {
+  const match = disposition?.match(/filename\*?=(?:UTF-8''|")?([^";]+)/i);
+  return match ? decodeURIComponent(match[1].replace(/"/g, "")) : undefined;
 }
 
 export async function userGet<T>(path: string): Promise<T> {
@@ -81,14 +92,24 @@ export async function verifyDebugPayment(
   return res.json();
 }
 
-export async function downloadAsset(assetId: number): Promise<string> {
+export async function downloadAsset(assetId: number): Promise<DownloadResult> {
   const res = await fetch(`${API_URL}/assets/${assetId}/download/`, {
     method: "POST",
     headers: authHeaders()
   });
   if (!res.ok) throw new Error(await parseError(res, "Download is not available."));
+  const contentType = res.headers.get("Content-Type") || "";
+  if (!contentType.includes("application/json")) {
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    return {
+      url,
+      filename: filenameFromDisposition(res.headers.get("Content-Disposition")),
+      revoke: () => URL.revokeObjectURL(url)
+    };
+  }
   const data = await res.json();
-  return data.download_url;
+  return { url: data.download_url };
 }
 
 export async function addToWishlist(assetId: number): Promise<WishlistItem> {

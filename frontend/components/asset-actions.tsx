@@ -107,9 +107,15 @@ export function AssetActions({ asset }: { asset: Asset }) {
         }
         setMessage("Purchase confirmed. Preparing secure download...");
       }
-      const url = await downloadAsset(asset.id);
-      setMessage("Download ready. Opening package link...");
-      window.location.href = url;
+      const download = await downloadAsset(asset.id);
+      setMessage("Download ready. Starting package download...");
+      const link = document.createElement("a");
+      link.href = download.url;
+      link.download = download.filename || `${asset.slug}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      if (download.revoke) setTimeout(download.revoke, 1000);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not complete this action.");
     } finally {
