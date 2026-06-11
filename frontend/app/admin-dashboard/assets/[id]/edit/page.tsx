@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Save } from "lucide-react";
+import { CheckCircle2, Loader2, Save } from "lucide-react";
 import { AdminLoginNote } from "@/components/admin-login-note";
 import { AdminLayout } from "@/components/admin-table";
 import { adminGet, adminPatchForm } from "@/lib/admin-api";
@@ -22,6 +22,9 @@ export default function EditAssetPage({ params }: { params: Promise<{ id: string
   const [categories, setCategories] = useState<Category[]>(fallbackCategories);
   const [isFree, setIsFree] = useState(false);
   const [message, setMessage] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [thumbnailInfo, setThumbnailInfo] = useState("");
+  const [packageInfo, setPackageInfo] = useState("");
 
   useEffect(() => {
     params.then(({ id }) => {
@@ -36,7 +39,8 @@ export default function EditAssetPage({ params }: { params: Promise<{ id: string
 
   async function updateAsset(formData: FormData) {
     if (!asset) return;
-    setMessage("Updating asset...");
+    setSaving(true);
+    setMessage(packageInfo || thumbnailInfo ? "Uploading selected files and updating asset..." : "Updating asset...");
     const price = isFree ? "0.00" : String(formData.get("price") || "0");
     const category = Number(formData.get("category"));
     const file = formData.get("download_file");
@@ -59,9 +63,11 @@ export default function EditAssetPage({ params }: { params: Promise<{ id: string
       const updated = await adminPatchForm<EditableAsset>(`/admin/assets/${assetId}/`, formData);
       const nextCategory = categories.find((item) => item.id === category) || asset.category;
       setAsset({ ...asset, ...updated, category: nextCategory, price, is_free: isFree });
-      setMessage(file instanceof File && file.size > 0 ? "Asset updated and new file uploaded." : "Asset updated successfully.");
+      setMessage(file instanceof File && file.size > 0 ? "Upload completed. Asset updated and new file uploaded." : "Asset updated successfully.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not update asset.");
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -133,10 +139,11 @@ export default function EditAssetPage({ params }: { params: Promise<{ id: string
         </label>
         <label className="block">
           <span className="text-sm text-slate-300">Replace product card / home image</span>
-          <input name="thumbnail" type="file" accept="image/*" className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-3 text-sm" />
+          <input name="thumbnail" type="file" accept="image/*" onChange={(event) => setThumbnailInfo(fileStatus(event.currentTarget.files?.[0]))} className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-3 text-sm" />
           <span className="mt-1 block text-xs text-slate-500">
             Leave empty to keep the current image. This image appears on the home page, asset cards, and product detail hero.
           </span>
+          {thumbnailInfo ? <span className="mt-1 block text-xs text-rail-amber">{thumbnailInfo}</span> : null}
         </label>
         <div className="grid gap-3 md:grid-cols-2">
           <label className="flex items-center gap-3 rounded border border-white/10 bg-black/30 px-3 py-3">
@@ -156,18 +163,33 @@ export default function EditAssetPage({ params }: { params: Promise<{ id: string
         <textarea name="installation_steps" defaultValue={asset.installation_steps || ""} placeholder="Installation steps" rows={4} className="rounded border border-white/10 bg-black/40 px-3 py-3" />
         <textarea name="changelog" defaultValue={asset.changelog || ""} placeholder="Changelog" rows={4} className="rounded border border-white/10 bg-black/40 px-3 py-3 md:col-span-2" />
         <label className="block md:col-span-2">
-          <span className="text-sm text-slate-300">Replace ZIP/RAR/7Z file</span>
-          <input name="download_file" type="file" accept=".zip,.rar,.7z" className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-3 text-sm" />
+          <span className="text-sm text-slate-300">Replace ZIP file</span>
+          <input name="download_file" type="file" accept=".zip" onChange={(event) => setPackageInfo(fileStatus(event.currentTarget.files?.[0]))} className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-3 text-sm" />
           <span className="mt-1 block text-xs text-slate-500">
-            Leave empty to keep the current uploaded package. Upload a new .zip, .rar, or .7z file only when you want to replace it.
+            Leave empty to keep the current uploaded package. Cloudinary works best with .zip files.
           </span>
+          {packageInfo ? <span className="mt-1 block text-xs text-rail-amber">{packageInfo}</span> : null}
         </label>
         <div className="flex flex-wrap gap-3 md:col-span-2">
-          <button className="rounded bg-rail-red px-5 py-3 font-semibold"><Save className="mr-2 inline" size={18} /> Save changes</button>
+          <button disabled={saving} className="rounded bg-rail-red px-5 py-3 font-semibold disabled:opacity-60">
+            {saving ? <Loader2 className="mr-2 inline animate-spin" size={18} /> : <Save className="mr-2 inline" size={18} />}
+            {saving ? "Uploading..." : "Save changes"}
+          </button>
           <Link href="/admin-dashboard/assets" className="rounded border border-white/10 px-5 py-3 font-semibold">Back to assets</Link>
         </div>
-        {message ? <p className="text-sm text-slate-300 md:col-span-2">{message}</p> : null}
+        {message ? (
+          <p className="flex items-center gap-2 text-sm text-slate-300 md:col-span-2">
+            {message.includes("completed") ? <CheckCircle2 className="text-emerald-400" size={18} /> : null}
+            {message}
+          </p>
+        ) : null}
       </form>
     </AdminLayout>
   );
+}
+
+function fileStatus(file?: File) {
+  if (!file) return "";
+  const sizeMb = file.size / (1024 * 1024);
+  return `Selected: ${file.name} (${sizeMb.toFixed(sizeMb >= 10 ? 0 : 1)} MB)`;
 }
