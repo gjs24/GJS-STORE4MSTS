@@ -209,6 +209,8 @@ class SiteSetting(models.Model):
     popup_message = models.TextField(blank=True)
     popup_button_text = models.CharField(max_length=60, default="Browse assets")
     popup_button_url = models.CharField(max_length=200, default="/assets")
+    scroller_enabled = models.BooleanField(default=False)
+    scroller_message = models.CharField(max_length=500, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:

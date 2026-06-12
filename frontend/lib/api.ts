@@ -70,6 +70,8 @@ export type SiteSettings = {
   popup_message: string;
   popup_button_text: string;
   popup_button_url: string;
+  scroller_enabled: boolean;
+  scroller_message: string;
   updated_at?: string;
 };
 
@@ -80,7 +82,9 @@ export const fallbackSiteSettings: SiteSettings = {
   popup_title: "Welcome to MSTS-GJS Production Store",
   popup_message: "",
   popup_button_text: "Browse assets",
-  popup_button_url: "/assets"
+  popup_button_url: "/assets",
+  scroller_enabled: false,
+  scroller_message: ""
 };
 
 export function getStoredUser(): CurrentUser | null {

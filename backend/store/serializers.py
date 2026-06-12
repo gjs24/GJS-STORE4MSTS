@@ -220,6 +220,8 @@ class SiteSettingSerializer(serializers.ModelSerializer):
             "popup_message",
             "popup_button_text",
             "popup_button_url",
+            "scroller_enabled",
+            "scroller_message",
             "updated_at",
         ]
         read_only_fields = ["updated_at"]
