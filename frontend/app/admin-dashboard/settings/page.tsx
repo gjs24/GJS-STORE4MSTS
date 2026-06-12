@@ -20,6 +20,9 @@ export default function AdminSettingsPage() {
   const [siteForm, setSiteForm] = useState(fallbackSettings.site);
   const [status, setStatus] = useState("");
   const [saving, setSaving] = useState(false);
+  const slideshowUrls = siteForm.hero_slideshow_urls
+    ? siteForm.hero_slideshow_urls.split(/\r?\n/).slice(0, 10)
+    : [""];
 
   useEffect(() => {
     adminGet<AdminSettings>("/admin/settings/", fallbackSettings).then((data) => {
@@ -30,6 +33,22 @@ export default function AdminSettingsPage() {
 
   function updateSiteForm(field: keyof typeof siteForm, value: string | boolean) {
     setSiteForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function updateSlideshowUrl(index: number, value: string) {
+    const nextUrls = [...slideshowUrls];
+    nextUrls[index] = value;
+    updateSiteForm("hero_slideshow_urls", nextUrls.join("\n"));
+  }
+
+  function addSlideshowUrl() {
+    if (slideshowUrls.length >= 10) return;
+    updateSiteForm("hero_slideshow_urls", [...slideshowUrls, ""].join("\n"));
+  }
+
+  function removeSlideshowUrl(index: number) {
+    const nextUrls = slideshowUrls.filter((_, itemIndex) => itemIndex !== index);
+    updateSiteForm("hero_slideshow_urls", (nextUrls.length ? nextUrls : [""]).join("\n"));
   }
 
   async function saveSiteSettings(event: FormEvent<HTMLFormElement>) {
@@ -100,17 +119,42 @@ export default function AdminSettingsPage() {
             className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-2 text-white outline-none focus:border-rail-red"
           />
         </label>
-        <label className="block text-sm font-semibold text-slate-200">
-          Home page slideshow image URLs
-          <textarea
-            value={siteForm.hero_slideshow_urls}
-            onChange={(event) => updateSiteForm("hero_slideshow_urls", event.target.value)}
-            rows={4}
-            placeholder={"https://res.cloudinary.com/.../image/upload/train-1.jpg\nhttps://res.cloudinary.com/.../image/upload/train-2.jpg"}
-            className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-2 text-white outline-none focus:border-rail-red"
-          />
-          <span className="mt-1 block text-xs text-slate-500">Paste one image URL per line. The main image URL above shows first.</span>
-        </label>
+        <div className="space-y-3 rounded border border-white/10 bg-black/20 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-200">Home page slideshow image URLs</h3>
+              <p className="mt-1 text-xs text-slate-500">Add up to 10 extra slide images. The main image URL above shows first.</p>
+            </div>
+            <button
+              type="button"
+              onClick={addSlideshowUrl}
+              disabled={slideshowUrls.length >= 10}
+              className="rounded border border-white/10 px-3 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Add slide image
+            </button>
+          </div>
+          <div className="space-y-2">
+            {slideshowUrls.map((url, index) => (
+              <div key={index} className="flex gap-2">
+                <input
+                  value={url}
+                  onChange={(event) => updateSlideshowUrl(index, event.target.value)}
+                  placeholder={`Slide image ${index + 1} URL`}
+                  className="w-full rounded border border-white/10 bg-black/40 px-3 py-2 text-white outline-none focus:border-rail-red"
+                />
+                <button
+                  type="button"
+                  onClick={() => removeSlideshowUrl(index)}
+                  className="rounded border border-white/10 px-3 py-2 text-sm font-semibold text-slate-300 hover:text-white"
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-slate-500">{slideshowUrls.length}/10 slide image slots used.</p>
+        </div>
         <label className="block text-sm font-semibold text-slate-200">
           Image alt text
           <input
