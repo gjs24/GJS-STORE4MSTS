@@ -37,7 +37,7 @@ export default async function HomePage() {
               <span className="rounded border border-white/10 bg-white/5 p-3"><ShieldCheck size={18} /> JWT secure</span>
             </div>
           </div>
-          <div className="cinematic-panel relative flex min-h-[320px] items-center justify-center overflow-hidden rounded-lg">
+          <div className="cinematic-panel hero-media-card relative flex min-h-[320px] items-center justify-center overflow-hidden rounded-lg">
             {siteSettings.hero_image_url ? (
               <Image
                 src={siteSettings.hero_image_url}
@@ -45,10 +45,10 @@ export default async function HomePage() {
                 fill
                 priority
                 sizes="(min-width: 768px) 45vw, 100vw"
-                className="object-cover"
+                className="hero-media-image object-cover"
               />
             ) : (
-              <TrainFront className="h-40 w-40 text-white" />
+              <TrainFront className="hero-media-icon relative z-10 h-40 w-40 text-white" />
             )}
           </div>
         </div>
