@@ -32,6 +32,7 @@ export type Asset = {
   has_file?: boolean;
   download_file?: string | null;
   external_download_url?: string;
+  private_download_key?: string;
   preview_video_url?: string;
   requirements?: string;
   installation_steps?: string;

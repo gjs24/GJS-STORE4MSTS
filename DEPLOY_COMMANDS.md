@@ -63,6 +63,12 @@ JWT_SECRET_KEY=paste_different_generated_secret_here
 GOOGLE_OAUTH_CLIENT_ID=your-google-client-id.apps.googleusercontent.com
 RAZORPAY_KEY_ID=rzp_test_or_live_key_id
 RAZORPAY_KEY_SECRET=razorpay_secret_key
+PRIVATE_DOWNLOAD_BUCKET=your-private-download-bucket
+PRIVATE_DOWNLOAD_REGION=auto
+PRIVATE_DOWNLOAD_ENDPOINT_URL=https://account-id.r2.cloudflarestorage.com
+PRIVATE_DOWNLOAD_ACCESS_KEY_ID=your-private-download-access-key
+PRIVATE_DOWNLOAD_SECRET_ACCESS_KEY=your-private-download-secret-key
+PRIVATE_DOWNLOAD_URL_EXPIRE_SECONDS=300
 ```
 
 After changing Render environment variables:
@@ -207,14 +213,14 @@ Upcoming products are visible to users but checkout and downloads are blocked un
 
 Important: Render free service storage is not permanent. Uploaded files stored in `backend/media/` can disappear after redeploy. For real paid files, configure Cloudinary or S3.
 
-For large files such as 300 MB+ ZIP packages, use the manual Cloudinary URL flow:
+For paid large files such as 300 MB+ ZIP packages, use the private S3/R2 object-key flow:
 
 ```text
-Cloudinary Dashboard -> Media Library -> Upload ZIP as raw/file -> Copy secure URL
-Admin Dashboard -> Edit Asset -> Manual Cloudinary download URL -> Paste URL -> Save
+Cloudflare R2 / S3 -> private bucket -> upload ZIP -> copy object key
+Admin Dashboard -> Edit Asset -> Private S3/R2 object key -> Paste key -> Save
 ```
 
-This avoids sending the large file through Vercel and Render during form upload.
+The backend signs a short-lived download URL only after login/purchase, so users cannot share a permanent public file link.
 
 ## Useful Test URLs
 

@@ -25,6 +25,18 @@ services:
         sync: false
       - key: CLOUDINARY_URL
         sync: false
+      - key: PRIVATE_DOWNLOAD_BUCKET
+        sync: false
+      - key: PRIVATE_DOWNLOAD_REGION
+        sync: false
+      - key: PRIVATE_DOWNLOAD_ENDPOINT_URL
+        sync: false
+      - key: PRIVATE_DOWNLOAD_ACCESS_KEY_ID
+        sync: false
+      - key: PRIVATE_DOWNLOAD_SECRET_ACCESS_KEY
+        sync: false
+      - key: PRIVATE_DOWNLOAD_URL_EXPIRE_SECONDS
+        value: "300"
       - key: RAZORPAY_KEY_ID
         sync: false
       - key: RAZORPAY_KEY_SECRET

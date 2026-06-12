@@ -177,6 +177,13 @@ export default function CreateAssetPage() {
             For large files, upload the ZIP directly in Cloudinary and paste the secure URL here instead of uploading through this form.
           </span>
         </label>
+        <label className="block md:col-span-2">
+          <span className="text-sm text-slate-300">Private S3/R2 object key</span>
+          <input name="private_download_key" placeholder="assets/gjs-pack-v1.zip" className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-3" />
+          <span className="mt-1 block text-xs text-slate-500">
+            Most secure option for paid files. Upload ZIP to a private S3/R2 bucket and paste only the object key here.
+          </span>
+        </label>
         <div className="flex flex-wrap gap-3 md:col-span-2">
           <button disabled={saving} className="rounded bg-rail-red px-5 py-3 font-semibold disabled:opacity-60">
             {saving ? <Loader2 className="mr-2 inline animate-spin" size={18} /> : <Save className="mr-2 inline" size={18} />}

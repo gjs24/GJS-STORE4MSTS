@@ -443,6 +443,19 @@ def create_download_response(request, asset):
     allowed = asset.is_free or Order.objects.filter(user=request.user, asset=asset, status=Order.Status.PAID).exists()
     if not allowed:
         return Response({"detail": "Purchase required before downloading this asset."}, status=status.HTTP_403_FORBIDDEN)
+    if asset.private_download_key:
+        signed_url = create_private_download_url(asset.private_download_key)
+        if not signed_url:
+            return Response({"detail": "Private download storage is not configured. Please contact the admin."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        DownloadLog.objects.create(
+            user=request.user,
+            asset=asset,
+            ip_address=request.META.get("REMOTE_ADDR"),
+            user_agent=request.META.get("HTTP_USER_AGENT", "")[:255],
+        )
+        asset.download_count += 1
+        asset.save(update_fields=["download_count"])
+        return Response({"download_url": signed_url})
     if not asset.download_file:
         if asset.external_download_url:
             DownloadLog.objects.create(
@@ -471,6 +484,36 @@ def create_download_response(request, asset):
     asset.save(update_fields=["download_count"])
     filename = PurePath(asset.download_file.name).name
     return FileResponse(asset.download_file.open("rb"), as_attachment=True, filename=filename)
+
+
+def create_private_download_url(object_key):
+    required = [
+        settings.PRIVATE_DOWNLOAD_BUCKET,
+        settings.PRIVATE_DOWNLOAD_ACCESS_KEY_ID,
+        settings.PRIVATE_DOWNLOAD_SECRET_ACCESS_KEY,
+    ]
+    if not all(required):
+        return ""
+    try:
+        import boto3
+
+        client_kwargs = {
+            "service_name": "s3",
+            "aws_access_key_id": settings.PRIVATE_DOWNLOAD_ACCESS_KEY_ID,
+            "aws_secret_access_key": settings.PRIVATE_DOWNLOAD_SECRET_ACCESS_KEY,
+            "region_name": settings.PRIVATE_DOWNLOAD_REGION,
+        }
+        if settings.PRIVATE_DOWNLOAD_ENDPOINT_URL:
+            client_kwargs["endpoint_url"] = settings.PRIVATE_DOWNLOAD_ENDPOINT_URL
+        client = boto3.client(**client_kwargs)
+        return client.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": settings.PRIVATE_DOWNLOAD_BUCKET, "Key": object_key},
+            ExpiresIn=settings.PRIVATE_DOWNLOAD_URL_EXPIRE_SECONDS,
+        )
+    except Exception:
+        logger.exception("Private download URL signing failed")
+        return ""
 
 
 @api_view(["POST"])

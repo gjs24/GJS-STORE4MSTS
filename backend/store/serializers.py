@@ -111,7 +111,7 @@ class AssetListSerializer(serializers.ModelSerializer):
         return f"{obj.original_price - obj.price:.2f}"
 
     def get_has_file(self, obj):
-        return bool(obj.download_file or obj.external_download_url)
+        return bool(obj.download_file or obj.external_download_url or obj.private_download_key)
 
     def get_thumbnail(self, obj):
         if obj.thumbnail_url:
@@ -143,6 +143,8 @@ class AssetDetailSerializer(AssetListSerializer):
             "requirements",
             "installation_steps",
             "changelog",
+            "external_download_url",
+            "private_download_key",
             "images",
             "reviews",
             "updates",

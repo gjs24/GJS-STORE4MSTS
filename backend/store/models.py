@@ -61,6 +61,7 @@ class Asset(models.Model):
         validators=[FileExtensionValidator(["zip", "rar", "7z"])],
     )
     external_download_url = models.URLField(blank=True)
+    private_download_key = models.CharField(max_length=500, blank=True)
     download_count = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
