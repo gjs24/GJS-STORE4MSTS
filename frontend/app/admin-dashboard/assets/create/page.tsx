@@ -48,6 +48,9 @@ export default function CreateAssetPage() {
       formData.set("is_upcoming", String(formData.get("is_upcoming") === "on"));
       if (file instanceof File && file.size === 0) {
         formData.delete("download_file");
+      } else if (file instanceof File && formData.get("external_download_url")) {
+        formData.delete("download_file");
+        setPackageInfo("");
       }
       if (thumbnail instanceof File && thumbnail.size === 0) {
         formData.delete("thumbnail");

@@ -5,8 +5,8 @@ import { useEffect, useState } from "react";
 import { CheckCircle2, Loader2, Save } from "lucide-react";
 import { AdminLoginNote } from "@/components/admin-login-note";
 import { AdminLayout } from "@/components/admin-table";
-import { adminGet, adminPatchForm } from "@/lib/admin-api";
-import { fallbackAssets, fallbackCategories, type Asset, type Category } from "@/lib/api";
+import { adminGet, adminGetRequired, adminPatchForm } from "@/lib/admin-api";
+import { fallbackCategories, type Asset, type Category } from "@/lib/api";
 
 type EditableAsset = Asset & {
   category: Category | number;
@@ -29,10 +29,15 @@ export default function EditAssetPage({ params }: { params: Promise<{ id: string
   useEffect(() => {
     params.then(({ id }) => {
       setAssetId(id);
-      adminGet<EditableAsset>(`/admin/assets/${id}/`, fallbackAssets[0] as EditableAsset).then((data) => {
-        setAsset(data);
-        setIsFree(data.is_free);
-      });
+      adminGetRequired<EditableAsset>(`/admin/assets/${id}/`)
+        .then((data) => {
+          setAsset(data);
+          setIsFree(data.is_free);
+          setMessage("");
+        })
+        .catch((error) => {
+          setMessage(error instanceof Error ? error.message : "Could not load this asset.");
+        });
     });
     adminGet<Category[]>("/admin/categories/", fallbackCategories).then(setCategories);
   }, [params]);
@@ -56,6 +61,9 @@ export default function EditAssetPage({ params }: { params: Promise<{ id: string
 
     if (file instanceof File && file.size === 0) {
       formData.delete("download_file");
+    } else if (file instanceof File && formData.get("external_download_url")) {
+      formData.delete("download_file");
+      setPackageInfo("");
     }
     if (thumbnail instanceof File && thumbnail.size === 0) {
       formData.delete("thumbnail");
@@ -77,7 +85,9 @@ export default function EditAssetPage({ params }: { params: Promise<{ id: string
     return (
       <AdminLayout title="Edit Asset">
         <AdminLoginNote />
-        <div className="rounded border border-white/10 bg-white/[0.03] p-5 text-slate-300">Loading asset...</div>
+        <div className="rounded border border-white/10 bg-white/[0.03] p-5 text-slate-300">
+          {message || "Loading asset..."}
+        </div>
       </AdminLayout>
     );
   }

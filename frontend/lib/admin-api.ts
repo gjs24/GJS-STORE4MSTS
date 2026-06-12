@@ -121,6 +121,18 @@ export async function adminGet<T>(path: string, fallback: T): Promise<T> {
   }
 }
 
+export async function adminGetRequired<T>(path: string): Promise<T> {
+  if (!hasAdminToken()) throw new Error("Admin login required.");
+  const token = await validAccessToken();
+  let res = await fetch(`${API_URL}${path}`, { headers: token ? { Authorization: `Bearer ${token}` } : {}, cache: "no-store" });
+  if (res.status === 401 && await refreshAccessToken()) {
+    res = await fetch(`${API_URL}${path}`, { headers: adminHeaders(), cache: "no-store" });
+  }
+  if (res.status === 404) throw new Error("Asset was not found. It may have been deleted or the URL is wrong.");
+  if (!res.ok) throw new Error(await parseAdminError(res, "Admin request failed"));
+  return res.json();
+}
+
 export async function adminPatch<T>(path: string, body: unknown): Promise<T> {
   if (!hasAdminToken()) throw new Error("Admin login required.");
   await validAccessToken();

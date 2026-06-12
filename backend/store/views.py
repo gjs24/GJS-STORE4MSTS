@@ -329,7 +329,26 @@ class AdminAssetViewSet(viewsets.ModelViewSet):
         assets = self.get_queryset().annotate(review_count=Count("reviews", filter=Q(reviews__is_approved=True)))
         return Response(AssetListSerializer(assets, many=True, context={"request": request}).data)
 
+    def clean_cloudinary_file_payload(self, request):
+        if not settings.CLOUDINARY_CONFIGURED:
+            return None
+        if "download_file" in request.FILES:
+            return Response(
+                {
+                    "detail": (
+                        "ZIP/RAR/7Z upload through the website is blocked by Cloudinary on this deployment. "
+                        "Upload the package in Cloudinary Media Library as a raw file, paste its secure URL in "
+                        "Manual Cloudinary download URL, and leave Replace ZIP file empty."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return None
+
     def create(self, request, *args, **kwargs):
+        blocked_response = self.clean_cloudinary_file_payload(request)
+        if blocked_response:
+            return blocked_response
         try:
             return super().create(request, *args, **kwargs)
         except Exception as exc:
@@ -340,6 +359,9 @@ class AdminAssetViewSet(viewsets.ModelViewSet):
             )
 
     def update(self, request, *args, **kwargs):
+        blocked_response = self.clean_cloudinary_file_payload(request)
+        if blocked_response:
+            return blocked_response
         try:
             return super().update(request, *args, **kwargs)
         except Exception as exc:
@@ -350,6 +372,9 @@ class AdminAssetViewSet(viewsets.ModelViewSet):
             )
 
     def partial_update(self, request, *args, **kwargs):
+        blocked_response = self.clean_cloudinary_file_payload(request)
+        if blocked_response:
+            return blocked_response
         try:
             return super().partial_update(request, *args, **kwargs)
         except Exception as exc:
