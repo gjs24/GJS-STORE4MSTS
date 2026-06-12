@@ -538,7 +538,7 @@ def google_drive_service_account_info():
     raw_json = settings.GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON.strip()
     raw_base64 = settings.GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON_BASE64.strip()
     if raw_base64:
-        raw_json = base64.b64decode(raw_base64).decode("utf-8")
+        raw_json = base64.b64decode(raw_base64, validate=True).decode("utf-8")
     if not raw_json:
         return None
     return json.loads(raw_json)
@@ -581,6 +581,9 @@ def grant_google_drive_access(file_id, email):
     except json.JSONDecodeError:
         logger.exception("Google Drive service account JSON is invalid")
         return "", "Google Drive service account JSON is invalid. Use the Base64 env option or one-line JSON."
+    except (UnicodeDecodeError, ValueError):
+        logger.exception("Google Drive service account credentials are invalid")
+        return "", "Google Drive service account credentials are invalid. Recreate the Render GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON_BASE64 value from the downloaded JSON key file."
     except Exception as exc:
         if HttpError and isinstance(exc, HttpError):
             logger.exception("Google Drive API access grant failed")
