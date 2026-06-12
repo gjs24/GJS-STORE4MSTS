@@ -3,6 +3,7 @@ import { Heart, Search, TrainFront } from "lucide-react";
 import { AuthNav } from "@/components/auth-nav";
 
 const links = [
+  ["Home", "/"],
   ["Assets", "/assets"],
   ["Categories", "/categories"],
   ["Dashboard", "/dashboard"],
