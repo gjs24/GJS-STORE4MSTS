@@ -28,6 +28,7 @@ export type Asset = {
   is_featured: boolean;
   is_upcoming?: boolean;
   thumbnail?: string;
+  thumbnail_url?: string;
   has_file?: boolean;
   download_file?: string | null;
   external_download_url?: string;

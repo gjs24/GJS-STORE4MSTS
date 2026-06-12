@@ -54,6 +54,9 @@ export default function CreateAssetPage() {
       }
       if (thumbnail instanceof File && thumbnail.size === 0) {
         formData.delete("thumbnail");
+      } else if (thumbnail instanceof File && formData.get("thumbnail_url")) {
+        formData.delete("thumbnail");
+        setThumbnailInfo("");
       }
 
       if (!title || !formData.get("short_description") || !formData.get("description") || !category) {
@@ -136,8 +139,15 @@ export default function CreateAssetPage() {
         <label className="block">
           <span className="text-sm text-slate-300">Product card / home image</span>
           <input name="thumbnail" type="file" accept="image/*" onChange={(event) => setThumbnailInfo(fileStatus(event.currentTarget.files?.[0]))} className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-3 text-sm" />
-          <span className="mt-1 block text-xs text-slate-500">This image appears on the home page, asset cards, and product detail hero.</span>
+          <span className="mt-1 block text-xs text-slate-500">For production, prefer uploading the image in Cloudinary and pasting the secure URL below.</span>
           {thumbnailInfo ? <span className="mt-1 block text-xs text-rail-amber">{thumbnailInfo}</span> : null}
+        </label>
+        <label className="block md:col-span-2">
+          <span className="text-sm text-slate-300">Manual Cloudinary image URL</span>
+          <input name="thumbnail_url" type="url" placeholder="https://res.cloudinary.com/.../image/upload/..." className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-3" />
+          <span className="mt-1 block text-xs text-slate-500">
+            Paste the secure image URL here to show product card/home/detail image without uploading through Render.
+          </span>
         </label>
         <label className="flex items-center gap-3 rounded border border-white/10 bg-black/30 px-3 py-3">
           <input name="is_published" type="checkbox" defaultChecked />

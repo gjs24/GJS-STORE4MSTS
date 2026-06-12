@@ -48,6 +48,7 @@ class Asset(models.Model):
     is_featured = models.BooleanField(default=False)
     is_upcoming = models.BooleanField(default=False)
     thumbnail = models.ImageField(upload_to="assets/thumbnails/", blank=True, null=True)
+    thumbnail_url = models.URLField(blank=True)
     preview_video_url = models.URLField(blank=True)
     requirements = models.TextField(blank=True)
     installation_steps = models.TextField(blank=True)

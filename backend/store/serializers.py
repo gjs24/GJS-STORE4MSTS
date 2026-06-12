@@ -88,6 +88,7 @@ class AssetListSerializer(serializers.ModelSerializer):
             "is_featured",
             "is_upcoming",
             "thumbnail",
+            "thumbnail_url",
             "has_file",
             "download_count",
             "average_rating",
@@ -113,6 +114,8 @@ class AssetListSerializer(serializers.ModelSerializer):
         return bool(obj.download_file or obj.external_download_url)
 
     def get_thumbnail(self, obj):
+        if obj.thumbnail_url:
+            return obj.thumbnail_url
         if not obj.thumbnail:
             return None
         try:

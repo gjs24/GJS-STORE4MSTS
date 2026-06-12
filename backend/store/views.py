@@ -332,6 +332,17 @@ class AdminAssetViewSet(viewsets.ModelViewSet):
     def clean_cloudinary_file_payload(self, request):
         if not settings.CLOUDINARY_CONFIGURED:
             return None
+        if "thumbnail" in request.FILES:
+            return Response(
+                {
+                    "detail": (
+                        "Image upload through the website is blocked by Cloudinary on this deployment. "
+                        "Upload the image in Cloudinary Media Library, paste its secure URL in Manual Cloudinary image URL, "
+                        "and leave Product card / home image empty."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         if "download_file" in request.FILES:
             return Response(
                 {
