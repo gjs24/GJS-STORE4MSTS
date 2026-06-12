@@ -70,6 +70,7 @@ PRIVATE_DOWNLOAD_ACCESS_KEY_ID=your-private-download-access-key
 PRIVATE_DOWNLOAD_SECRET_ACCESS_KEY=your-private-download-secret-key
 PRIVATE_DOWNLOAD_URL_EXPIRE_SECONDS=300
 GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON=paste_service_account_json_on_one_line
+GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON_BASE64=paste_base64_service_account_json_here
 ```
 
 After changing Render environment variables:
@@ -232,6 +233,14 @@ Admin Dashboard -> Edit Asset -> Restricted Google Drive file ID -> Paste file I
 ```
 
 When a paid user downloads, the backend grants that user's account email reader access to the restricted Drive file.
+
+If Render has trouble with one-line JSON, use Base64 instead:
+
+```powershell
+[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes((Get-Content "C:\path\service-account.json" -Raw))) | Set-Clipboard
+```
+
+Paste that value into `GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON_BASE64`.
 
 ## Useful Test URLs
 

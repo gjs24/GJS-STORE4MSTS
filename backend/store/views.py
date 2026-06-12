@@ -1,4 +1,5 @@
 import hmac
+import base64
 import json
 import logging
 import re
@@ -460,9 +461,9 @@ def create_download_response(request, asset):
     if asset.google_drive_file_id:
         if not request.user.email:
             return Response({"detail": "Your account needs an email address before Drive access can be granted."}, status=status.HTTP_400_BAD_REQUEST)
-        drive_url = grant_google_drive_access(asset.google_drive_file_id, request.user.email)
+        drive_url, drive_error = grant_google_drive_access(asset.google_drive_file_id, request.user.email)
         if not drive_url:
-            return Response({"detail": "Google Drive access is not configured. Please contact the admin."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            return Response({"detail": drive_error}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         DownloadLog.objects.create(
             user=request.user,
             asset=asset,
@@ -532,15 +533,27 @@ def create_private_download_url(object_key):
         return ""
 
 
+def google_drive_service_account_info():
+    raw_json = settings.GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON.strip()
+    raw_base64 = settings.GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON_BASE64.strip()
+    if raw_base64:
+        raw_json = base64.b64decode(raw_base64).decode("utf-8")
+    if not raw_json:
+        return None
+    return json.loads(raw_json)
+
+
 def grant_google_drive_access(file_id, email):
-    if not settings.GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON:
-        return ""
+    if not (settings.GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON or settings.GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON_BASE64):
+        return "", "Google Drive service account is not configured in Render."
     try:
         from google.oauth2 import service_account
         from googleapiclient.discovery import build
         from googleapiclient.errors import HttpError
 
-        service_account_info = json.loads(settings.GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON)
+        service_account_info = google_drive_service_account_info()
+        if not service_account_info:
+            return "", "Google Drive service account JSON is empty."
         credentials = service_account.Credentials.from_service_account_info(
             service_account_info,
             scopes=["https://www.googleapis.com/auth/drive"],
@@ -562,9 +575,20 @@ def grant_google_drive_access(file_id, email):
             if getattr(exc, "status_code", None) != 409 and getattr(exc.resp, "status", None) != 409:
                 raise
         return f"https://drive.google.com/file/d/{file_id}/view"
+    except json.JSONDecodeError:
+        logger.exception("Google Drive service account JSON is invalid")
+        return "", "Google Drive service account JSON is invalid. Use the Base64 env option or one-line JSON."
+    except HttpError as exc:
+        logger.exception("Google Drive API access grant failed")
+        status_code = getattr(exc, "status_code", None) or getattr(exc.resp, "status", None)
+        if status_code == 404:
+            return "", "Google Drive file was not found. Check the file ID and share the file with the service account email."
+        if status_code == 403:
+            return "", "Google Drive permission denied. Enable Drive API and share the restricted file with the service account email as Viewer."
+        return "", "Google Drive access could not be granted. Check Drive API, service account, and file sharing."
     except Exception:
         logger.exception("Google Drive access grant failed")
-        return ""
+        return "", "Google Drive access is not configured correctly. Check Render env and service account key."
 
 
 @api_view(["POST"])
