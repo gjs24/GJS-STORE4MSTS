@@ -58,6 +58,7 @@ class Asset(models.Model):
         storage=RawAssetStorage(),
         validators=[FileExtensionValidator(["zip", "rar", "7z"])],
     )
+    external_download_url = models.URLField(blank=True)
     download_count = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

@@ -205,6 +205,15 @@ Upcoming products are visible to users but checkout and downloads are blocked un
 
 Important: Render free service storage is not permanent. Uploaded files stored in `backend/media/` can disappear after redeploy. For real paid files, configure Cloudinary or S3.
 
+For large files such as 300 MB+ ZIP packages, use the manual Cloudinary URL flow:
+
+```text
+Cloudinary Dashboard -> Media Library -> Upload ZIP as raw/file -> Copy secure URL
+Admin Dashboard -> Edit Asset -> Manual Cloudinary download URL -> Paste URL -> Save
+```
+
+This avoids sending the large file through Vercel and Render during form upload.
+
 ## Useful Test URLs
 
 Backend:

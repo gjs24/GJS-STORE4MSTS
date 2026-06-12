@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Download, Heart, PackageCheck, User, type LucideIcon } from "lucide-react";
 import { PageShell } from "@/components/page-shell";
+import { ProfilePanel } from "@/components/profile-panel";
 
 export default function DashboardPage() {
   const cards: Array<[string, string, LucideIcon]> = [
@@ -11,6 +12,7 @@ export default function DashboardPage() {
   ];
   return (
     <PageShell title="User Dashboard" eyebrow="Your simulator library">
+      <ProfilePanel />
       <div className="grid gap-4 md:grid-cols-4">
         {cards.map(([label, href, Icon]) => (
           <Link key={href} href={href} className="rounded border border-white/10 bg-white/[0.03] p-5 hover:border-rail-red">

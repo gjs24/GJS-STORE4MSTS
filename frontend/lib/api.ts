@@ -27,6 +27,7 @@ export type Asset = {
   thumbnail?: string;
   has_file?: boolean;
   download_file?: string | null;
+  external_download_url?: string;
   preview_video_url?: string;
   requirements?: string;
   installation_steps?: string;
@@ -147,11 +148,38 @@ export const fallbackAssets: Asset[] = [
   }
 ];
 
+function filterFallbackAssets(path: string) {
+  const [, queryString = ""] = path.split("?");
+  const params = new URLSearchParams(queryString);
+  const search = params.get("search")?.trim().toLowerCase();
+  const category = params.get("category")?.trim();
+  const simulator = params.get("simulator_type")?.trim();
+  const price = params.get("price")?.trim();
+  const version = params.get("version")?.trim().toLowerCase();
+
+  return fallbackAssets.filter((asset) => {
+    const matchesSearch = !search || [
+      asset.title,
+      asset.short_description,
+      asset.description,
+      asset.category?.name,
+      asset.category?.slug,
+      asset.simulator_type
+    ].filter(Boolean).join(" ").toLowerCase().includes(search);
+    const matchesCategory = !category || asset.category?.slug === category;
+    const matchesSimulator = !simulator || asset.simulator_type === simulator || asset.simulator_type === "BOTH";
+    const matchesPrice = !price || (price === "free" ? asset.is_free : price === "premium" ? !asset.is_free : true);
+    const matchesVersion = !version || asset.version.toLowerCase().includes(version);
+
+    return matchesSearch && matchesCategory && matchesSimulator && matchesPrice && matchesVersion;
+  });
+}
+
 export async function getAssets(path = "/assets/") {
   try {
     return await apiGet<Asset[]>(path);
   } catch {
-    return fallbackAssets;
+    return filterFallbackAssets(path);
   }
 }
 

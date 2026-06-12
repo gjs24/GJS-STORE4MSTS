@@ -153,7 +153,14 @@ class AssetViewSet(viewsets.ModelViewSet):
         upcoming = self.request.query_params.get("upcoming")
 
         if search:
-            qs = qs.filter(Q(title__icontains=search) | Q(description__icontains=search))
+            qs = qs.filter(
+                Q(title__icontains=search)
+                | Q(short_description__icontains=search)
+                | Q(description__icontains=search)
+                | Q(category__name__icontains=search)
+                | Q(category__slug__icontains=search)
+                | Q(simulator_type__icontains=search)
+            )
         if category:
             qs = qs.filter(category__slug=category)
         if simulator:
@@ -408,7 +415,7 @@ def create_download_response(request, asset):
         return Response({"detail": "Download file is not available yet."}, status=status.HTTP_404_NOT_FOUND)
     if not asset.download_file.storage.exists(asset.download_file.name):
         return Response(
-            {"detail": "Download file is missing from storage. Please re-upload this asset file from the admin dashboard."},
+            {"detail": "Download file is missing from storage. Please contact the admin."},
             status=status.HTTP_404_NOT_FOUND,
         )
 

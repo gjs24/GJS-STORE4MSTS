@@ -95,7 +95,7 @@ class AssetListSerializer(serializers.ModelSerializer):
         return round(rating or 0, 1)
 
     def get_has_file(self, obj):
-        return bool(obj.download_file)
+        return bool(obj.download_file or obj.external_download_url)
 
     def get_thumbnail(self, obj):
         if not obj.thumbnail:

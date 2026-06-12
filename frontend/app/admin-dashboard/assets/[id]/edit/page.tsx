@@ -170,6 +170,13 @@ export default function EditAssetPage({ params }: { params: Promise<{ id: string
           </span>
           {packageInfo ? <span className="mt-1 block text-xs text-rail-amber">{packageInfo}</span> : null}
         </label>
+        <label className="block md:col-span-2">
+          <span className="text-sm text-slate-300">Manual Cloudinary download URL</span>
+          <input name="external_download_url" type="url" defaultValue={asset.external_download_url || ""} placeholder="https://res.cloudinary.com/.../raw/upload/..." className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-3" />
+          <span className="mt-1 block text-xs text-slate-500">
+            For large files, upload the ZIP directly in Cloudinary and paste the secure URL here. Leave empty if you use the uploaded package field.
+          </span>
+        </label>
         <div className="flex flex-wrap gap-3 md:col-span-2">
           <button disabled={saving} className="rounded bg-rail-red px-5 py-3 font-semibold disabled:opacity-60">
             {saving ? <Loader2 className="mr-2 inline animate-spin" size={18} /> : <Save className="mr-2 inline" size={18} />}
