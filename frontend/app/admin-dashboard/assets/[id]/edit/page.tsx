@@ -186,6 +186,36 @@ export default function EditAssetPage({ params }: { params: Promise<{ id: string
             <span>Upcoming product / coming soon</span>
           </label>
         </div>
+        <div className="space-y-4 rounded border border-rail-amber/20 bg-rail-amber/5 p-4 md:col-span-2">
+          <h2 className="font-semibold text-rail-amber">Coming Soon Banner</h2>
+          <label className="block">
+            <span className="text-sm text-slate-300">Coming Soon Banner Title</span>
+            <input name="coming_soon_banner_title" defaultValue={asset.coming_soon_banner_title || "Vande Bharat Express Train Pack"} className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-3" />
+          </label>
+          <label className="block">
+            <span className="text-sm text-slate-300">Coming Soon Message</span>
+            <textarea
+              name="coming_soon_message"
+              rows={8}
+              defaultValue={asset.coming_soon_message || `The highly detailed Indian Railways Vande Bharat Express Train Pack for MSTS and Open Rails is coming soon.\n\nFeatures include:\n- Detailed exterior and interior\n- Fully functional cab view\n- Working door animations\n- Custom sounds\n- Night textures\n- Realistic lighting\n- Open Rails compatibility\n\nStay tuned for the official release.`}
+              className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-3"
+            />
+          </label>
+          <div className="grid gap-4 md:grid-cols-3">
+            <label className="block">
+              <span className="text-sm text-slate-300">Button Text</span>
+              <input name="coming_soon_button_text" defaultValue={asset.coming_soon_button_text || "Notify Me"} className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-3" />
+            </label>
+            <label className="block">
+              <span className="text-sm text-slate-300">Homepage Badge</span>
+              <input name="coming_soon_badge" defaultValue={asset.coming_soon_badge || "COMING SOON"} className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-3" />
+            </label>
+            <label className="block">
+              <span className="text-sm text-slate-300">Product Status Text</span>
+              <input name="coming_soon_status_text" defaultValue={asset.coming_soon_status_text || "Release Date: To Be Announced"} className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-3" />
+            </label>
+          </div>
+        </div>
         <textarea name="requirements" defaultValue={asset.requirements || ""} placeholder="Requirements" rows={4} className="rounded border border-white/10 bg-black/40 px-3 py-3" />
         <textarea name="installation_steps" defaultValue={asset.installation_steps || ""} placeholder="Installation steps" rows={4} className="rounded border border-white/10 bg-black/40 px-3 py-3" />
         <textarea name="changelog" defaultValue={asset.changelog || ""} placeholder="Changelog" rows={4} className="rounded border border-white/10 bg-black/40 px-3 py-3 md:col-span-2" />

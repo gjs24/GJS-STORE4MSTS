@@ -16,7 +16,7 @@ export function AssetCard({ asset }: { asset: Asset }) {
         <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-black/20" />
         <span className="absolute left-3 top-3 rounded bg-black/70 px-2 py-1 text-xs text-white">{asset.simulator_type.replace("_", " ")}</span>
         <span className="absolute right-3 top-3 rounded bg-rail-red px-2 py-1 text-xs font-semibold">
-          {asset.is_upcoming ? "COMING SOON" : asset.is_free ? "FREE" : asset.discount_percent ? `${asset.discount_percent}% OFF` : `INR ${asset.price}`}
+          {asset.is_upcoming ? asset.coming_soon_badge || "COMING SOON" : asset.is_free ? "FREE" : asset.discount_percent ? `${asset.discount_percent}% OFF` : `INR ${asset.price}`}
         </span>
       </div>
       <div className="space-y-3 p-4">
@@ -25,7 +25,13 @@ export function AssetCard({ asset }: { asset: Asset }) {
           <h3 className="mt-1 line-clamp-2 text-lg font-semibold text-white">{asset.title}</h3>
         </div>
         <p className="line-clamp-2 text-sm text-slate-400">{asset.short_description}</p>
-        <p className="text-sm"><PriceDisplay asset={asset} compact /></p>
+        <p className="text-sm">
+          {asset.is_upcoming ? (
+            <span className="font-semibold text-rail-amber">{asset.coming_soon_status_text || "Release Date: To Be Announced"}</span>
+          ) : (
+            <PriceDisplay asset={asset} compact />
+          )}
+        </p>
         <div className="flex items-center justify-between text-xs text-slate-300">
           <span className="flex items-center gap-1"><Star size={14} className="fill-rail-amber text-rail-amber" /> {asset.average_rating}</span>
           <span>v{asset.version}</span>

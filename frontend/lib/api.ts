@@ -27,6 +27,11 @@ export type Asset = {
   is_published?: boolean;
   is_featured: boolean;
   is_upcoming?: boolean;
+  coming_soon_banner_title?: string;
+  coming_soon_message?: string;
+  coming_soon_button_text?: string;
+  coming_soon_badge?: string;
+  coming_soon_status_text?: string;
   thumbnail?: string;
   thumbnail_url?: string;
   has_file?: boolean;
