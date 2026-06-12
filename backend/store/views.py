@@ -613,7 +613,14 @@ def grant_google_drive_access(file_id, email):
 @throttle_classes([UserRateThrottle])
 def asset_download_by_id(request, pk):
     asset = get_object_or_404(Asset, pk=pk)
-    return create_download_response(request, asset)
+    try:
+        return create_download_response(request, asset)
+    except Exception:
+        logger.exception("Asset download failed")
+        return Response(
+            {"detail": "Download setup failed on the server. Check the asset download source and Google Drive/Cloud storage settings."},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
 
 
 @api_view(["GET"])
