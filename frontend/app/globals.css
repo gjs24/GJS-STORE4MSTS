@@ -113,3 +113,21 @@ body {
 .hero-media-icon {
   animation: hero-card-pulse 4.5s ease-in-out infinite;
 }
+
+@keyframes home-announcement-scroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+.home-announcement-track {
+  display: flex;
+  width: max-content;
+  min-width: 200%;
+  gap: 4rem;
+  animation: home-announcement-scroll 24s linear infinite;
+  white-space: nowrap;
+}
+
+.home-announcement-track:hover {
+  animation-play-state: paused;
+}

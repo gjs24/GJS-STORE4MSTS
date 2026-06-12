@@ -52,6 +52,16 @@ export default async function HomePage() {
             )}
           </div>
         </div>
+        {siteSettings.scroller_enabled && siteSettings.scroller_message ? (
+          <div className="relative border-t border-white/10 bg-black/45">
+            <div className="mx-auto max-w-7xl overflow-hidden px-4 py-3">
+              <div className="home-announcement-track text-sm font-semibold uppercase tracking-wide text-rail-amber">
+                <span>{siteSettings.scroller_message}</span>
+                <span aria-hidden="true">{siteSettings.scroller_message}</span>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
 
       <div className="mx-auto max-w-7xl px-4 py-12">

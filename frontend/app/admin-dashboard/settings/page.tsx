@@ -24,7 +24,7 @@ export default function AdminSettingsPage() {
   useEffect(() => {
     adminGet<AdminSettings>("/admin/settings/", fallbackSettings).then((data) => {
       setSettings(data);
-      setSiteForm(data.site || fallbackSettings.site);
+      setSiteForm({ ...fallbackSettings.site, ...(data.site || {}) });
     });
   }, []);
 
@@ -162,6 +162,31 @@ export default function AdminSettingsPage() {
             />
           </label>
         </div>
+        <div className="border-t border-white/10 pt-5">
+          <div className="flex items-center gap-2 text-rail-amber">
+            <Megaphone size={20} />
+            <h2 className="font-semibold text-white">Home page scrolling message</h2>
+          </div>
+          <p className="mt-2 text-sm text-slate-400">Show a moving announcement bar on the home page for coming soon products, offers, or support updates.</p>
+        </div>
+        <label className="flex items-center gap-3 text-sm font-semibold text-slate-200">
+          <input
+            type="checkbox"
+            checked={siteForm.scroller_enabled}
+            onChange={(event) => updateSiteForm("scroller_enabled", event.target.checked)}
+            className="h-4 w-4 accent-rail-red"
+          />
+          Enable home page scroller
+        </label>
+        <label className="block text-sm font-semibold text-slate-200">
+          Scroller message
+          <input
+            value={siteForm.scroller_message}
+            onChange={(event) => updateSiteForm("scroller_message", event.target.value)}
+            placeholder="COMING SOON: GJS Vande Bharat Express Train Pack - Detailed Model, Functional Cab, Custom Sounds and Door Animations."
+            className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-2 text-white outline-none focus:border-rail-red"
+          />
+        </label>
         {status ? <p className="text-sm text-rail-amber">{status}</p> : null}
       </form>
     </AdminLayout>
