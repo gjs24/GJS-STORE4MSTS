@@ -1,7 +1,7 @@
 import Link from "next/link";
-import Image from "next/image";
-import { ArrowRight, BadgeIndianRupee, Download, ShieldCheck, TrainFront } from "lucide-react";
+import { ArrowRight, BadgeIndianRupee, Download, ShieldCheck } from "lucide-react";
 import { AssetCard } from "@/components/asset-card";
+import { HomeHeroSlideshow } from "@/components/home-hero-slideshow";
 import { getAssets, getCategories, getSiteSettings } from "@/lib/api";
 
 export default async function HomePage() {
@@ -11,6 +11,10 @@ export default async function HomePage() {
     getCategories(),
     getSiteSettings()
   ]);
+  const heroImages = [
+    siteSettings.hero_image_url,
+    ...siteSettings.hero_slideshow_urls.split(/\r?\n/).map((url) => url.trim())
+  ].filter(Boolean);
 
   return (
     <section className="rail-grid min-h-screen">
@@ -38,18 +42,7 @@ export default async function HomePage() {
             </div>
           </div>
           <div className="cinematic-panel hero-media-card relative flex min-h-[320px] items-center justify-center overflow-hidden rounded-lg">
-            {siteSettings.hero_image_url ? (
-              <Image
-                src={siteSettings.hero_image_url}
-                alt={siteSettings.hero_image_alt || "MSTS-GJS Production Store railway asset preview"}
-                fill
-                priority
-                sizes="(min-width: 768px) 45vw, 100vw"
-                className="hero-media-image object-cover"
-              />
-            ) : (
-              <TrainFront className="hero-media-icon relative z-10 h-40 w-40 text-white" />
-            )}
+            <HomeHeroSlideshow images={heroImages} alt={siteSettings.hero_image_alt || "MSTS-GJS Production Store railway asset preview"} />
           </div>
         </div>
         {siteSettings.scroller_enabled && siteSettings.scroller_message ? (

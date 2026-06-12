@@ -101,6 +101,17 @@ export default function AdminSettingsPage() {
           />
         </label>
         <label className="block text-sm font-semibold text-slate-200">
+          Home page slideshow image URLs
+          <textarea
+            value={siteForm.hero_slideshow_urls}
+            onChange={(event) => updateSiteForm("hero_slideshow_urls", event.target.value)}
+            rows={4}
+            placeholder={"https://res.cloudinary.com/.../image/upload/train-1.jpg\nhttps://res.cloudinary.com/.../image/upload/train-2.jpg"}
+            className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-2 text-white outline-none focus:border-rail-red"
+          />
+          <span className="mt-1 block text-xs text-slate-500">Paste one image URL per line. The main image URL above shows first.</span>
+        </label>
+        <label className="block text-sm font-semibold text-slate-200">
           Image alt text
           <input
             value={siteForm.hero_image_alt}

@@ -214,6 +214,7 @@ class SiteSettingSerializer(serializers.ModelSerializer):
         model = SiteSetting
         fields = [
             "hero_image_url",
+            "hero_slideshow_urls",
             "hero_image_alt",
             "popup_enabled",
             "popup_title",

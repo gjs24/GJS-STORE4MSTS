@@ -64,6 +64,7 @@ export type CurrentUser = {
 
 export type SiteSettings = {
   hero_image_url: string;
+  hero_slideshow_urls: string;
   hero_image_alt: string;
   popup_enabled: boolean;
   popup_title: string;
@@ -77,6 +78,7 @@ export type SiteSettings = {
 
 export const fallbackSiteSettings: SiteSettings = {
   hero_image_url: "",
+  hero_slideshow_urls: "",
   hero_image_alt: "MSTS-GJS Production Store railway asset preview",
   popup_enabled: false,
   popup_title: "Welcome to MSTS-GJS Production Store",

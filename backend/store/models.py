@@ -203,6 +203,7 @@ class UpdateLog(models.Model):
 
 class SiteSetting(models.Model):
     hero_image_url = models.URLField(blank=True)
+    hero_slideshow_urls = models.TextField(blank=True)
     hero_image_alt = models.CharField(max_length=180, default="MSTS-GJS Production Store railway asset preview")
     popup_enabled = models.BooleanField(default=False)
     popup_title = models.CharField(max_length=120, default="Welcome to MSTS-GJS Production Store")
