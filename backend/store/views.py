@@ -20,7 +20,7 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 
-from .models import Asset, Category, DownloadLog, Order, Payment, Review, Wishlist
+from .models import Asset, Category, DownloadLog, Order, Payment, Review, SiteSetting, Wishlist
 from .permissions import IsAdminOrReadOnly
 from .serializers import (
     AssetDetailSerializer,
@@ -32,6 +32,7 @@ from .serializers import (
     PaymentVerifySerializer,
     RegisterSerializer,
     ReviewSerializer,
+    SiteSettingSerializer,
     UserSerializer,
     WishlistSerializer,
 )
@@ -634,8 +635,20 @@ def admin_stats(request):
 
 
 @api_view(["GET"])
+@permission_classes([permissions.AllowAny])
+def site_settings(request):
+    return Response(SiteSettingSerializer(SiteSetting.load()).data)
+
+
+@api_view(["GET", "PATCH"])
 @permission_classes([permissions.IsAdminUser])
 def admin_settings(request):
+    site_setting = SiteSetting.load()
+    if request.method == "PATCH":
+        serializer = SiteSettingSerializer(site_setting, data=request.data.get("site", request.data), partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        site_setting = serializer.instance
     return Response(
         {
             "api_status": "online",
@@ -652,5 +665,6 @@ def admin_settings(request):
                 "allowed_hosts": settings.ALLOWED_HOSTS,
                 "download_rate_limit": settings.REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]["downloads"],
             },
+            "site": SiteSettingSerializer(site_setting).data,
         }
     )

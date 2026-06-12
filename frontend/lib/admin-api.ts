@@ -1,6 +1,6 @@
 "use client";
 
-import { API_URL, type Asset } from "./api";
+import { API_URL, type Asset, type SiteSettings } from "./api";
 
 export type AdminStats = {
   total_users: number;
@@ -51,6 +51,7 @@ export type AdminSettings = {
   payments: { razorpay_configured: boolean; stripe_configured: boolean };
   storage: { cloudinary_configured: boolean; media_url: string };
   security: { debug: boolean; allowed_hosts: string[]; download_rate_limit: string };
+  site: SiteSettings;
 };
 
 function storedAccessToken() {
@@ -148,7 +149,7 @@ export async function adminPatch<T>(path: string, body: unknown): Promise<T> {
       body: JSON.stringify(body)
     });
   }
-  if (!res.ok) throw new Error("Update failed");
+  if (!res.ok) throw new Error(await parseAdminError(res, "Update failed"));
   return res.json();
 }
 

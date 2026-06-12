@@ -3,7 +3,7 @@ from django.conf import settings
 from django.db.models import Avg
 from rest_framework import serializers
 
-from .models import Asset, AssetImage, Category, DownloadLog, Order, Payment, Review, UpdateLog, Wishlist
+from .models import Asset, AssetImage, Category, DownloadLog, Order, Payment, Review, SiteSetting, UpdateLog, Wishlist
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -202,3 +202,19 @@ class WishlistSerializer(serializers.ModelSerializer):
         model = Wishlist
         fields = ["id", "asset", "asset_id", "created_at"]
         read_only_fields = ["created_at"]
+
+
+class SiteSettingSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SiteSetting
+        fields = [
+            "hero_image_url",
+            "hero_image_alt",
+            "popup_enabled",
+            "popup_title",
+            "popup_message",
+            "popup_button_text",
+            "popup_button_url",
+            "updated_at",
+        ]
+        read_only_fields = ["updated_at"]

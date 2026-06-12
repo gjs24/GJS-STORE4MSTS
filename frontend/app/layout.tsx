@@ -4,6 +4,7 @@ import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { WhatsAppSupport } from "@/components/whatsapp-support";
 import { GoogleAuthProvider } from "@/components/google-auth-provider";
+import { EntrancePopup } from "@/components/entrance-popup";
 
 export const metadata: Metadata = {
   title: "MSTS-GJS Production Store",
@@ -17,6 +18,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <GoogleAuthProvider>
           <SiteHeader />
           <main>{children}</main>
+          <EntrancePopup />
           <WhatsAppSupport />
           <SiteFooter />
         </GoogleAuthProvider>

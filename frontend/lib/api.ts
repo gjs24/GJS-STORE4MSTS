@@ -57,6 +57,27 @@ export type CurrentUser = {
   date_joined?: string;
 };
 
+export type SiteSettings = {
+  hero_image_url: string;
+  hero_image_alt: string;
+  popup_enabled: boolean;
+  popup_title: string;
+  popup_message: string;
+  popup_button_text: string;
+  popup_button_url: string;
+  updated_at?: string;
+};
+
+export const fallbackSiteSettings: SiteSettings = {
+  hero_image_url: "",
+  hero_image_alt: "MSTS-GJS Production Store railway asset preview",
+  popup_enabled: false,
+  popup_title: "Welcome to MSTS-GJS Production Store",
+  popup_message: "",
+  popup_button_text: "Browse assets",
+  popup_button_url: "/assets"
+};
+
 export function getStoredUser(): CurrentUser | null {
   if (typeof window === "undefined") return null;
   const raw = localStorage.getItem("currentUser");
@@ -203,6 +224,14 @@ export async function getCategories() {
     return await apiGet<Category[]>("/categories/");
   } catch {
     return fallbackCategories;
+  }
+}
+
+export async function getSiteSettings() {
+  try {
+    return await apiGet<SiteSettings>("/site-settings/");
+  } catch {
+    return fallbackSiteSettings;
   }
 }
 

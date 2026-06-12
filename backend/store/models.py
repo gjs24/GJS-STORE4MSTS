@@ -194,3 +194,26 @@ class UpdateLog(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+
+
+class SiteSetting(models.Model):
+    hero_image_url = models.URLField(blank=True)
+    hero_image_alt = models.CharField(max_length=180, default="MSTS-GJS Production Store railway asset preview")
+    popup_enabled = models.BooleanField(default=False)
+    popup_title = models.CharField(max_length=120, default="Welcome to MSTS-GJS Production Store")
+    popup_message = models.TextField(blank=True)
+    popup_button_text = models.CharField(max_length=60, default="Browse assets")
+    popup_button_url = models.CharField(max_length=200, default="/assets")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Site setting"
+        verbose_name_plural = "Site settings"
+
+    def __str__(self):
+        return "Site settings"
+
+    @classmethod
+    def load(cls):
+        setting, _ = cls.objects.get_or_create(pk=1)
+        return setting

@@ -1,13 +1,15 @@
 import Link from "next/link";
+import Image from "next/image";
 import { ArrowRight, BadgeIndianRupee, Download, ShieldCheck, TrainFront } from "lucide-react";
 import { AssetCard } from "@/components/asset-card";
-import { getAssets, getCategories } from "@/lib/api";
+import { getAssets, getCategories, getSiteSettings } from "@/lib/api";
 
 export default async function HomePage() {
-  const [assets, upcomingAssets, categories] = await Promise.all([
+  const [assets, upcomingAssets, categories, siteSettings] = await Promise.all([
     getAssets("/assets/?featured=true"),
     getAssets("/assets/?upcoming=true"),
-    getCategories()
+    getCategories(),
+    getSiteSettings()
   ]);
 
   return (
@@ -35,8 +37,19 @@ export default async function HomePage() {
               <span className="rounded border border-white/10 bg-white/5 p-3"><ShieldCheck size={18} /> JWT secure</span>
             </div>
           </div>
-          <div className="cinematic-panel flex min-h-[320px] items-center justify-center rounded-lg">
-            <TrainFront className="h-40 w-40 text-white" />
+          <div className="cinematic-panel relative flex min-h-[320px] items-center justify-center overflow-hidden rounded-lg">
+            {siteSettings.hero_image_url ? (
+              <Image
+                src={siteSettings.hero_image_url}
+                alt={siteSettings.hero_image_alt || "MSTS-GJS Production Store railway asset preview"}
+                fill
+                priority
+                sizes="(min-width: 768px) 45vw, 100vw"
+                className="object-cover"
+              />
+            ) : (
+              <TrainFront className="h-40 w-40 text-white" />
+            )}
           </div>
         </div>
       </div>

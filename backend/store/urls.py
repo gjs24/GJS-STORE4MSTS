@@ -23,6 +23,7 @@ from .views import (
     admin_stats,
     asset_download_by_id,
     current_user,
+    site_settings,
 )
 
 router = DefaultRouter()
@@ -36,6 +37,7 @@ router.register("admin/reviews", AdminReviewViewSet, basename="admin-review")
 
 urlpatterns = [
     path("assets/<int:pk>/download/", asset_download_by_id, name="asset-download-by-id"),
+    path("site-settings/", site_settings, name="site-settings"),
     path("", include(router.urls)),
     path("auth/register/", RegisterView.as_view(), name="register"),
     path("auth/login/", LoginView.as_view(), name="login"),
