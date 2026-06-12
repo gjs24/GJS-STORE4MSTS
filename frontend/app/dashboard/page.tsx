@@ -8,7 +8,7 @@ export default function DashboardPage() {
     ["My purchases", "/dashboard/purchases", PackageCheck],
     ["Download history", "/dashboard/downloads", Download],
     ["Wishlist", "/wishlist", Heart],
-    ["Profile", "/dashboard", User]
+    ["Profile", "/dashboard/profile", User]
   ];
   return (
     <PageShell title="User Dashboard" eyebrow="Your simulator library">

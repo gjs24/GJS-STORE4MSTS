@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Eye, EyeOff, Pencil, Search, Star, Trash2 } from "lucide-react";
 import { AdminLoginNote } from "@/components/admin-login-note";
 import { AdminLayout } from "@/components/admin-table";
+import { PriceDisplay } from "@/components/price-display";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { adminDelete, adminGet, adminPatch, adminPost } from "@/lib/admin-api";
@@ -102,7 +103,7 @@ export default function AdminAssetsPage() {
               </span>
             </span>
             <span>{asset.category.name}</span>
-            <span>{asset.is_free ? "Free" : `INR ${asset.price}`}</span>
+            <span><PriceDisplay asset={asset} compact /></span>
             <span>
               <Badge variant={asset.is_published === false ? "muted" : "success"}>
                 {asset.is_published === false ? "Hidden" : "Visible"}

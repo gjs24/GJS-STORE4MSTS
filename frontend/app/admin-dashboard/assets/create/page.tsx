@@ -12,7 +12,9 @@ type CreatedAsset = {
   id: number;
   title: string;
   slug: string;
+  original_price: string;
   price: string;
+  discount_percent?: number;
 };
 
 export default function CreateAssetPage() {
@@ -33,10 +35,12 @@ export default function CreateAssetPage() {
     try {
       const title = String(formData.get("title") || "");
       const price = isFree ? "0.00" : String(formData.get("price") || "0");
+      const originalPrice = isFree ? "0.00" : String(formData.get("original_price") || price);
       const category = Number(formData.get("category"));
       const file = formData.get("download_file");
       const thumbnail = formData.get("thumbnail");
 
+      formData.set("original_price", originalPrice);
       formData.set("price", price);
       formData.set("is_free", String(isFree));
       formData.set("is_published", String(formData.get("is_published") === "on"));
@@ -55,7 +59,7 @@ export default function CreateAssetPage() {
       }
 
       const created = await adminPostForm<CreatedAsset>("/admin/assets/", formData);
-      setMessage(`Upload completed. Asset created: ${created.title}. Price set to INR ${created.price}.`);
+      setMessage(`Upload completed. Asset created: ${created.title}. Selling price INR ${created.price}${created.discount_percent ? ` (${created.discount_percent}% off)` : ""}.`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not create asset.");
     } finally {
@@ -105,7 +109,12 @@ export default function CreateAssetPage() {
           </select>
         </label>
         <label className="block">
-          <span className="text-sm text-slate-300">Price in INR</span>
+          <span className="text-sm text-slate-300">Original price in INR</span>
+          <input name="original_price" type="number" min="0" step="0.01" disabled={isFree} defaultValue="149.00" className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-3 disabled:opacity-50" />
+          <span className="mt-1 block text-xs text-slate-500">Old/MRP price. Keep higher than selling price to show an offer.</span>
+        </label>
+        <label className="block">
+          <span className="text-sm text-slate-300">Selling price in INR</span>
           <input name="price" type="number" min="0" step="0.01" disabled={isFree} defaultValue="99.00" className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-3 disabled:opacity-50" />
           <span className="mt-1 block text-xs text-slate-500">{isFree ? "Free product price will be saved as INR 0.00." : "Example: 149.00, 349.00, 999.00"}</span>
         </label>

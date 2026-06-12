@@ -64,6 +64,16 @@ export async function userGet<T>(path: string): Promise<T> {
   return res.json();
 }
 
+export async function userPatch<T>(path: string, body: Record<string, unknown>): Promise<T> {
+  const res = await fetch(`${API_URL}${path}`, {
+    method: "PATCH",
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
+  if (!res.ok) throw new Error(await parseError(res, "Could not update your account data."));
+  return res.json();
+}
+
 export async function createOrder(assetId: number): Promise<StoreOrder> {
   const res = await fetch(`${API_URL}/orders/create/`, {
     method: "POST",

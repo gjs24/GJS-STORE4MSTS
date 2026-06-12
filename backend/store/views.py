@@ -115,9 +115,15 @@ class GoogleLoginView(APIView):
         )
 
 
-@api_view(["GET"])
+@api_view(["GET", "PATCH"])
 @permission_classes([permissions.IsAuthenticated])
 def current_user(request):
+    if request.method == "PATCH":
+        allowed_fields = ["first_name", "last_name", "email"]
+        for field in allowed_fields:
+            if field in request.data:
+                setattr(request.user, field, str(request.data.get(field, "")).strip())
+        request.user.save(update_fields=allowed_fields)
     return Response(UserSerializer(request.user).data)
 
 

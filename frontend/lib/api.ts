@@ -19,7 +19,10 @@ export type Asset = {
   simulator_type: "MSTS" | "OPEN_RAILS" | "BOTH";
   version: string;
   file_size: string;
+  original_price: string;
   price: string;
+  discount_percent?: number;
+  savings_amount?: string;
   is_free: boolean;
   is_published?: boolean;
   is_featured: boolean;
@@ -97,7 +100,10 @@ export const fallbackAssets: Asset[] = [
     simulator_type: "BOTH",
     version: "2.1.0",
     file_size: "485 MB",
+    original_price: "499.00",
     price: "349.00",
+    discount_percent: 30,
+    savings_amount: "150.00",
     is_free: false,
     is_published: true,
     is_featured: true,
@@ -119,7 +125,10 @@ export const fallbackAssets: Asset[] = [
     simulator_type: "OPEN_RAILS",
     version: "1.0.0",
     file_size: "720 MB",
+    original_price: "0.00",
     price: "0.00",
+    discount_percent: 0,
+    savings_amount: "0.00",
     is_free: true,
     is_published: true,
     is_featured: true,
@@ -137,7 +146,10 @@ export const fallbackAssets: Asset[] = [
     simulator_type: "BOTH",
     version: "1.4.2",
     file_size: "160 MB",
+    original_price: "199.00",
     price: "149.00",
+    discount_percent: 25,
+    savings_amount: "50.00",
     is_free: false,
     is_published: true,
     is_featured: false,
@@ -189,4 +201,12 @@ export async function getCategories() {
   } catch {
     return fallbackCategories;
   }
+}
+
+export function hasOffer(asset: Pick<Asset, "is_free" | "original_price" | "price" | "discount_percent">) {
+  return !asset.is_free && Number(asset.original_price) > Number(asset.price) && Number(asset.discount_percent || 0) > 0;
+}
+
+export function priceLabel(asset: Pick<Asset, "is_free" | "price">) {
+  return asset.is_free ? "Free" : `INR ${asset.price}`;
 }

@@ -41,6 +41,7 @@ class Asset(models.Model):
     simulator_type = models.CharField(max_length=20, choices=SimulatorType.choices, default=SimulatorType.BOTH)
     version = models.CharField(max_length=40, default="1.0.0")
     file_size = models.CharField(max_length=40)
+    original_price = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
     price = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
     is_free = models.BooleanField(default=True)
     is_published = models.BooleanField(default=True)

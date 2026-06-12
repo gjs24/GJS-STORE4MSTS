@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Download, PackageCheck, ShoppingCart } from "lucide-react";
+import { PriceDisplay } from "@/components/price-display";
 import type { Asset } from "@/lib/api";
 import { downloadAsset, type DownloadLog, type StoreOrder, type WishlistItem, userGet } from "@/lib/store-api";
 
@@ -93,7 +94,7 @@ export function AccountList({ type }: AccountListProps) {
               <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-300">
                 <span className="rounded border border-white/10 px-2 py-1">v{row.asset.version}</span>
                 <span className="rounded border border-white/10 px-2 py-1">{row.asset.file_size}</span>
-                <span className="rounded border border-white/10 px-2 py-1">{row.asset.is_free ? "Free" : `INR ${row.asset.price}`}</span>
+                <span className="rounded border border-white/10 px-2 py-1"><PriceDisplay asset={row.asset} compact /></span>
                 {row.status ? <span className="rounded border border-white/10 px-2 py-1">{row.status}</span> : null}
               </div>
             </div>

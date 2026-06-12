@@ -2,6 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { CheckCircle2, HardDriveDownload, ShieldCheck, Star, TrainFront } from "lucide-react";
 import { AssetActions } from "@/components/asset-actions";
+import { PriceDisplay } from "@/components/price-display";
 import { API_URL, Asset, fallbackAssets } from "@/lib/api";
 
 async function getAsset(slug: string): Promise<Asset> {
@@ -31,13 +32,19 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ sl
             <span className="rounded bg-black/75 px-3 py-2 text-white">{asset.simulator_type.replace("_", " ")}</span>
             <span className="rounded bg-black/75 px-3 py-2 text-white">{asset.file_size}</span>
             <span className="rounded bg-rail-red px-3 py-2 font-semibold text-white">
-              {asset.is_upcoming ? "Coming soon" : asset.is_free ? "Free release" : `INR ${asset.price}`}
+              {asset.is_upcoming ? "Coming soon" : asset.is_free ? "Free release" : asset.discount_percent ? `${asset.discount_percent}% OFF` : `INR ${asset.price}`}
             </span>
           </div>
         </div>
         <div>
           <p className="text-sm font-semibold uppercase text-rail-amber">{asset.category?.name} / v{asset.version}</p>
           <h1 className="mt-2 text-4xl font-black">{asset.title}</h1>
+          <div className="mt-4 text-xl">
+            <PriceDisplay asset={asset} />
+            {!asset.is_free && Number(asset.savings_amount || 0) > 0 ? (
+              <p className="mt-1 text-sm text-emerald-300">You save INR {asset.savings_amount}</p>
+            ) : null}
+          </div>
           <p className="mt-4 text-slate-300">{asset.description || asset.short_description}</p>
           <div className="mt-5 flex flex-wrap gap-3 text-sm">
             <span className="rounded border border-white/10 px-3 py-2">{asset.simulator_type.replace("_", " ")}</span>

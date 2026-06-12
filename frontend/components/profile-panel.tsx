@@ -52,9 +52,14 @@ export function ProfilePanel() {
           <h2 className="mt-2 text-2xl font-black text-white">{displayName(user)}</h2>
           <p className="mt-1 text-sm text-slate-400">{user.email || "No email saved"}</p>
         </div>
-        <span className="rounded border border-white/10 px-3 py-2 text-xs font-semibold text-slate-300">
-          {user.is_staff ? "Admin account" : "Customer account"}
-        </span>
+        <div className="flex flex-wrap gap-2">
+          <span className="rounded border border-white/10 px-3 py-2 text-xs font-semibold text-slate-300">
+            {user.is_staff ? "Admin account" : "Customer account"}
+          </span>
+          <Link href="/dashboard/profile" className="rounded bg-rail-red px-3 py-2 text-xs font-semibold text-white">
+            Edit profile
+          </Link>
+        </div>
       </div>
       <div className="mt-5 grid gap-3 text-sm md:grid-cols-3">
         <div className="rounded border border-white/10 bg-black/20 p-3">

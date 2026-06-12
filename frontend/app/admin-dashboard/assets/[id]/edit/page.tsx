@@ -42,10 +42,12 @@ export default function EditAssetPage({ params }: { params: Promise<{ id: string
     setSaving(true);
     setMessage(packageInfo || thumbnailInfo ? "Uploading selected files and updating asset..." : "Updating asset...");
     const price = isFree ? "0.00" : String(formData.get("price") || "0");
+    const originalPrice = isFree ? "0.00" : String(formData.get("original_price") || price);
     const category = Number(formData.get("category"));
     const file = formData.get("download_file");
     const thumbnail = formData.get("thumbnail");
 
+    formData.set("original_price", originalPrice);
     formData.set("price", price);
     formData.set("is_free", String(isFree));
     formData.set("is_published", String(formData.get("is_published") === "on"));
@@ -62,7 +64,7 @@ export default function EditAssetPage({ params }: { params: Promise<{ id: string
     try {
       const updated = await adminPatchForm<EditableAsset>(`/admin/assets/${assetId}/`, formData);
       const nextCategory = categories.find((item) => item.id === category) || asset.category;
-      setAsset({ ...asset, ...updated, category: nextCategory, price, is_free: isFree });
+      setAsset({ ...asset, ...updated, category: nextCategory, original_price: originalPrice, price, is_free: isFree });
       setMessage(file instanceof File && file.size > 0 ? "Upload completed. Asset updated and new file uploaded." : "Asset updated successfully.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not update asset.");
@@ -122,7 +124,12 @@ export default function EditAssetPage({ params }: { params: Promise<{ id: string
           </select>
         </label>
         <label className="block">
-          <span className="text-sm text-slate-300">Price in INR</span>
+          <span className="text-sm text-slate-300">Original price in INR</span>
+          <input name="original_price" type="number" min="0" step="0.01" disabled={isFree} defaultValue={asset.original_price || asset.price} className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-3 disabled:opacity-50" />
+          <span className="mt-1 block text-xs text-slate-500">Old/MRP price. Keep higher than selling price to show an offer.</span>
+        </label>
+        <label className="block">
+          <span className="text-sm text-slate-300">Selling price in INR</span>
           <input name="price" type="number" min="0" step="0.01" disabled={isFree} defaultValue={asset.price} className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-3 disabled:opacity-50" />
         </label>
         <label className="block md:col-span-2">

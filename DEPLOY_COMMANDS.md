@@ -60,6 +60,7 @@ CORS_ALLOWED_ORIGINS=https://your-vercel-site.vercel.app
 CSRF_TRUSTED_ORIGINS=https://your-vercel-site.vercel.app
 DJANGO_SECRET_KEY=paste_generated_secret_here
 JWT_SECRET_KEY=paste_different_generated_secret_here
+GOOGLE_OAUTH_CLIENT_ID=your-google-client-id.apps.googleusercontent.com
 RAZORPAY_KEY_ID=rzp_test_or_live_key_id
 RAZORPAY_KEY_SECRET=razorpay_secret_key
 ```
@@ -88,6 +89,7 @@ Vercel frontend environment variables:
 
 ```env
 NEXT_PUBLIC_API_URL=https://msts-gjs-api.onrender.com/api
+NEXT_PUBLIC_GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com
 NEXT_PUBLIC_RAZORPAY_KEY_ID=rzp_test_or_live_key_id
 NEXT_PUBLIC_BUSINESS_NAME=MSTS-GJS Production Store
 NEXT_PUBLIC_SUPPORT_EMAIL=gjs2721@gmail.com

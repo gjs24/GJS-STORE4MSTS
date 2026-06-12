@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { CheckCircle2, Download, Heart, Lock, ShoppingCart } from "lucide-react";
-import type { Asset } from "@/lib/api";
+import { priceLabel, type Asset } from "@/lib/api";
 import { addToWishlist, createOrder, downloadAsset, isLoggedIn, verifyDebugPayment } from "@/lib/store-api";
 
 const RAZORPAY_KEY_ID = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || "";
@@ -146,7 +146,7 @@ export function AssetActions({ asset }: { asset: Asset }) {
       <div className="flex flex-wrap gap-3">
         <button onClick={handlePrimaryAction} disabled={busy} className="rounded bg-rail-red px-5 py-3 font-semibold text-white disabled:opacity-60">
           {asset.is_free || asset.can_download ? <Download className="mr-2 inline" size={18} /> : <ShoppingCart className="mr-2 inline" size={18} />}
-          {asset.is_upcoming ? "Coming soon" : asset.is_free || asset.can_download ? "Download package" : `Buy for INR ${asset.price}`}
+          {asset.is_upcoming ? "Coming soon" : asset.is_free || asset.can_download ? "Download package" : `Buy for ${priceLabel(asset)}`}
         </button>
         <button onClick={handleWishlist} disabled={busy} className="rounded border border-white/15 px-5 py-3 font-semibold disabled:opacity-60">
           <Heart className="mr-2 inline" size={18} /> Wishlist

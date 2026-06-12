@@ -62,7 +62,9 @@ class ReviewSerializer(serializers.ModelSerializer):
 class AssetListSerializer(serializers.ModelSerializer):
     category = CategorySerializer(read_only=True)
     average_rating = serializers.SerializerMethodField()
+    discount_percent = serializers.SerializerMethodField()
     has_file = serializers.SerializerMethodField()
+    savings_amount = serializers.SerializerMethodField()
     thumbnail = serializers.SerializerMethodField()
     review_count = serializers.IntegerField(read_only=True, default=0)
 
@@ -77,7 +79,10 @@ class AssetListSerializer(serializers.ModelSerializer):
             "simulator_type",
             "version",
             "file_size",
+            "original_price",
             "price",
+            "discount_percent",
+            "savings_amount",
             "is_free",
             "is_published",
             "is_featured",
@@ -93,6 +98,16 @@ class AssetListSerializer(serializers.ModelSerializer):
     def get_average_rating(self, obj):
         rating = obj.reviews.filter(is_approved=True).aggregate(avg=Avg("rating"))["avg"]
         return round(rating or 0, 1)
+
+    def get_discount_percent(self, obj):
+        if obj.is_free or not obj.original_price or obj.original_price <= obj.price:
+            return 0
+        return round(((obj.original_price - obj.price) / obj.original_price) * 100)
+
+    def get_savings_amount(self, obj):
+        if obj.is_free or not obj.original_price or obj.original_price <= obj.price:
+            return "0.00"
+        return f"{obj.original_price - obj.price:.2f}"
 
     def get_has_file(self, obj):
         return bool(obj.download_file or obj.external_download_url)
