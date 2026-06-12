@@ -54,6 +54,7 @@ class Asset(models.Model):
     coming_soon_status_text = models.CharField(max_length=120, default="Release Date: To Be Announced")
     thumbnail = models.ImageField(upload_to="assets/thumbnails/", blank=True, null=True)
     thumbnail_url = models.URLField(blank=True)
+    gallery_image_urls = models.TextField(blank=True)
     preview_video_url = models.URLField(blank=True)
     requirements = models.TextField(blank=True)
     installation_steps = models.TextField(blank=True)
@@ -181,6 +182,29 @@ class Wishlist(models.Model):
 
     class Meta:
         unique_together = ["user", "asset"]
+        ordering = ["-created_at"]
+
+
+class NotifyRequest(models.Model):
+    asset = models.ForeignKey(Asset, related_name="notify_requests", on_delete=models.CASCADE)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="notify_requests", on_delete=models.CASCADE)
+    email = models.EmailField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ["asset", "user"]
+        ordering = ["-created_at"]
+
+
+class AdminActivityLog(models.Model):
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, blank=True, null=True, on_delete=models.SET_NULL)
+    action = models.CharField(max_length=120)
+    target_type = models.CharField(max_length=80, blank=True)
+    target_id = models.CharField(max_length=80, blank=True)
+    message = models.CharField(max_length=260)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
         ordering = ["-created_at"]
 
 

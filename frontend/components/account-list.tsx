@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Download, PackageCheck, ShoppingCart } from "lucide-react";
+import { Download, FileText, PackageCheck, ShoppingCart } from "lucide-react";
 import { PriceDisplay } from "@/components/price-display";
 import type { Asset } from "@/lib/api";
-import { downloadAsset, type DownloadLog, type StoreOrder, type WishlistItem, userGet } from "@/lib/store-api";
+import { downloadAsset, downloadInvoice, type DownloadLog, type StoreOrder, type WishlistItem, userGet } from "@/lib/store-api";
 
 type AccountListProps = {
   type: "purchases" | "downloads" | "wishlist";
@@ -68,6 +68,26 @@ export function AccountList({ type }: AccountListProps) {
     }
   }
 
+  async function handleInvoice(orderId: number) {
+    setBusyId(orderId);
+    setMessage("Preparing invoice...");
+    try {
+      const invoice = await downloadInvoice(orderId);
+      const link = document.createElement("a");
+      link.href = invoice.url;
+      link.download = invoice.filename || `GJS-${orderId}-invoice.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      if (invoice.revoke) setTimeout(invoice.revoke, 1000);
+      setMessage("Invoice download started.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not download invoice.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   if (message && rows.length === 0) {
     return (
       <div className="rounded border border-white/10 bg-white/[0.03] p-6 text-slate-300">
@@ -103,6 +123,11 @@ export function AccountList({ type }: AccountListProps) {
                 <Link href={`/assets/${row.asset.slug}`} className="rounded border border-white/10 px-4 py-2 text-sm font-semibold">
                   <ShoppingCart className="mr-2 inline" size={16} /> View
                 </Link>
+              ) : null}
+              {type === "purchases" ? (
+                <button onClick={() => handleInvoice(row.id)} disabled={busyId === row.id} className="rounded border border-white/10 px-4 py-2 text-sm font-semibold disabled:opacity-60">
+                  <FileText className="mr-2 inline" size={16} /> Invoice
+                </button>
               ) : null}
               <button onClick={() => handleDownload(row.asset)} disabled={busyId === row.asset.id} className="rounded bg-rail-red px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
                 {type === "purchases" ? <PackageCheck className="mr-2 inline" size={16} /> : <Download className="mr-2 inline" size={16} />}

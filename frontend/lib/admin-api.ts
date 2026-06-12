@@ -46,6 +46,24 @@ export type AdminReview = {
   created_at: string;
 };
 
+export type AdminNotifyRequest = {
+  id: number;
+  email: string;
+  created_at: string;
+  user?: AdminUser;
+  asset?: Asset;
+};
+
+export type AdminActivityLog = {
+  id: number;
+  actor?: AdminUser | null;
+  action: string;
+  target_type: string;
+  target_id: string;
+  message: string;
+  created_at: string;
+};
+
 export type AdminSettings = {
   api_status: string;
   payments: { razorpay_configured: boolean; stripe_configured: boolean };

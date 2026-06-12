@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { adminDelete, adminGet, adminPatch, adminPost } from "@/lib/admin-api";
 import type { Asset } from "@/lib/api";
 
-type AssetFilter = "all" | "published" | "hidden" | "free" | "premium" | "featured";
+type AssetFilter = "all" | "published" | "hidden" | "free" | "premium" | "featured" | "upcoming";
 
 export default function AdminAssetsPage() {
   const [assets, setAssets] = useState<Asset[]>([]);
@@ -32,7 +32,8 @@ export default function AdminAssetsPage() {
         (filter === "hidden" && asset.is_published === false) ||
         (filter === "free" && asset.is_free) ||
         (filter === "premium" && !asset.is_free) ||
-        (filter === "featured" && asset.is_featured);
+        (filter === "featured" && asset.is_featured) ||
+        (filter === "upcoming" && asset.is_upcoming);
       return matchesQuery && matchesFilter;
     });
   }, [assets, filter, query]);
@@ -80,6 +81,7 @@ export default function AdminAssetsPage() {
           <option value="published">Visible to users</option>
           <option value="hidden">Hidden from users</option>
           <option value="featured">Featured</option>
+          <option value="upcoming">Coming Soon</option>
           <option value="free">Free</option>
           <option value="premium">Premium</option>
         </select>

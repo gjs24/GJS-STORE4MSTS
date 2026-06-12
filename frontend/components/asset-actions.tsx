@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { CheckCircle2, Download, Heart, Lock, ShoppingCart } from "lucide-react";
 import { priceLabel, type Asset } from "@/lib/api";
-import { addToWishlist, createOrder, downloadAsset, isLoggedIn, verifyDebugPayment } from "@/lib/store-api";
+import { addToWishlist, createOrder, downloadAsset, isLoggedIn, notifyMe, verifyDebugPayment } from "@/lib/store-api";
 
 const RAZORPAY_KEY_ID = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || "";
 
@@ -68,7 +68,17 @@ export function AssetActions({ asset }: { asset: Asset }) {
 
   async function handlePrimaryAction() {
     if (asset.is_upcoming) {
-      setMessage("This product is coming soon. Add it to your wishlist to follow the release.");
+      if (!(await requireLogin())) return;
+      setBusy(true);
+      setMessage("Saving your Notify Me request...");
+      try {
+        const result = await notifyMe(asset.slug);
+        setMessage(result.detail);
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "Could not save notification request.");
+      } finally {
+        setBusy(false);
+      }
       return;
     }
     if (!(await requireLogin())) return;

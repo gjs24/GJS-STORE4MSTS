@@ -18,6 +18,9 @@ export function AssetCard({ asset }: { asset: Asset }) {
         <span className="absolute right-3 top-3 rounded bg-rail-red px-2 py-1 text-xs font-semibold">
           {asset.is_upcoming ? asset.coming_soon_badge || "COMING SOON" : asset.is_free ? "FREE" : asset.discount_percent ? `${asset.discount_percent}% OFF` : `INR ${asset.price}`}
         </span>
+        {!asset.is_upcoming && !asset.is_free && Number(asset.discount_percent || 0) > 0 ? (
+          <span className="absolute bottom-3 left-3 rounded bg-rail-amber px-2 py-1 text-xs font-black uppercase text-black">Launch Offer</span>
+        ) : null}
       </div>
       <div className="space-y-3 p-4">
         <div>

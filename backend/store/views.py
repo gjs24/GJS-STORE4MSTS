@@ -7,7 +7,7 @@ from pathlib import PurePath
 
 from django.conf import settings
 from django.contrib.auth.models import User
-from django.http import FileResponse
+from django.http import FileResponse, HttpResponse
 from django.db.models import Count, Q, Sum
 from django.shortcuts import get_object_or_404
 from rest_framework import generics, permissions, status, viewsets
@@ -20,14 +20,16 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 
-from .models import Asset, Category, DownloadLog, Order, Payment, Review, SiteSetting, Wishlist
+from .models import AdminActivityLog, Asset, Category, DownloadLog, NotifyRequest, Order, Payment, Review, SiteSetting, Wishlist
 from .permissions import IsAdminOrReadOnly
 from .serializers import (
     AssetDetailSerializer,
     AssetListSerializer,
     AssetWriteSerializer,
+    AdminActivityLogSerializer,
     CategorySerializer,
     DownloadLogSerializer,
+    NotifyRequestSerializer,
     OrderSerializer,
     PaymentVerifySerializer,
     RegisterSerializer,
@@ -38,6 +40,19 @@ from .serializers import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def log_admin_activity(request, action, target_type="", target_id="", message=""):
+    try:
+        AdminActivityLog.objects.create(
+            actor=request.user if request.user.is_authenticated else None,
+            action=action,
+            target_type=target_type,
+            target_id=str(target_id or ""),
+            message=message[:260],
+        )
+    except Exception:
+        logger.exception("Admin activity logging failed")
 
 
 class RegisterView(generics.CreateAPIView):
@@ -191,6 +206,20 @@ class AssetViewSet(viewsets.ModelViewSet):
         asset = self.get_object()
         return create_download_response(request, asset)
 
+    @action(detail=True, methods=["post"], permission_classes=[permissions.IsAuthenticated])
+    def notify(self, request, slug=None):
+        asset = self.get_object()
+        if not asset.is_upcoming:
+            return Response({"detail": "Notify Me is only available for upcoming products."}, status=status.HTTP_400_BAD_REQUEST)
+        email = (request.user.email or request.data.get("email") or "").strip()
+        if not email:
+            return Response({"detail": "Add an email to your account before using Notify Me."}, status=status.HTTP_400_BAD_REQUEST)
+        notify, created = NotifyRequest.objects.get_or_create(asset=asset, user=request.user, defaults={"email": email})
+        if not created and notify.email != email:
+            notify.email = email
+            notify.save(update_fields=["email"])
+        return Response({"detail": "You will be notified when this product is released.", "created": created})
+
 
 class OrderCreateView(generics.CreateAPIView):
     serializer_class = OrderSerializer
@@ -295,6 +324,50 @@ class PurchaseListView(generics.ListAPIView):
         return Order.objects.filter(user=self.request.user, status=Order.Status.PAID).select_related("asset", "asset__category")
 
 
+@api_view(["GET"])
+@permission_classes([permissions.IsAuthenticated])
+def order_invoice(request, pk):
+    order = get_object_or_404(Order.objects.select_related("asset", "user"), pk=pk, user=request.user, status=Order.Status.PAID)
+    lines = [
+        "MSTS-GJS Production Store",
+        "Digital Product Invoice",
+        "",
+        f"Invoice No: GJS-{order.id:06d}",
+        f"Date: {order.created_at:%d %b %Y}",
+        f"Customer: {order.user.get_full_name() or order.user.username}",
+        f"Email: {order.user.email}",
+        "",
+        f"Product: {order.asset.title}",
+        f"Version: {order.asset.version}",
+        f"Amount: {order.currency} {order.amount}",
+        f"Status: {order.status}",
+        "",
+        "Delivery: Instant digital download/account access after successful payment.",
+        "No physical shipping.",
+    ]
+    stream = "BT /F1 12 Tf 50 740 Td 16 TL " + " T* ".join(f"({line.replace('(', '').replace(')', '')})" for line in lines) + " ET"
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Count 1 /Kids [3 0 R] >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
+        f"<< /Length {len(stream)} >>\nstream\n{stream}\nendstream".encode(),
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    ]
+    pdf = b"%PDF-1.4\n"
+    offsets = [0]
+    for index, obj in enumerate(objects, start=1):
+        offsets.append(len(pdf))
+        pdf += f"{index} 0 obj\n".encode() + obj + b"\nendobj\n"
+    xref_at = len(pdf)
+    pdf += f"xref\n0 {len(objects) + 1}\n0000000000 65535 f \n".encode()
+    for offset in offsets[1:]:
+        pdf += f"{offset:010d} 00000 n \n".encode()
+    pdf += f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref_at}\n%%EOF".encode()
+    response = HttpResponse(pdf, content_type="application/pdf")
+    response["Content-Disposition"] = f'attachment; filename="GJS-{order.id:06d}-invoice.pdf"'
+    return response
+
+
 class DownloadListView(generics.ListAPIView):
     serializer_class = DownloadLogSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -364,7 +437,9 @@ class AdminAssetViewSet(viewsets.ModelViewSet):
         if blocked_response:
             return blocked_response
         try:
-            return super().create(request, *args, **kwargs)
+            response = super().create(request, *args, **kwargs)
+            log_admin_activity(request, "Product created", "Asset", response.data.get("id"), f"Created product {response.data.get('title', '')}")
+            return response
         except Exception as exc:
             logger.exception("Admin asset upload failed")
             return Response(
@@ -377,7 +452,18 @@ class AdminAssetViewSet(viewsets.ModelViewSet):
         if blocked_response:
             return blocked_response
         try:
-            return super().update(request, *args, **kwargs)
+            previous = self.get_object()
+            previous_price = previous.price
+            previous_file = previous.download_file.name if previous.download_file else ""
+            response = super().update(request, *args, **kwargs)
+            asset = self.get_object()
+            log_admin_activity(request, "Product edited", "Asset", asset.id, f"Edited product {asset.title}")
+            if previous_price != asset.price:
+                log_admin_activity(request, "Price changed", "Asset", asset.id, f"{asset.title} price changed from {previous_price} to {asset.price}")
+            next_file = asset.download_file.name if asset.download_file else ""
+            if previous_file != next_file:
+                log_admin_activity(request, "File changed", "Asset", asset.id, f"{asset.title} file source changed")
+            return response
         except Exception as exc:
             logger.exception("Admin asset update failed")
             return Response(
@@ -390,7 +476,14 @@ class AdminAssetViewSet(viewsets.ModelViewSet):
         if blocked_response:
             return blocked_response
         try:
-            return super().partial_update(request, *args, **kwargs)
+            previous = self.get_object()
+            previous_price = previous.price
+            response = super().partial_update(request, *args, **kwargs)
+            asset = self.get_object()
+            log_admin_activity(request, "Product edited", "Asset", asset.id, f"Edited product {asset.title}")
+            if previous_price != asset.price:
+                log_admin_activity(request, "Price changed", "Asset", asset.id, f"{asset.title} price changed from {previous_price} to {asset.price}")
+            return response
         except Exception as exc:
             logger.exception("Admin asset update failed")
             return Response(
@@ -438,6 +531,36 @@ class AdminReviewViewSet(viewsets.ModelViewSet):
         review.is_approved = True
         review.save(update_fields=["is_approved"])
         return Response(ReviewSerializer(review).data)
+
+
+class AdminNotifyRequestView(generics.ListAPIView):
+    serializer_class = NotifyRequestSerializer
+    permission_classes = [permissions.IsAdminUser]
+
+    def get_queryset(self):
+        qs = NotifyRequest.objects.select_related("asset", "asset__category", "user")
+        asset_id = self.request.query_params.get("asset")
+        if asset_id:
+            qs = qs.filter(asset_id=asset_id)
+        return qs
+
+
+class AdminDownloadHistoryView(generics.ListAPIView):
+    serializer_class = DownloadLogSerializer
+    permission_classes = [permissions.IsAdminUser]
+
+    def get_queryset(self):
+        qs = DownloadLog.objects.select_related("asset", "asset__category", "user")
+        asset_id = self.request.query_params.get("asset")
+        if asset_id:
+            qs = qs.filter(asset_id=asset_id)
+        return qs
+
+
+class AdminActivityLogView(generics.ListAPIView):
+    serializer_class = AdminActivityLogSerializer
+    permission_classes = [permissions.IsAdminUser]
+    queryset = AdminActivityLog.objects.select_related("actor")
 
 
 def create_download_response(request, asset):
@@ -645,10 +768,14 @@ def site_settings(request):
 def admin_settings(request):
     site_setting = SiteSetting.load()
     if request.method == "PATCH":
+        before_popup = site_setting.popup_enabled
         serializer = SiteSettingSerializer(site_setting, data=request.data.get("site", request.data), partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
         site_setting = serializer.instance
+        log_admin_activity(request, "Store settings edited", "SiteSetting", site_setting.id, "Updated homepage, popup, or notification settings")
+        if before_popup != site_setting.popup_enabled:
+            log_admin_activity(request, "Popup enabled" if site_setting.popup_enabled else "Popup disabled", "SiteSetting", site_setting.id, "Changed entrance popup status")
     return Response(
         {
             "api_status": "online",

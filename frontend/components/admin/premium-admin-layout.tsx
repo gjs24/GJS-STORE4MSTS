@@ -81,7 +81,7 @@ const sections: SidebarSection[] = [
       { label: "Settings", href: "/admin-dashboard/settings", icon: Settings },
       { label: "Payments", href: "/admin-dashboard/settings", icon: ShieldCheck },
       { label: "Email Templates", href: "/admin-dashboard/settings", icon: Mail },
-      { label: "Activity Logs", href: "/admin-dashboard/settings", icon: History }
+      { label: "Activity Logs", href: "/admin-dashboard/activity-logs", icon: History }
     ]
   }
 ];

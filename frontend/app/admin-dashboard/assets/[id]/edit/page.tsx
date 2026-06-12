@@ -5,8 +5,9 @@ import { useEffect, useState } from "react";
 import { CheckCircle2, Loader2, Save } from "lucide-react";
 import { AdminLoginNote } from "@/components/admin-login-note";
 import { AdminLayout } from "@/components/admin-table";
-import { adminGet, adminGetRequired, adminPatchForm } from "@/lib/admin-api";
+import { adminGet, adminGetRequired, adminPatchForm, type AdminNotifyRequest } from "@/lib/admin-api";
 import { fallbackCategories, type Asset, type Category } from "@/lib/api";
+import type { DownloadLog } from "@/lib/store-api";
 
 type EditableAsset = Asset & {
   category: Category | number;
@@ -25,10 +26,14 @@ export default function EditAssetPage({ params }: { params: Promise<{ id: string
   const [saving, setSaving] = useState(false);
   const [thumbnailInfo, setThumbnailInfo] = useState("");
   const [packageInfo, setPackageInfo] = useState("");
+  const [notifyRequests, setNotifyRequests] = useState<AdminNotifyRequest[]>([]);
+  const [downloadHistory, setDownloadHistory] = useState<DownloadLog[]>([]);
 
   useEffect(() => {
     params.then(({ id }) => {
       setAssetId(id);
+      adminGet<AdminNotifyRequest[]>(`/admin/notify-requests/?asset=${id}`, []).then(setNotifyRequests);
+      adminGet<DownloadLog[]>(`/admin/download-history/?asset=${id}`, []).then(setDownloadHistory);
       adminGetRequired<EditableAsset>(`/admin/assets/${id}/`)
         .then((data) => {
           setAsset(data);
@@ -172,6 +177,11 @@ export default function EditAssetPage({ params }: { params: Promise<{ id: string
             Paste the secure image URL here to show product card/home/detail image without uploading through Render.
           </span>
         </label>
+        <label className="block md:col-span-2">
+          <span className="text-sm text-slate-300">Product gallery image URLs</span>
+          <textarea name="gallery_image_urls" rows={4} defaultValue={asset.gallery_image_urls || ""} placeholder={"https://res.cloudinary.com/.../image/upload/screenshot-1.jpg\nhttps://res.cloudinary.com/.../image/upload/screenshot-2.jpg"} className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-3" />
+          <span className="mt-1 block text-xs text-slate-500">Paste one screenshot URL per line. These appear on the product detail page.</span>
+        </label>
         <div className="grid gap-3 md:grid-cols-2">
           <label className="flex items-center gap-3 rounded border border-white/10 bg-black/30 px-3 py-3">
             <input name="is_published" type="checkbox" defaultChecked={asset.is_published !== false} />
@@ -253,6 +263,7 @@ export default function EditAssetPage({ params }: { params: Promise<{ id: string
             {saving ? <Loader2 className="mr-2 inline animate-spin" size={18} /> : <Save className="mr-2 inline" size={18} />}
             {saving ? "Uploading..." : "Save changes"}
           </button>
+          <Link href={`/assets/${asset.slug}`} className="rounded border border-rail-amber px-5 py-3 font-semibold text-rail-amber">Preview Product</Link>
           <Link href="/admin-dashboard/assets" className="rounded border border-white/10 px-5 py-3 font-semibold">Back to assets</Link>
         </div>
         {message ? (
@@ -262,6 +273,32 @@ export default function EditAssetPage({ params }: { params: Promise<{ id: string
           </p>
         ) : null}
       </form>
+      <div className="mt-6 grid gap-5 lg:grid-cols-2">
+        <div className="rounded border border-white/10 bg-white/[0.03] p-5">
+          <h2 className="font-semibold text-white">Notify Me users</h2>
+          <p className="mt-1 text-sm text-slate-400">{notifyRequests.length} interested user{notifyRequests.length === 1 ? "" : "s"}</p>
+          <div className="mt-4 space-y-3">
+            {notifyRequests.length ? notifyRequests.map((item) => (
+              <div key={item.id} className="rounded border border-white/10 bg-black/20 p-3 text-sm">
+                <p className="font-semibold">{item.email}</p>
+                <p className="text-xs text-slate-400">{new Date(item.created_at).toLocaleString("en-IN")}</p>
+              </div>
+            )) : <p className="text-sm text-slate-400">No Notify Me requests yet.</p>}
+          </div>
+        </div>
+        <div className="rounded border border-white/10 bg-white/[0.03] p-5">
+          <h2 className="font-semibold text-white">Download history</h2>
+          <p className="mt-1 text-sm text-slate-400">{downloadHistory.length} download record{downloadHistory.length === 1 ? "" : "s"}</p>
+          <div className="mt-4 space-y-3">
+            {downloadHistory.length ? downloadHistory.slice(0, 10).map((item) => (
+              <div key={item.id} className="rounded border border-white/10 bg-black/20 p-3 text-sm">
+                <p className="font-semibold">{item.user?.email || item.user?.username || "User"}</p>
+                <p className="text-xs text-slate-400">{new Date(item.downloaded_at).toLocaleString("en-IN")} {item.ip_address ? `/ ${item.ip_address}` : ""}</p>
+              </div>
+            )) : <p className="text-sm text-slate-400">No downloads yet.</p>}
+          </div>
+        </div>
+      </div>
     </AdminLayout>
   );
 }

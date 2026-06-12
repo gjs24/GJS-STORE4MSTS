@@ -15,6 +15,7 @@ export type StoreOrder = {
 export type DownloadLog = {
   id: number;
   asset: Asset;
+  user?: { id: number; username: string; email: string };
   ip_address?: string | null;
   downloaded_at: string;
 };
@@ -216,4 +217,36 @@ export async function addToWishlist(assetId: number): Promise<WishlistItem> {
   }
   if (!res.ok) throw new Error(await parseError(res, "Could not save this asset."));
   return res.json();
+}
+
+export async function notifyMe(assetSlug: string): Promise<{ detail: string; created: boolean }> {
+  await validAccessToken();
+  let res = await fetch(`${API_URL}/assets/${assetSlug}/notify/`, {
+    method: "POST",
+    headers: { ...authHeaders(), "Content-Type": "application/json" }
+  });
+  if (res.status === 401 && await refreshAccessToken()) {
+    res = await fetch(`${API_URL}/assets/${assetSlug}/notify/`, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" }
+    });
+  }
+  if (!res.ok) throw new Error(await parseError(res, "Could not save notification request."));
+  return res.json();
+}
+
+export async function downloadInvoice(orderId: number): Promise<DownloadResult> {
+  await validAccessToken();
+  let res = await fetch(`${API_URL}/orders/${orderId}/invoice/`, { headers: authHeaders() });
+  if (res.status === 401 && await refreshAccessToken()) {
+    res = await fetch(`${API_URL}/orders/${orderId}/invoice/`, { headers: authHeaders() });
+  }
+  if (!res.ok) throw new Error(await parseError(res, "Could not download invoice."));
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  return {
+    url,
+    filename: filenameFromDisposition(res.headers.get("Content-Disposition")) || `GJS-${orderId}-invoice.pdf`,
+    revoke: () => URL.revokeObjectURL(url)
+  };
 }

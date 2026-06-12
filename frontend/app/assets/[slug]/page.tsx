@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
+import type { Metadata } from "next";
 import { CheckCircle2, HardDriveDownload, ShieldCheck, Star, TrainFront } from "lucide-react";
 import { AssetActions } from "@/components/asset-actions";
 import { PriceDisplay } from "@/components/price-display";
@@ -15,9 +16,32 @@ async function getAsset(slug: string): Promise<Asset> {
   }
 }
 
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const { slug } = await params;
+  const asset = await getAsset(slug);
+  return {
+    title: `${asset.title} | MSTS-GJS Production Store`,
+    description: asset.short_description || asset.description || "MSTS and Open Rails digital asset download.",
+    openGraph: {
+      title: asset.title,
+      description: asset.short_description,
+      images: asset.thumbnail ? [asset.thumbnail] : []
+    }
+  };
+}
+
 export default async function AssetDetailPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const asset = await getAsset(slug);
+  const galleryUrlImages = (asset.gallery_image_urls || "")
+    .split(/\r?\n/)
+    .map((url, index) => ({ id: index + 1000, image: url.trim(), alt_text: `${asset.title} screenshot ${index + 1}`, sort_order: index + 1 }))
+    .filter((image) => image.image);
+  const galleryImages = [
+    asset.thumbnail ? { id: 0, image: asset.thumbnail, alt_text: asset.title, sort_order: 0 } : null,
+    ...(asset.images || []),
+    ...galleryUrlImages
+  ].filter((image): image is { id: number; image?: string | null; alt_text: string; sort_order: number } => Boolean(image?.image));
 
   return (
     <section className="rail-grid min-h-screen px-4 py-10">
@@ -31,6 +55,9 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ sl
           <div className="absolute bottom-4 left-4 flex flex-wrap gap-2 text-xs">
             <span className="rounded bg-black/75 px-3 py-2 text-white">{asset.simulator_type.replace("_", " ")}</span>
             <span className="rounded bg-black/75 px-3 py-2 text-white">{asset.file_size}</span>
+            {!asset.is_upcoming && !asset.is_free && Number(asset.discount_percent || 0) > 0 ? (
+              <span className="rounded bg-rail-amber px-3 py-2 font-black text-black">Launch Offer</span>
+            ) : null}
             <span className="rounded bg-rail-red px-3 py-2 font-semibold text-white">
               {asset.is_upcoming ? "Coming soon" : asset.is_free ? "Free release" : asset.discount_percent ? `${asset.discount_percent}% OFF` : `INR ${asset.price}`}
             </span>
@@ -42,7 +69,7 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ sl
           <div className="mt-4 text-xl">
             <PriceDisplay asset={asset} />
             {!asset.is_free && Number(asset.savings_amount || 0) > 0 ? (
-              <p className="mt-1 text-sm text-emerald-300">You save INR {asset.savings_amount}</p>
+              <p className="mt-1 text-sm text-emerald-300">Limited Time Launch Offer - You save INR {asset.savings_amount}</p>
             ) : null}
           </div>
           <p className="mt-4 text-slate-300">{asset.description || asset.short_description}</p>
@@ -75,6 +102,18 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ sl
           </div>
         </div>
       </div>
+      {galleryImages.length > 1 ? (
+        <div className="mx-auto mt-8 max-w-7xl">
+          <h2 className="mb-4 text-xl font-bold">Product gallery</h2>
+          <div className="grid gap-4 md:grid-cols-3">
+            {galleryImages.map((image) => (
+              <div key={`${image.id}-${image.image}`} className="cinematic-panel relative aspect-video overflow-hidden rounded-lg">
+                <Image src={image.image || ""} alt={image.alt_text || asset.title} fill sizes="(min-width: 768px) 33vw, 100vw" className="object-cover transition hover:scale-105" />
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
       <div className="mx-auto mt-10 grid max-w-7xl gap-5 lg:grid-cols-3">
         {[
           ["Requirements", asset.requirements],

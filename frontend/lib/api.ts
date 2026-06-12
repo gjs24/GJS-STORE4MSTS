@@ -34,6 +34,7 @@ export type Asset = {
   coming_soon_status_text?: string;
   thumbnail?: string;
   thumbnail_url?: string;
+  gallery_image_urls?: string;
   has_file?: boolean;
   download_file?: string | null;
   external_download_url?: string;
@@ -47,6 +48,7 @@ export type Asset = {
   average_rating: number;
   review_count: number;
   can_download?: boolean;
+  images?: Array<{ id: number; image?: string | null; alt_text: string; sort_order: number }>;
   updates?: Array<{ id: number; version: string; changelog: string; created_at: string }>;
   reviews?: Array<{ id: number; rating: number; comment: string; created_at: string; user?: { username: string } }>;
 };

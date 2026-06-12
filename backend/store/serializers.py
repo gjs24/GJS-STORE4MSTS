@@ -3,7 +3,7 @@ from django.conf import settings
 from django.db.models import Avg
 from rest_framework import serializers
 
-from .models import Asset, AssetImage, Category, DownloadLog, Order, Payment, Review, SiteSetting, UpdateLog, Wishlist
+from .models import AdminActivityLog, Asset, AssetImage, Category, DownloadLog, NotifyRequest, Order, Payment, Review, SiteSetting, UpdateLog, Wishlist
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -38,9 +38,21 @@ class CategorySerializer(serializers.ModelSerializer):
 
 
 class AssetImageSerializer(serializers.ModelSerializer):
+    image = serializers.SerializerMethodField()
+
     class Meta:
         model = AssetImage
         fields = ["id", "image", "alt_text", "sort_order"]
+
+    def get_image(self, obj):
+        if not obj.image:
+            return None
+        try:
+            url = obj.image.url
+        except Exception:
+            return None
+        request = self.context.get("request")
+        return request.build_absolute_uri(url) if request and not url.startswith(("http://", "https://")) else url
 
 
 class UpdateLogSerializer(serializers.ModelSerializer):
@@ -94,6 +106,7 @@ class AssetListSerializer(serializers.ModelSerializer):
             "coming_soon_status_text",
             "thumbnail",
             "thumbnail_url",
+            "gallery_image_urls",
             "has_file",
             "download_count",
             "average_rating",
@@ -193,10 +206,11 @@ class PaymentVerifySerializer(serializers.Serializer):
 
 class DownloadLogSerializer(serializers.ModelSerializer):
     asset = AssetListSerializer(read_only=True)
+    user = UserSerializer(read_only=True)
 
     class Meta:
         model = DownloadLog
-        fields = ["id", "asset", "ip_address", "downloaded_at"]
+        fields = ["id", "asset", "user", "ip_address", "downloaded_at"]
 
 
 class WishlistSerializer(serializers.ModelSerializer):
@@ -207,6 +221,24 @@ class WishlistSerializer(serializers.ModelSerializer):
         model = Wishlist
         fields = ["id", "asset", "asset_id", "created_at"]
         read_only_fields = ["created_at"]
+
+
+class NotifyRequestSerializer(serializers.ModelSerializer):
+    asset = AssetListSerializer(read_only=True)
+    user = UserSerializer(read_only=True)
+
+    class Meta:
+        model = NotifyRequest
+        fields = ["id", "asset", "user", "email", "created_at"]
+        read_only_fields = ["asset", "user", "email", "created_at"]
+
+
+class AdminActivityLogSerializer(serializers.ModelSerializer):
+    actor = UserSerializer(read_only=True)
+
+    class Meta:
+        model = AdminActivityLog
+        fields = ["id", "actor", "action", "target_type", "target_id", "message", "created_at"]
 
 
 class SiteSettingSerializer(serializers.ModelSerializer):
