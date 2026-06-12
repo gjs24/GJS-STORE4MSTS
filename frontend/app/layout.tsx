@@ -3,6 +3,7 @@ import "./globals.css";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { WhatsAppSupport } from "@/components/whatsapp-support";
+import { GoogleAuthProvider } from "@/components/google-auth-provider";
 
 export const metadata: Metadata = {
   title: "MSTS-GJS Production Store",
@@ -13,10 +14,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body>
-        <SiteHeader />
-        <main>{children}</main>
-        <WhatsAppSupport />
-        <SiteFooter />
+        <GoogleAuthProvider>
+          <SiteHeader />
+          <main>{children}</main>
+          <WhatsAppSupport />
+          <SiteFooter />
+        </GoogleAuthProvider>
       </body>
     </html>
   );

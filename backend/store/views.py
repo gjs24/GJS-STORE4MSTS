@@ -1,5 +1,6 @@
 import hmac
 import logging
+import re
 from pathlib import PurePath
 
 from django.conf import settings
@@ -13,6 +14,8 @@ from rest_framework.exceptions import APIException
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.throttling import UserRateThrottle
+from rest_framework.views import APIView
+from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 
 from .models import Asset, Category, DownloadLog, Order, Payment, Review, Wishlist
@@ -49,6 +52,67 @@ class LoginView(TokenObtainPairView):
         if user and response.status_code == status.HTTP_200_OK:
             response.data["user"] = UserSerializer(user).data
         return response
+
+
+def unique_google_username(email):
+    base = re.sub(r"[^a-zA-Z0-9_]", "_", email.split("@")[0]).strip("_") or "google_user"
+    username = base[:140]
+    suffix = 1
+    while User.objects.filter(username=username).exists():
+        suffix_text = f"_{suffix}"
+        username = f"{base[:150 - len(suffix_text)]}{suffix_text}"
+        suffix += 1
+    return username
+
+
+class GoogleLoginView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        if not settings.GOOGLE_OAUTH_CLIENT_ID:
+            return Response({"detail": "Google login is not configured."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+        credential = request.data.get("credential")
+        if not credential:
+            return Response({"detail": "Google credential is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            from google.auth.transport import requests as google_requests
+            from google.oauth2 import id_token
+
+            profile = id_token.verify_oauth2_token(
+                credential,
+                google_requests.Request(),
+                settings.GOOGLE_OAUTH_CLIENT_ID,
+            )
+        except Exception:
+            return Response({"detail": "Invalid Google credential."}, status=status.HTTP_400_BAD_REQUEST)
+
+        email = (profile.get("email") or "").lower()
+        if not email:
+            return Response({"detail": "Google account email is required."}, status=status.HTTP_400_BAD_REQUEST)
+        if not profile.get("email_verified"):
+            return Response({"detail": "Google email is not verified."}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = User.objects.filter(email__iexact=email).first()
+        if not user:
+            user = User(
+                username=unique_google_username(email),
+                email=email,
+                first_name=profile.get("given_name", ""),
+                last_name=profile.get("family_name", ""),
+            )
+            user.set_unusable_password()
+            user.save()
+
+        refresh = RefreshToken.for_user(user)
+        return Response(
+            {
+                "access": str(refresh.access_token),
+                "refresh": str(refresh),
+                "user": UserSerializer(user).data,
+            }
+        )
 
 
 @api_view(["GET"])
@@ -331,6 +395,16 @@ def create_download_response(request, asset):
     if not allowed:
         return Response({"detail": "Purchase required before downloading this asset."}, status=status.HTTP_403_FORBIDDEN)
     if not asset.download_file:
+        if asset.external_download_url:
+            DownloadLog.objects.create(
+                user=request.user,
+                asset=asset,
+                ip_address=request.META.get("REMOTE_ADDR"),
+                user_agent=request.META.get("HTTP_USER_AGENT", "")[:255],
+            )
+            asset.download_count += 1
+            asset.save(update_fields=["download_count"])
+            return Response({"download_url": asset.external_download_url})
         return Response({"detail": "Download file is not available yet."}, status=status.HTTP_404_NOT_FOUND)
     if not asset.download_file.storage.exists(asset.download_file.name):
         return Response(
