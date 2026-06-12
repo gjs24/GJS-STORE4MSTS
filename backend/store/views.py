@@ -473,19 +473,27 @@ def create_download_response(request, asset):
         asset.download_count += 1
         asset.save(update_fields=["download_count"])
         return Response({"download_url": drive_url})
+    if asset.external_download_url:
+        DownloadLog.objects.create(
+            user=request.user,
+            asset=asset,
+            ip_address=request.META.get("REMOTE_ADDR"),
+            user_agent=request.META.get("HTTP_USER_AGENT", "")[:255],
+        )
+        asset.download_count += 1
+        asset.save(update_fields=["download_count"])
+        return Response({"download_url": asset.external_download_url})
     if not asset.download_file:
-        if asset.external_download_url:
-            DownloadLog.objects.create(
-                user=request.user,
-                asset=asset,
-                ip_address=request.META.get("REMOTE_ADDR"),
-                user_agent=request.META.get("HTTP_USER_AGENT", "")[:255],
-            )
-            asset.download_count += 1
-            asset.save(update_fields=["download_count"])
-            return Response({"download_url": asset.external_download_url})
-        return Response({"detail": "Download file is not available yet."}, status=status.HTTP_404_NOT_FOUND)
-    if not asset.download_file.storage.exists(asset.download_file.name):
+        return Response({"detail": "Download file is not available yet. Add a restricted Google Drive file ID or another download source in admin."}, status=status.HTTP_404_NOT_FOUND)
+    try:
+        file_exists = asset.download_file.storage.exists(asset.download_file.name)
+    except Exception:
+        logger.exception("Download file storage check failed")
+        return Response(
+            {"detail": "Uploaded file storage is not accessible. Add a restricted Google Drive file ID or another download source in admin."},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+    if not file_exists:
         return Response(
             {"detail": "Download file is missing from storage. Please contact the admin."},
             status=status.HTTP_404_NOT_FOUND,
@@ -500,7 +508,14 @@ def create_download_response(request, asset):
     asset.download_count += 1
     asset.save(update_fields=["download_count"])
     filename = PurePath(asset.download_file.name).name
-    return FileResponse(asset.download_file.open("rb"), as_attachment=True, filename=filename)
+    try:
+        return FileResponse(asset.download_file.open("rb"), as_attachment=True, filename=filename)
+    except Exception:
+        logger.exception("Download file open failed")
+        return Response(
+            {"detail": "Uploaded file could not be opened. Add a restricted Google Drive file ID or another download source in admin."},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
 
 
 def create_private_download_url(object_key):
@@ -546,6 +561,7 @@ def google_drive_service_account_info():
 def grant_google_drive_access(file_id, email):
     if not (settings.GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON or settings.GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON_BASE64):
         return "", "Google Drive service account is not configured in Render."
+    HttpError = None
     try:
         from google.oauth2 import service_account
         from googleapiclient.discovery import build
@@ -572,22 +588,23 @@ def grant_google_drive_access(file_id, email):
                 fields="id",
             ).execute()
         except HttpError as exc:
-            if getattr(exc, "status_code", None) != 409 and getattr(exc.resp, "status", None) != 409:
+            drive_status = str(getattr(exc, "status_code", "") or getattr(exc.resp, "status", ""))
+            if drive_status != "409":
                 raise
         return f"https://drive.google.com/file/d/{file_id}/view"
     except json.JSONDecodeError:
         logger.exception("Google Drive service account JSON is invalid")
         return "", "Google Drive service account JSON is invalid. Use the Base64 env option or one-line JSON."
-    except HttpError as exc:
+    except Exception as exc:
+        if HttpError and isinstance(exc, HttpError):
+            logger.exception("Google Drive API access grant failed")
+            status_code = str(getattr(exc, "status_code", "") or getattr(exc.resp, "status", ""))
+            if status_code == "404":
+                return "", "Google Drive file was not found. Check the file ID and share the file with the service account email."
+            if status_code == "403":
+                return "", "Google Drive permission denied. Enable Drive API and share the restricted file with the service account email as Editor."
+            return "", "Google Drive access could not be granted. Check Drive API, service account, and file sharing."
         logger.exception("Google Drive API access grant failed")
-        status_code = getattr(exc, "status_code", None) or getattr(exc.resp, "status", None)
-        if status_code == 404:
-            return "", "Google Drive file was not found. Check the file ID and share the file with the service account email."
-        if status_code == 403:
-            return "", "Google Drive permission denied. Enable Drive API and share the restricted file with the service account email as Viewer."
-        return "", "Google Drive access could not be granted. Check Drive API, service account, and file sharing."
-    except Exception:
-        logger.exception("Google Drive access grant failed")
         return "", "Google Drive access is not configured correctly. Check Render env and service account key."
 
 
