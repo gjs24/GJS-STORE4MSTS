@@ -577,7 +577,7 @@ def grant_google_drive_access(file_id, email):
             drive_status = str(getattr(exc, "status_code", "") or getattr(exc.resp, "status", ""))
             if drive_status != "409":
                 raise
-        return f"https://drive.google.com/file/d/{file_id}/view"
+        return f"https://drive.google.com/file/d/{file_id}/view", ""
     except json.JSONDecodeError:
         logger.exception("Google Drive service account JSON is invalid")
         return "", "Google Drive service account JSON is invalid. Use the Base64 env option or one-line JSON."
