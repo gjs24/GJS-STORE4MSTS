@@ -175,6 +175,7 @@ class AssetViewSet(viewsets.ModelViewSet):
         version = self.request.query_params.get("version")
         featured = self.request.query_params.get("featured")
         upcoming = self.request.query_params.get("upcoming")
+        deal = self.request.query_params.get("deal")
 
         if search:
             qs = qs.filter(
@@ -199,6 +200,8 @@ class AssetViewSet(viewsets.ModelViewSet):
             qs = qs.filter(is_featured=True)
         if upcoming == "true":
             qs = qs.filter(is_upcoming=True)
+        if deal == "true":
+            qs = qs.filter(deal_is_open=True)
         return qs.annotate(review_count=Count("reviews", filter=Q(reviews__is_approved=True)))
 
     @action(detail=True, methods=["post"], permission_classes=[permissions.IsAuthenticated], throttle_classes=[UserRateThrottle])
@@ -455,6 +458,7 @@ class AdminAssetViewSet(viewsets.ModelViewSet):
             previous = self.get_object()
             previous_price = previous.price
             previous_file = previous.download_file.name if previous.download_file else ""
+            previous_deal = previous.deal_is_open
             response = super().update(request, *args, **kwargs)
             asset = self.get_object()
             log_admin_activity(request, "Product edited", "Asset", asset.id, f"Edited product {asset.title}")
@@ -463,6 +467,8 @@ class AdminAssetViewSet(viewsets.ModelViewSet):
             next_file = asset.download_file.name if asset.download_file else ""
             if previous_file != next_file:
                 log_admin_activity(request, "File changed", "Asset", asset.id, f"{asset.title} file source changed")
+            if previous_deal != asset.deal_is_open:
+                log_admin_activity(request, "Deal opened" if asset.deal_is_open else "Deal closed", "Asset", asset.id, f"{asset.title} deal is now {'open' if asset.deal_is_open else 'closed'}")
             return response
         except Exception as exc:
             logger.exception("Admin asset update failed")
@@ -478,11 +484,14 @@ class AdminAssetViewSet(viewsets.ModelViewSet):
         try:
             previous = self.get_object()
             previous_price = previous.price
+            previous_deal = previous.deal_is_open
             response = super().partial_update(request, *args, **kwargs)
             asset = self.get_object()
             log_admin_activity(request, "Product edited", "Asset", asset.id, f"Edited product {asset.title}")
             if previous_price != asset.price:
                 log_admin_activity(request, "Price changed", "Asset", asset.id, f"{asset.title} price changed from {previous_price} to {asset.price}")
+            if previous_deal != asset.deal_is_open:
+                log_admin_activity(request, "Deal opened" if asset.deal_is_open else "Deal closed", "Asset", asset.id, f"{asset.title} deal is now {'open' if asset.deal_is_open else 'closed'}")
             return response
         except Exception as exc:
             logger.exception("Admin asset update failed")

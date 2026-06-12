@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { Eye, EyeOff, Pencil, Search, Star, Trash2 } from "lucide-react";
+import { BadgeIndianRupee, Eye, EyeOff, Pencil, Search, Star, Trash2 } from "lucide-react";
 import { AdminLoginNote } from "@/components/admin-login-note";
 import { AdminLayout } from "@/components/admin-table";
 import { PriceDisplay } from "@/components/price-display";
@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { adminDelete, adminGet, adminPatch, adminPost } from "@/lib/admin-api";
 import type { Asset } from "@/lib/api";
 
-type AssetFilter = "all" | "published" | "hidden" | "free" | "premium" | "featured" | "upcoming";
+type AssetFilter = "all" | "published" | "hidden" | "free" | "premium" | "featured" | "upcoming" | "deal";
 
 export default function AdminAssetsPage() {
   const [assets, setAssets] = useState<Asset[]>([]);
@@ -33,7 +33,8 @@ export default function AdminAssetsPage() {
         (filter === "free" && asset.is_free) ||
         (filter === "premium" && !asset.is_free) ||
         (filter === "featured" && asset.is_featured) ||
-        (filter === "upcoming" && asset.is_upcoming);
+        (filter === "upcoming" && asset.is_upcoming) ||
+        (filter === "deal" && asset.deal_is_open);
       return matchesQuery && matchesFilter;
     });
   }, [assets, filter, query]);
@@ -48,6 +49,12 @@ export default function AdminAssetsPage() {
     const updated = await adminPatch<Asset>(`/admin/assets/${asset.id}/`, { is_published: nextPublished });
     setAssets((current) => current.map((item) => item.id === asset.id ? { ...item, is_published: updated.is_published } : item));
     setMessage(`${asset.title} is now ${nextPublished ? "visible" : "hidden"} on the user store.`);
+  }
+
+  async function toggleDeal(asset: Asset) {
+    const updated = await adminPatch<Asset>(`/admin/assets/${asset.id}/`, { deal_is_open: !asset.deal_is_open });
+    setAssets((current) => current.map((item) => item.id === asset.id ? { ...item, deal_is_open: updated.deal_is_open } : item));
+    setMessage(`${asset.title} deal is now ${updated.deal_is_open ? "open" : "closed"}.`);
   }
 
   async function deleteAsset(asset: Asset) {
@@ -82,6 +89,7 @@ export default function AdminAssetsPage() {
           <option value="hidden">Hidden from users</option>
           <option value="featured">Featured</option>
           <option value="upcoming">Coming Soon</option>
+          <option value="deal">Deal Open</option>
           <option value="free">Free</option>
           <option value="premium">Premium</option>
         </select>
@@ -100,6 +108,7 @@ export default function AdminAssetsPage() {
               <span className="mt-2 flex gap-2">
                 {asset.is_featured ? <Badge variant="warning">Featured</Badge> : null}
                 {asset.is_upcoming ? <Badge variant="muted">Upcoming</Badge> : null}
+                {asset.deal_is_open ? <Badge variant="success">Deal open</Badge> : null}
                 <Badge variant={asset.is_free ? "success" : "default"}>{asset.is_free ? "Free" : "Premium"}</Badge>
                 <Badge variant={asset.has_file ? "success" : "warning"}>{asset.has_file ? "File uploaded" : "No file"}</Badge>
               </span>
@@ -118,6 +127,7 @@ export default function AdminAssetsPage() {
                 {asset.is_published === false ? <Eye size={16} /> : <EyeOff size={16} />}
               </button>
               <button title="Feature/unfeature" onClick={() => toggleFeature(asset)} className={`rounded border p-2 hover:bg-white/10 ${asset.is_featured ? "border-rail-amber text-rail-amber" : "border-white/10"}`}><Star size={16} /></button>
+              <button title="Open/close deal" onClick={() => toggleDeal(asset)} className={`rounded border p-2 hover:bg-white/10 ${asset.deal_is_open ? "border-emerald-400 text-emerald-300" : "border-white/10"}`}><BadgeIndianRupee size={16} /></button>
               <Link title="Edit" href={`/admin-dashboard/assets/${asset.id}/edit`} className="rounded border border-white/10 p-2 hover:bg-white/10"><Pencil size={16} /></Link>
               <button title="Delete" onClick={() => deleteAsset(asset)} className="rounded border border-red-500/40 p-2 text-red-300 hover:bg-red-500/10"><Trash2 size={16} /></button>
             </span>

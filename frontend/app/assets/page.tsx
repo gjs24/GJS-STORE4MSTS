@@ -12,7 +12,7 @@ function firstParam(value: string | string[] | undefined) {
 export default async function AssetsPage({ searchParams }: { searchParams: Promise<AssetsSearchParams> }) {
   const params = await searchParams;
   const query = new URLSearchParams();
-  ["search", "category", "price", "version", "simulator_type", "upcoming"].forEach((key) => {
+  ["search", "category", "price", "version", "simulator_type", "upcoming", "deal"].forEach((key) => {
     const value = firstParam(params[key]);
     if (value) query.set(key, value);
   });
@@ -21,7 +21,7 @@ export default async function AssetsPage({ searchParams }: { searchParams: Promi
 
   return (
     <PageShell title="Asset Marketplace" eyebrow="Search, filter, download">
-      <form action="/assets" className="mb-4 grid gap-3 rounded border border-white/10 bg-white/[0.03] p-4 md:grid-cols-7">
+      <form action="/assets" className="mb-4 grid gap-3 rounded border border-white/10 bg-white/[0.03] p-4 md:grid-cols-4 xl:grid-cols-8">
         <input name="search" placeholder="Search assets" defaultValue={firstParam(params.search)} className="rounded border border-white/10 bg-black/40 px-3 py-2 text-sm" />
         <select name="category" defaultValue={firstParam(params.category) || ""} className="rounded border border-white/10 bg-black/40 px-3 py-2 text-sm">
           <option value="">All categories</option>
@@ -41,6 +41,10 @@ export default async function AssetsPage({ searchParams }: { searchParams: Promi
         <select name="upcoming" defaultValue={firstParam(params.upcoming) || ""} className="rounded border border-white/10 bg-black/40 px-3 py-2 text-sm">
           <option value="">Any status</option>
           <option value="true">Coming Soon</option>
+        </select>
+        <select name="deal" defaultValue={firstParam(params.deal) || ""} className="rounded border border-white/10 bg-black/40 px-3 py-2 text-sm">
+          <option value="">Any deal</option>
+          <option value="true">Deal Open</option>
         </select>
         <input name="version" placeholder="Version" defaultValue={firstParam(params.version)} className="rounded border border-white/10 bg-black/40 px-3 py-2 text-sm" />
         <button className="rounded bg-rail-red px-4 py-2 text-sm font-semibold">Filter</button>

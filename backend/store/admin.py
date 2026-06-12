@@ -20,8 +20,8 @@ class UpdateLogInline(admin.TabularInline):
 
 @admin.register(Asset)
 class AssetAdmin(admin.ModelAdmin):
-    list_display = ("title", "category", "simulator_type", "original_price", "price", "is_free", "is_published", "is_featured", "is_upcoming", "download_count")
-    list_filter = ("category", "simulator_type", "is_free", "is_published", "is_featured", "is_upcoming")
+    list_display = ("title", "category", "simulator_type", "original_price", "price", "deal_is_open", "is_free", "is_published", "is_featured", "is_upcoming", "download_count")
+    list_filter = ("category", "simulator_type", "deal_is_open", "is_free", "is_published", "is_featured", "is_upcoming")
     search_fields = ("title", "short_description", "description")
     prepopulated_fields = {"slug": ("title",)}
     inlines = [AssetImageInline, AssetFileInline, UpdateLogInline]

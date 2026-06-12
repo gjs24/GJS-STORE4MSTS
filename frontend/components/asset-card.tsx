@@ -5,6 +5,7 @@ import { PriceDisplay } from "@/components/price-display";
 import type { Asset } from "@/lib/api";
 
 export function AssetCard({ asset }: { asset: Asset }) {
+  const showDeal = Boolean(asset.deal_is_open && !asset.is_upcoming && !asset.is_free && Number(asset.discount_percent || 0) > 0);
   return (
     <Link href={`/assets/${asset.slug}`} className="cinematic-panel group overflow-hidden rounded-lg">
       <div className="relative flex aspect-video items-center justify-center bg-[radial-gradient(circle_at_center,#17385d,#05070b_70%)]">
@@ -18,8 +19,8 @@ export function AssetCard({ asset }: { asset: Asset }) {
         <span className="absolute right-3 top-3 rounded bg-rail-red px-2 py-1 text-xs font-semibold">
           {asset.is_upcoming ? asset.coming_soon_badge || "COMING SOON" : asset.is_free ? "FREE" : asset.discount_percent ? `${asset.discount_percent}% OFF` : `INR ${asset.price}`}
         </span>
-        {!asset.is_upcoming && !asset.is_free && Number(asset.discount_percent || 0) > 0 ? (
-          <span className="absolute bottom-3 left-3 rounded bg-rail-amber px-2 py-1 text-xs font-black uppercase text-black">Launch Offer</span>
+        {showDeal ? (
+          <span className="absolute bottom-3 left-3 rounded bg-rail-amber px-2 py-1 text-xs font-black uppercase text-black">{asset.deal_badge || "Limited Time"}</span>
         ) : null}
       </div>
       <div className="space-y-3 p-4">
@@ -31,6 +32,8 @@ export function AssetCard({ asset }: { asset: Asset }) {
         <p className="text-sm">
           {asset.is_upcoming ? (
             <span className="font-semibold text-rail-amber">{asset.coming_soon_status_text || "Release Date: To Be Announced"}</span>
+          ) : showDeal ? (
+            <span className="font-semibold text-emerald-300">{asset.deal_title || "Launch Offer"} {asset.deal_status_text ? `- ${asset.deal_status_text}` : ""}</span>
           ) : (
             <PriceDisplay asset={asset} compact />
           )}

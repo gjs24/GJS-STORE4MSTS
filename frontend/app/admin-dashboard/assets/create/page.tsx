@@ -46,6 +46,10 @@ export default function CreateAssetPage() {
       formData.set("is_published", String(formData.get("is_published") === "on"));
       formData.set("is_featured", String(formData.get("is_featured") === "on"));
       formData.set("is_upcoming", String(formData.get("is_upcoming") === "on"));
+      formData.set("deal_is_open", String(formData.get("deal_is_open") === "on"));
+      if (!formData.get("deal_ends_at")) {
+        formData.delete("deal_ends_at");
+      }
       if (file instanceof File && file.size === 0) {
         formData.delete("download_file");
       } else if (file instanceof File && formData.get("external_download_url")) {
@@ -166,6 +170,31 @@ export default function CreateAssetPage() {
           <input name="is_upcoming" type="checkbox" />
           <span>Upcoming product / coming soon</span>
         </label>
+        <div className="space-y-4 rounded border border-emerald-400/20 bg-emerald-400/5 p-4 md:col-span-2">
+          <h2 className="font-semibold text-emerald-300">Deal Open / Close</h2>
+          <label className="flex items-center gap-3 rounded border border-white/10 bg-black/30 px-3 py-3">
+            <input name="deal_is_open" type="checkbox" />
+            <span>Deal open - show launch offer badge to users</span>
+          </label>
+          <div className="grid gap-4 md:grid-cols-2">
+            <label className="block">
+              <span className="text-sm text-slate-300">Deal title</span>
+              <input name="deal_title" defaultValue="Launch Offer" className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-3" />
+            </label>
+            <label className="block">
+              <span className="text-sm text-slate-300">Deal badge</span>
+              <input name="deal_badge" defaultValue="Limited Time" className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-3" />
+            </label>
+            <label className="block">
+              <span className="text-sm text-slate-300">Deal status text</span>
+              <input name="deal_status_text" placeholder="Offer closes soon" className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-3" />
+            </label>
+            <label className="block">
+              <span className="text-sm text-slate-300">Deal end date optional</span>
+              <input name="deal_ends_at" type="datetime-local" className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-3" />
+            </label>
+          </div>
+        </div>
         <div className="space-y-4 rounded border border-rail-amber/20 bg-rail-amber/5 p-4 md:col-span-2">
           <h2 className="font-semibold text-rail-amber">Coming Soon Banner</h2>
           <label className="block">

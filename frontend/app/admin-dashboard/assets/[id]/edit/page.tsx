@@ -63,6 +63,10 @@ export default function EditAssetPage({ params }: { params: Promise<{ id: string
     formData.set("is_published", String(formData.get("is_published") === "on"));
     formData.set("is_featured", String(formData.get("is_featured") === "on"));
     formData.set("is_upcoming", String(formData.get("is_upcoming") === "on"));
+    formData.set("deal_is_open", String(formData.get("deal_is_open") === "on"));
+    if (!formData.get("deal_ends_at")) {
+      formData.delete("deal_ends_at");
+    }
 
     if (file instanceof File && file.size === 0) {
       formData.delete("download_file");
@@ -196,6 +200,31 @@ export default function EditAssetPage({ params }: { params: Promise<{ id: string
             <span>Upcoming product / coming soon</span>
           </label>
         </div>
+        <div className="space-y-4 rounded border border-emerald-400/20 bg-emerald-400/5 p-4 md:col-span-2">
+          <h2 className="font-semibold text-emerald-300">Deal Open / Close</h2>
+          <label className="flex items-center gap-3 rounded border border-white/10 bg-black/30 px-3 py-3">
+            <input name="deal_is_open" type="checkbox" defaultChecked={asset.deal_is_open} />
+            <span>Deal open - show launch offer badge to users</span>
+          </label>
+          <div className="grid gap-4 md:grid-cols-2">
+            <label className="block">
+              <span className="text-sm text-slate-300">Deal title</span>
+              <input name="deal_title" defaultValue={asset.deal_title || "Launch Offer"} className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-3" />
+            </label>
+            <label className="block">
+              <span className="text-sm text-slate-300">Deal badge</span>
+              <input name="deal_badge" defaultValue={asset.deal_badge || "Limited Time"} className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-3" />
+            </label>
+            <label className="block">
+              <span className="text-sm text-slate-300">Deal status text</span>
+              <input name="deal_status_text" defaultValue={asset.deal_status_text || ""} placeholder="Offer closes soon" className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-3" />
+            </label>
+            <label className="block">
+              <span className="text-sm text-slate-300">Deal end date optional</span>
+              <input name="deal_ends_at" type="datetime-local" defaultValue={formatDateTimeLocal(asset.deal_ends_at)} className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-3" />
+            </label>
+          </div>
+        </div>
         <div className="space-y-4 rounded border border-rail-amber/20 bg-rail-amber/5 p-4 md:col-span-2">
           <h2 className="font-semibold text-rail-amber">Coming Soon Banner</h2>
           <label className="block">
@@ -307,4 +336,11 @@ function fileStatus(file?: File) {
   if (!file) return "";
   const sizeMb = file.size / (1024 * 1024);
   return `Selected: ${file.name} (${sizeMb.toFixed(sizeMb >= 10 ? 0 : 1)} MB)`;
+}
+
+function formatDateTimeLocal(value?: string | null) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toISOString().slice(0, 16);
 }

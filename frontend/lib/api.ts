@@ -21,6 +21,11 @@ export type Asset = {
   file_size: string;
   original_price: string;
   price: string;
+  deal_is_open?: boolean;
+  deal_title?: string;
+  deal_badge?: string;
+  deal_status_text?: string;
+  deal_ends_at?: string | null;
   discount_percent?: number;
   savings_amount?: string;
   is_free: boolean;
