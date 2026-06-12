@@ -122,11 +122,7 @@ class AssetListSerializer(serializers.ModelSerializer):
             return None
         url = obj.thumbnail.url
         if url.startswith("http://") or url.startswith("https://"):
-            if not settings.DEBUG and "/media/" in url and "res.cloudinary.com" not in url:
-                return None
             return url
-        if not settings.DEBUG:
-            return None
         request = self.context.get("request")
         return request.build_absolute_uri(url) if request else url
 

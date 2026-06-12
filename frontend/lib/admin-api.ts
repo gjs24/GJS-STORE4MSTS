@@ -53,6 +53,50 @@ export type AdminSettings = {
   security: { debug: boolean; allowed_hosts: string[]; download_rate_limit: string };
 };
 
+function storedAccessToken() {
+  return typeof window !== "undefined" ? localStorage.getItem("accessToken") || "" : "";
+}
+
+function storedRefreshToken() {
+  return typeof window !== "undefined" ? localStorage.getItem("refreshToken") || "" : "";
+}
+
+function tokenExpiresSoon(token: string) {
+  try {
+    const base64 = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+    const payload = JSON.parse(atob(base64.padEnd(base64.length + (4 - base64.length % 4) % 4, "=")));
+    return typeof payload.exp === "number" && payload.exp * 1000 < Date.now() + 60000;
+  } catch {
+    return true;
+  }
+}
+
+async function refreshAccessToken() {
+  const refresh = storedRefreshToken();
+  if (!refresh) return "";
+  const res = await fetch(`${API_URL}/auth/refresh/`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ refresh })
+  });
+  if (!res.ok) {
+    localStorage.removeItem("accessToken");
+    localStorage.removeItem("refreshToken");
+    localStorage.removeItem("currentUser");
+    return "";
+  }
+  const data = await res.json();
+  localStorage.setItem("accessToken", data.access);
+  return data.access as string;
+}
+
+async function validAccessToken() {
+  const token = storedAccessToken();
+  if (!token) return "";
+  if (!tokenExpiresSoon(token)) return token;
+  return refreshAccessToken();
+}
+
 export function adminHeaders(): Record<string, string> {
   const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : "";
   return token ? { Authorization: `Bearer ${token}` } : {};
@@ -65,7 +109,11 @@ function hasAdminToken() {
 export async function adminGet<T>(path: string, fallback: T): Promise<T> {
   if (!hasAdminToken()) return fallback;
   try {
-    const res = await fetch(`${API_URL}${path}`, { headers: adminHeaders(), cache: "no-store" });
+    const token = await validAccessToken();
+    let res = await fetch(`${API_URL}${path}`, { headers: token ? { Authorization: `Bearer ${token}` } : {}, cache: "no-store" });
+    if (res.status === 401 && await refreshAccessToken()) {
+      res = await fetch(`${API_URL}${path}`, { headers: adminHeaders(), cache: "no-store" });
+    }
     if (!res.ok) throw new Error("Admin request failed");
     return res.json();
   } catch {
@@ -75,22 +123,38 @@ export async function adminGet<T>(path: string, fallback: T): Promise<T> {
 
 export async function adminPatch<T>(path: string, body: unknown): Promise<T> {
   if (!hasAdminToken()) throw new Error("Admin login required.");
-  const res = await fetch(`${API_URL}${path}`, {
+  await validAccessToken();
+  let res = await fetch(`${API_URL}${path}`, {
     method: "PATCH",
     headers: { ...adminHeaders(), "Content-Type": "application/json" },
     body: JSON.stringify(body)
   });
+  if (res.status === 401 && await refreshAccessToken()) {
+    res = await fetch(`${API_URL}${path}`, {
+      method: "PATCH",
+      headers: { ...adminHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
+  }
   if (!res.ok) throw new Error("Update failed");
   return res.json();
 }
 
 export async function adminPost<T>(path: string, body?: unknown): Promise<T> {
   if (!hasAdminToken()) throw new Error("Admin login required.");
-  const res = await fetch(`${API_URL}${path}`, {
+  await validAccessToken();
+  let res = await fetch(`${API_URL}${path}`, {
     method: "POST",
     headers: { ...adminHeaders(), "Content-Type": "application/json" },
     body: body ? JSON.stringify(body) : undefined
   });
+  if (res.status === 401 && await refreshAccessToken()) {
+    res = await fetch(`${API_URL}${path}`, {
+      method: "POST",
+      headers: { ...adminHeaders(), "Content-Type": "application/json" },
+      body: body ? JSON.stringify(body) : undefined
+    });
+  }
   if (!res.ok) throw new Error("Action failed");
   return res.json();
 }
@@ -107,32 +171,55 @@ async function parseAdminError(res: Response, fallback: string) {
 
 export async function adminPostForm<T>(path: string, body: FormData): Promise<T> {
   if (!hasAdminToken()) throw new Error("Admin login required.");
-  const res = await fetch(`${API_URL}${path}`, {
+  await validAccessToken();
+  let res = await fetch(`${API_URL}${path}`, {
     method: "POST",
     headers: adminHeaders(),
     body
   });
+  if (res.status === 401 && await refreshAccessToken()) {
+    res = await fetch(`${API_URL}${path}`, {
+      method: "POST",
+      headers: adminHeaders(),
+      body
+    });
+  }
   if (!res.ok) throw new Error(await parseAdminError(res, "Upload failed"));
   return res.json();
 }
 
 export async function adminPatchForm<T>(path: string, body: FormData): Promise<T> {
   if (!hasAdminToken()) throw new Error("Admin login required.");
-  const res = await fetch(`${API_URL}${path}`, {
+  await validAccessToken();
+  let res = await fetch(`${API_URL}${path}`, {
     method: "PATCH",
     headers: adminHeaders(),
     body
   });
+  if (res.status === 401 && await refreshAccessToken()) {
+    res = await fetch(`${API_URL}${path}`, {
+      method: "PATCH",
+      headers: adminHeaders(),
+      body
+    });
+  }
   if (!res.ok) throw new Error(await parseAdminError(res, "Upload failed"));
   return res.json();
 }
 
 export async function adminDelete(path: string): Promise<void> {
   if (!hasAdminToken()) throw new Error("Admin login required.");
-  const res = await fetch(`${API_URL}${path}`, {
+  await validAccessToken();
+  let res = await fetch(`${API_URL}${path}`, {
     method: "DELETE",
     headers: adminHeaders()
   });
+  if (res.status === 401 && await refreshAccessToken()) {
+    res = await fetch(`${API_URL}${path}`, {
+      method: "DELETE",
+      headers: adminHeaders()
+    });
+  }
   if (!res.ok) throw new Error("Delete failed");
 }
 
