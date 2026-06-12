@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Heart, Search, TrainFront } from "lucide-react";
 import { AuthNav } from "@/components/auth-nav";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const links = [
   ["Home", "/"],
@@ -31,6 +32,7 @@ export function SiteHeader() {
           ))}
         </nav>
         <div className="flex items-center gap-2">
+          <ThemeToggle />
           <Link aria-label="Search assets" href="/assets" className="rounded border border-white/10 p-2 text-slate-300 hover:text-white">
             <Search size={18} />
           </Link>
