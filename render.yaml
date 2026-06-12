@@ -37,6 +37,8 @@ services:
         sync: false
       - key: PRIVATE_DOWNLOAD_URL_EXPIRE_SECONDS
         value: "300"
+      - key: GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON
+        sync: false
       - key: RAZORPAY_KEY_ID
         sync: false
       - key: RAZORPAY_KEY_SECRET

@@ -211,6 +211,13 @@ export default function EditAssetPage({ params }: { params: Promise<{ id: string
             Most secure option for paid files. Upload ZIP to a private S3/R2 bucket and paste only the object key here.
           </span>
         </label>
+        <label className="block md:col-span-2">
+          <span className="text-sm text-slate-300">Restricted Google Drive file ID</span>
+          <input name="google_drive_file_id" defaultValue={asset.google_drive_file_id || ""} placeholder="1AbCDefGhIjKlMnOpQrStUvWxYz" className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-3" />
+          <span className="mt-1 block text-xs text-slate-500">
+            Keep the Drive file restricted. After payment, the backend grants access only to the logged-in user's email.
+          </span>
+        </label>
         <div className="flex flex-wrap gap-3 md:col-span-2">
           <button disabled={saving} className="rounded bg-rail-red px-5 py-3 font-semibold disabled:opacity-60">
             {saving ? <Loader2 className="mr-2 inline animate-spin" size={18} /> : <Save className="mr-2 inline" size={18} />}

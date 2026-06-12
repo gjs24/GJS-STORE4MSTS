@@ -62,6 +62,7 @@ class Asset(models.Model):
     )
     external_download_url = models.URLField(blank=True)
     private_download_key = models.CharField(max_length=500, blank=True)
+    google_drive_file_id = models.CharField(max_length=200, blank=True)
     download_count = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

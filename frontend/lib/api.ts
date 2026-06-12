@@ -33,6 +33,7 @@ export type Asset = {
   download_file?: string | null;
   external_download_url?: string;
   private_download_key?: string;
+  google_drive_file_id?: string;
   preview_video_url?: string;
   requirements?: string;
   installation_steps?: string;

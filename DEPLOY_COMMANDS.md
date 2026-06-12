@@ -69,6 +69,7 @@ PRIVATE_DOWNLOAD_ENDPOINT_URL=https://account-id.r2.cloudflarestorage.com
 PRIVATE_DOWNLOAD_ACCESS_KEY_ID=your-private-download-access-key
 PRIVATE_DOWNLOAD_SECRET_ACCESS_KEY=your-private-download-secret-key
 PRIVATE_DOWNLOAD_URL_EXPIRE_SECONDS=300
+GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON=paste_service_account_json_on_one_line
 ```
 
 After changing Render environment variables:
@@ -221,6 +222,16 @@ Admin Dashboard -> Edit Asset -> Private S3/R2 object key -> Paste key -> Save
 ```
 
 The backend signs a short-lived download URL only after login/purchase, so users cannot share a permanent public file link.
+
+Google Drive restricted file alternative:
+
+```text
+Google Cloud -> Enable Drive API -> Create service account -> Create JSON key
+Google Drive -> Upload ZIP -> Keep Restricted -> Share file with service account email as Viewer
+Admin Dashboard -> Edit Asset -> Restricted Google Drive file ID -> Paste file ID -> Save
+```
+
+When a paid user downloads, the backend grants that user's account email reader access to the restricted Drive file.
 
 ## Useful Test URLs
 

@@ -6,6 +6,7 @@ django-cors-headers
 django-environ
 djangorestframework-simplejwt
 google-auth
+google-api-python-client
 whitenoise
 cloudinary
 django-cloudinary-storage
