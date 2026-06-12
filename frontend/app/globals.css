@@ -72,6 +72,10 @@ body {
   background: rgba(248, 250, 252, 0.88);
 }
 
+:root[data-theme="light"] .bg-rail-black {
+  background: #ffffff;
+}
+
 :root[data-theme="light"] .text-white {
   color: #0f172a !important;
 }
