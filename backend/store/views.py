@@ -449,14 +449,7 @@ def create_download_response(request, asset):
         signed_url = create_private_download_url(asset.private_download_key)
         if not signed_url:
             return Response({"detail": "Private download storage is not configured. Please contact the admin."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-        DownloadLog.objects.create(
-            user=request.user,
-            asset=asset,
-            ip_address=request.META.get("REMOTE_ADDR"),
-            user_agent=request.META.get("HTTP_USER_AGENT", "")[:255],
-        )
-        asset.download_count += 1
-        asset.save(update_fields=["download_count"])
+        record_download(request, asset)
         return Response({"download_url": signed_url})
     if asset.google_drive_file_id:
         if not request.user.email:
@@ -464,24 +457,10 @@ def create_download_response(request, asset):
         drive_url, drive_error = grant_google_drive_access(asset.google_drive_file_id, request.user.email)
         if not drive_url:
             return Response({"detail": drive_error}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-        DownloadLog.objects.create(
-            user=request.user,
-            asset=asset,
-            ip_address=request.META.get("REMOTE_ADDR"),
-            user_agent=request.META.get("HTTP_USER_AGENT", "")[:255],
-        )
-        asset.download_count += 1
-        asset.save(update_fields=["download_count"])
+        record_download(request, asset)
         return Response({"download_url": drive_url})
     if asset.external_download_url:
-        DownloadLog.objects.create(
-            user=request.user,
-            asset=asset,
-            ip_address=request.META.get("REMOTE_ADDR"),
-            user_agent=request.META.get("HTTP_USER_AGENT", "")[:255],
-        )
-        asset.download_count += 1
-        asset.save(update_fields=["download_count"])
+        record_download(request, asset)
         return Response({"download_url": asset.external_download_url})
     if not asset.download_file:
         return Response({"detail": "Download file is not available yet. Add a restricted Google Drive file ID or another download source in admin."}, status=status.HTTP_404_NOT_FOUND)
@@ -499,14 +478,7 @@ def create_download_response(request, asset):
             status=status.HTTP_404_NOT_FOUND,
         )
 
-    DownloadLog.objects.create(
-        user=request.user,
-        asset=asset,
-        ip_address=request.META.get("REMOTE_ADDR"),
-        user_agent=request.META.get("HTTP_USER_AGENT", "")[:255],
-    )
-    asset.download_count += 1
-    asset.save(update_fields=["download_count"])
+    record_download(request, asset)
     filename = PurePath(asset.download_file.name).name
     try:
         return FileResponse(asset.download_file.open("rb"), as_attachment=True, filename=filename)
@@ -516,6 +488,20 @@ def create_download_response(request, asset):
             {"detail": "Uploaded file could not be opened. Add a restricted Google Drive file ID or another download source in admin."},
             status=status.HTTP_503_SERVICE_UNAVAILABLE,
         )
+
+
+def record_download(request, asset):
+    try:
+        DownloadLog.objects.create(
+            user=request.user,
+            asset=asset,
+            ip_address=request.META.get("REMOTE_ADDR"),
+            user_agent=request.META.get("HTTP_USER_AGENT", "")[:255],
+        )
+        asset.download_count += 1
+        asset.save(update_fields=["download_count"])
+    except Exception:
+        logger.exception("Download logging failed")
 
 
 def create_private_download_url(object_key):
@@ -615,10 +601,10 @@ def asset_download_by_id(request, pk):
     asset = get_object_or_404(Asset, pk=pk)
     try:
         return create_download_response(request, asset)
-    except Exception:
+    except Exception as exc:
         logger.exception("Asset download failed")
         return Response(
-            {"detail": "Download setup failed on the server. Check the asset download source and Google Drive/Cloud storage settings."},
+            {"detail": f"Download setup failed on the server: {type(exc).__name__}. Check the asset download source and Google Drive/Cloud storage settings."},
             status=status.HTTP_503_SERVICE_UNAVAILABLE,
         )
 
