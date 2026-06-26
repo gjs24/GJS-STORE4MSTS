@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { Download, FileText, PackageCheck, ShoppingCart } from "lucide-react";
 import { PriceDisplay } from "@/components/price-display";
 import type { Asset } from "@/lib/api";
-import { downloadAsset, downloadInvoice, type DownloadLog, type StoreOrder, type WishlistItem, userGet } from "@/lib/store-api";
+import { downloadAsset, downloadInvoice, type DownloadLog, type StoreOrder, type WishlistItem, userGet, verifyPayment } from "@/lib/store-api";
 
 type AccountListProps = {
   type: "purchases" | "downloads" | "wishlist";
@@ -46,7 +46,20 @@ export function AccountList({ type }: AccountListProps) {
         setMessage(nextRows.length ? "" : "No items yet. Browse the marketplace to build your simulator library.");
       })
       .catch((error) => setMessage(error instanceof Error ? error.message : "Please login to view this page."));
-    loadRows();
+    const verifyReturnedOrder = async () => {
+      if (type !== "purchases") return;
+      const orderId = Number(new URLSearchParams(window.location.search).get("order_id") || "");
+      if (!orderId) return;
+      setMessage("Confirming Cashfree payment...");
+      try {
+        const order = await verifyPayment(orderId);
+        setMessage(order.download_enabled ? "Payment confirmed. Download access is ready." : "Payment is not confirmed yet. Please refresh in a moment.");
+        window.history.replaceState(null, "", window.location.pathname);
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "Could not confirm Cashfree payment yet.");
+      }
+    };
+    verifyReturnedOrder().finally(loadRows);
     if (type !== "purchases") return;
     const interval = window.setInterval(loadRows, 10000);
     return () => window.clearInterval(interval);
