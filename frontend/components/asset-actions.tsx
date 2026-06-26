@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { load } from "@cashfreepayments/cashfree-js";
 import { CheckCircle2, Download, Heart, Lock, ShoppingCart } from "lucide-react";
 import { priceLabel, type Asset } from "@/lib/api";
 import { addToWishlist, createOrder, downloadAsset, isLoggedIn, notifyMe, verifyPayment, type StoreOrder } from "@/lib/store-api";
@@ -9,6 +10,8 @@ import { addToWishlist, createOrder, downloadAsset, isLoggedIn, notifyMe, verify
 function qrCodeUrl(value: string) {
   return `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(value)}`;
 }
+
+const cashfreeMode = process.env.NEXT_PUBLIC_CASHFREE_MODE === "production" ? "production" : "sandbox";
 
 export function AssetActions({ asset }: { asset: Asset }) {
   const [message, setMessage] = useState("");
@@ -23,6 +26,35 @@ export function AssetActions({ asset }: { asset: Asset }) {
       return false;
     }
     return true;
+  }
+
+  async function startCashfreeCheckout(nextOrder: StoreOrder) {
+    if (!nextOrder.payment_session_id) {
+      return null;
+    }
+    setMessage("Opening secure Cashfree checkout...");
+    const cashfree = await load({ mode: cashfreeMode });
+    const result = await cashfree.checkout({
+      paymentSessionId: nextOrder.payment_session_id,
+      redirectTarget: "_modal"
+    });
+    if (result.error) {
+      throw new Error(result.error.message || "Cashfree checkout could not be completed.");
+    }
+    setMessage("Confirming payment with Cashfree...");
+    return verifyPayment(nextOrder.id);
+  }
+
+  async function startDownload() {
+    const download = await downloadAsset(asset.id);
+    setMessage("Download ready. Starting package download...");
+    const link = document.createElement("a");
+    link.href = download.url;
+    link.download = download.filename || `${asset.slug}.zip`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    if (download.revoke) setTimeout(download.revoke, 1000);
   }
 
   async function handlePrimaryAction() {
@@ -47,29 +79,28 @@ export function AssetActions({ asset }: { asset: Asset }) {
       if (!asset.is_free && !asset.can_download) {
         const nextOrder = await createOrder(asset.id);
         setOrder(nextOrder);
-        if (nextOrder.status === "PENDING") {
-          setMessage("Order created. Pay by UPI and submit your UTR for verification.");
+        if (nextOrder.status === "PENDING" && nextOrder.payment_session_id) {
+          const paidOrder = await startCashfreeCheckout(nextOrder);
+          if (!paidOrder?.download_enabled) {
+            setMessage("Payment is not confirmed yet. Check your purchases page in a moment.");
+            return;
+          }
+          setOrder(paidOrder);
+          setMessage("Payment confirmed. Preparing secure download...");
+        } else if (nextOrder.status === "PENDING") {
+          setMessage("Order created. Complete the payment details shown below.");
           return;
-        }
-        if (nextOrder.status === "VERIFICATION_PENDING") {
+        } else if (nextOrder.status === "VERIFICATION_PENDING") {
           setMessage("Your payment is waiting for admin verification.");
           return;
-        }
-        if (nextOrder.status === "REJECTED") {
+        } else if (nextOrder.status === "REJECTED") {
           setMessage("This payment was rejected. Contact support if you believe this is a mistake.");
           return;
+        } else {
+          setMessage("Purchase confirmed. Preparing secure download...");
         }
-        setMessage("Purchase confirmed. Preparing secure download...");
       }
-      const download = await downloadAsset(asset.id);
-      setMessage("Download ready. Starting package download...");
-      const link = document.createElement("a");
-      link.href = download.url;
-      link.download = download.filename || `${asset.slug}.zip`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      if (download.revoke) setTimeout(download.revoke, 1000);
+      await startDownload();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not complete this action.");
     } finally {

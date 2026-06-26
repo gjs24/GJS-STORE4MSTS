@@ -14,6 +14,8 @@ export type StoreOrder = {
   payer_name?: string;
   payment_submitted_at?: string | null;
   download_enabled?: boolean;
+  payment_session_id?: string;
+  payment_provider?: "CASHFREE" | "MANUAL" | "";
   manual_payment?: {
     upi_id: string;
     payee_name: string;

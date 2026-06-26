@@ -151,6 +151,7 @@ class Order(models.Model):
 class Payment(models.Model):
     class Provider(models.TextChoices):
         MANUAL = "MANUAL", "Manual"
+        CASHFREE = "CASHFREE", "Cashfree"
 
     order = models.OneToOneField(Order, related_name="payment", on_delete=models.CASCADE)
     provider = models.CharField(max_length=20, choices=Provider.choices, default=Provider.MANUAL)

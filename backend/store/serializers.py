@@ -198,6 +198,8 @@ class OrderSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
     order_id = serializers.CharField(source="provider_order_id", read_only=True)
     manual_payment = serializers.SerializerMethodField()
+    payment_session_id = serializers.SerializerMethodField()
+    payment_provider = serializers.SerializerMethodField()
 
     class Meta:
         model = Order
@@ -216,11 +218,16 @@ class OrderSerializer(serializers.ModelSerializer):
             "payment_submitted_at",
             "download_enabled",
             "manual_payment",
+            "payment_session_id",
+            "payment_provider",
             "created_at",
         ]
-        read_only_fields = ["amount", "status", "provider_order_id", "utr", "payer_name", "payment_submitted_at", "download_enabled", "manual_payment", "created_at"]
+        read_only_fields = ["amount", "status", "provider_order_id", "utr", "payer_name", "payment_submitted_at", "download_enabled", "manual_payment", "payment_session_id", "payment_provider", "created_at"]
 
     def get_manual_payment(self, obj):
+        payment = getattr(obj, "payment", None)
+        if payment and payment.provider == Payment.Provider.CASHFREE:
+            return None
         if obj.asset.is_free or obj.download_enabled:
             return None
         upi_id = getattr(settings, "MANUAL_UPI_ID", "")
@@ -238,10 +245,20 @@ class OrderSerializer(serializers.ModelSerializer):
             "instructions": "Pay the exact amount by UPI, then submit the UTR / transaction ID for admin verification.",
         }
 
+    def get_payment_session_id(self, obj):
+        payment = getattr(obj, "payment", None)
+        if not payment or payment.provider != Payment.Provider.CASHFREE:
+            return ""
+        return payment.raw_response.get("payment_session_id", "")
+
+    def get_payment_provider(self, obj):
+        payment = getattr(obj, "payment", None)
+        return payment.provider if payment else ""
+
 
 class PaymentVerifySerializer(serializers.Serializer):
     order_id = serializers.IntegerField()
-    utr = serializers.CharField(min_length=6, max_length=80)
+    utr = serializers.CharField(required=False, allow_blank=True, min_length=6, max_length=80)
     payer_name = serializers.CharField(required=False, allow_blank=True, max_length=160)
 
 

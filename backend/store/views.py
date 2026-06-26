@@ -4,6 +4,7 @@ import logging
 import re
 from pathlib import PurePath
 
+import requests
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.http import FileResponse, HttpResponse
@@ -39,6 +40,111 @@ from .serializers import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def cashfree_base_url():
+    if settings.CASHFREE_ENVIRONMENT == "production":
+        return "https://api.cashfree.com/pg"
+    return "https://sandbox.cashfree.com/pg"
+
+
+def cashfree_headers():
+    return {
+        "Content-Type": "application/json",
+        "x-client-id": settings.CASHFREE_CLIENT_ID,
+        "x-client-secret": settings.CASHFREE_CLIENT_SECRET,
+        "x-api-version": settings.CASHFREE_API_VERSION,
+    }
+
+
+def cashfree_is_configured():
+    return bool(settings.CASHFREE_CLIENT_ID and settings.CASHFREE_CLIENT_SECRET)
+
+
+def cashfree_return_url(order):
+    separator = "&" if "?" in settings.CASHFREE_RETURN_URL else "?"
+    return f"{settings.CASHFREE_RETURN_URL}{separator}order_id={order.id}"
+
+
+def create_cashfree_order(order, request):
+    if not cashfree_is_configured():
+        return None, "Cashfree is not configured."
+
+    user = order.user
+    customer_name = user.get_full_name() or user.username or f"Customer {user.id}"
+    payload = {
+        "order_id": order.provider_order_id,
+        "order_amount": float(order.amount),
+        "order_currency": order.currency,
+        "customer_details": {
+            "customer_id": str(user.id),
+            "customer_name": customer_name[:100],
+            "customer_email": user.email or f"user-{user.id}@example.com",
+            "customer_phone": settings.CASHFREE_CUSTOMER_PHONE_FALLBACK,
+        },
+        "order_meta": {
+            "return_url": cashfree_return_url(order),
+        },
+        "order_note": f"{order.asset.title} digital download",
+    }
+    response = requests.post(
+        f"{cashfree_base_url()}/orders",
+        headers=cashfree_headers(),
+        json=payload,
+        timeout=20,
+    )
+    try:
+        data = response.json()
+    except ValueError:
+        data = {"message": response.text}
+    if response.status_code >= 400:
+        logger.warning("Cashfree order create failed: %s", data)
+        return None, data.get("message") or data.get("detail") or "Cashfree order creation failed."
+    return data, ""
+
+
+def fetch_cashfree_order(provider_order_id):
+    if not cashfree_is_configured():
+        return None, "Cashfree is not configured."
+    response = requests.get(
+        f"{cashfree_base_url()}/orders/{provider_order_id}",
+        headers=cashfree_headers(),
+        timeout=20,
+    )
+    try:
+        data = response.json()
+    except ValueError:
+        data = {"message": response.text}
+    if response.status_code >= 400:
+        logger.warning("Cashfree order fetch failed: %s", data)
+        return None, data.get("message") or data.get("detail") or "Cashfree payment verification failed."
+    return data, ""
+
+
+def ensure_cashfree_payment(order, request):
+    if order.asset.is_free or order.download_enabled or not cashfree_is_configured():
+        return
+    payment = getattr(order, "payment", None)
+    if (
+        payment
+        and payment.provider == Payment.Provider.CASHFREE
+        and payment.raw_response.get("payment_session_id")
+    ):
+        return
+    data, error = create_cashfree_order(order, request)
+    if not data:
+        logger.warning("Cashfree checkout unavailable for order %s: %s", order.id, error)
+        return
+    Payment.objects.update_or_create(
+        order=order,
+        defaults={
+            "provider": Payment.Provider.CASHFREE,
+            "provider_payment_id": str(data.get("cf_order_id", "")),
+            "provider_signature": "",
+            "status": str(data.get("order_status", "created")).lower(),
+            "raw_response": data,
+        },
+    )
 
 
 def log_admin_activity(request, action, target_type="", target_id="", message=""):
@@ -237,12 +343,16 @@ class OrderCreateView(generics.CreateAPIView):
             status__in=[Order.Status.PENDING, Order.Status.VERIFICATION_PENDING, Order.Status.APPROVED, Order.Status.PAID],
         ).first()
         if existing_order:
+            ensure_cashfree_payment(existing_order, request)
             return Response(OrderSerializer(existing_order, context={"request": request}).data, status=status.HTTP_200_OK)
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
-        headers = self.get_success_headers(serializer.data)
-        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+        order = serializer.instance
+        ensure_cashfree_payment(order, request)
+        data = OrderSerializer(order, context={"request": request}).data
+        headers = self.get_success_headers(data)
+        return Response(data, status=status.HTTP_201_CREATED, headers=headers)
 
     def perform_create(self, serializer):
         asset = serializer.validated_data["asset"]
@@ -274,10 +384,33 @@ class PaymentVerifyView(generics.GenericAPIView):
             return Response(OrderSerializer(order).data)
         if order.status == Order.Status.REJECTED:
             return Response({"detail": "This order was rejected. Please create a new order if you paid again."}, status=status.HTTP_400_BAD_REQUEST)
+        payment = getattr(order, "payment", None)
+        if payment and payment.provider == Payment.Provider.CASHFREE:
+            data, error = fetch_cashfree_order(order.provider_order_id)
+            if not data:
+                return Response({"detail": error}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            order_status = str(data.get("order_status", "")).upper()
+            payment.provider_payment_id = str(data.get("cf_order_id", payment.provider_payment_id or ""))
+            payment.status = order_status.lower() or payment.status
+            payment.raw_response = {**payment.raw_response, **data}
+            payment.save(update_fields=["provider_payment_id", "status", "raw_response"])
+            if order_status == "PAID":
+                order.status = Order.Status.PAID
+                order.download_enabled = True
+                order.save(update_fields=["status", "download_enabled"])
+                return Response(OrderSerializer(order, context={"request": request}).data)
+            if order_status in ["FAILED", "EXPIRED", "TERMINATED", "CANCELLED"]:
+                order.status = Order.Status.FAILED
+                order.download_enabled = False
+                order.save(update_fields=["status", "download_enabled"])
+                return Response({"detail": "Cashfree reports this payment as failed or expired."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"detail": "Cashfree payment is not complete yet."}, status=status.HTTP_400_BAD_REQUEST)
         if order.utr:
             return Response({"detail": "A UTR was already submitted for this order."}, status=status.HTTP_400_BAD_REQUEST)
 
-        utr = serializer.validated_data["utr"].strip().upper()
+        utr = serializer.validated_data.get("utr", "").strip().upper()
+        if not utr:
+            return Response({"detail": "UTR / transaction ID is required for manual payment verification."}, status=status.HTTP_400_BAD_REQUEST)
         if Order.objects.filter(utr__iexact=utr).exclude(id=order.id).exists():
             return Response({"detail": "This UTR has already been submitted."}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -781,6 +914,8 @@ def admin_settings(request):
         {
             "api_status": "online",
             "payments": {
+                "cashfree_configured": cashfree_is_configured(),
+                "cashfree_environment": settings.CASHFREE_ENVIRONMENT,
                 "manual_upi_configured": bool(settings.MANUAL_UPI_ID),
                 "stripe_configured": bool(settings.STRIPE_SECRET_KEY),
             },

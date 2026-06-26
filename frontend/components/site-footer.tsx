@@ -10,6 +10,7 @@ const policyLinks = [
 ];
 
 const supportEmail = process.env.NEXT_PUBLIC_SUPPORT_EMAIL || "gjs2721@gmail.com";
+const legalOwnerName = process.env.NEXT_PUBLIC_LEGAL_OWNER_NAME || "GNANAJEBASEELAN G";
 
 export function SiteFooter() {
   return (
@@ -56,8 +57,8 @@ export function SiteFooter() {
           </div>
         </div>
       </div>
-      <div className="border-t border-white/10 px-4 py-4 text-center text-xs text-slate-500">
-        &copy; 2026 MSTS-GJS Production Store. Independent digital asset platform.
+      <div className="border-t border-white/10 px-4 py-4 text-center text-xs leading-5 text-slate-500">
+        &copy; 2026 MSTS-GJS Production Store. Owned and operated by {legalOwnerName}.
       </div>
     </footer>
   );

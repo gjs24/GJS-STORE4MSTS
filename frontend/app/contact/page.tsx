@@ -6,6 +6,7 @@ const businessName = process.env.NEXT_PUBLIC_BUSINESS_NAME || "MSTS-GJS Producti
 const supportEmail = process.env.NEXT_PUBLIC_SUPPORT_EMAIL || "gjs2721@gmail.com";
 const supportPhone = process.env.NEXT_PUBLIC_SUPPORT_PHONE || "+91-7845727002";
 const businessAddress = process.env.NEXT_PUBLIC_BUSINESS_ADDRESS || "No 18 Kamala Nehru Colony, Arumuganeri, Tamilnadu, India - 628202";
+const legalOwnerName = process.env.NEXT_PUBLIC_LEGAL_OWNER_NAME || "GNANAJEBASEELAN G";
 
 export const metadata: Metadata = {
   title: "Contact Us | MSTS-GJS Production Store",
@@ -23,6 +24,7 @@ export default function ContactPage() {
             <p className="mt-2 text-sm leading-6 text-slate-400">
               Digital asset store for MSTS and Open Rails train models, routes, textures, sounds, cab views, and 3D assets.
             </p>
+            <p className="mt-3 text-sm text-slate-400">Owned and operated by {legalOwnerName}.</p>
           </div>
           <div className="rounded border border-white/10 bg-white/[0.03] p-5">
             <Mail className="mb-3 text-rail-amber" />
