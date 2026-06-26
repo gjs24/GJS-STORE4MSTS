@@ -40,7 +40,7 @@ from .serializers import (
 )
 
 logger = logging.getLogger(__name__)
-DOWNLOAD_READY_STATUSES = [Order.Status.APPROVED, Order.Status.PAID]
+DOWNLOAD_READY_STATUSES = [Order.Status.PAID]
 
 
 def cashfree_base_url():
@@ -125,7 +125,7 @@ def fetch_cashfree_order(provider_order_id):
 def ensure_cashfree_payment(order, request):
     sync_order_download_access(order)
     if order_has_download_access(order) or not cashfree_is_configured():
-        return True, ""
+        return cashfree_is_configured(), "" if cashfree_is_configured() else "Cashfree payment is not configured. Add Cashfree client ID and secret before selling paid products."
     payment = getattr(order, "payment", None)
     if (
         payment
@@ -136,7 +136,7 @@ def ensure_cashfree_payment(order, request):
     data, error = create_cashfree_order(order, request)
     if not data:
         logger.warning("Cashfree checkout unavailable for order %s: %s", order.id, error)
-        return True, ""
+        return False, error
     Payment.objects.update_or_create(
         order=order,
         defaults={
@@ -164,12 +164,12 @@ def log_admin_activity(request, action, target_type="", target_id="", message=""
 
 
 def order_has_download_access(order):
-    return order.asset.is_free or order.download_enabled or order.status in DOWNLOAD_READY_STATUSES
+    return order.asset.is_free or order.status in DOWNLOAD_READY_STATUSES
 
 
 def sync_order_download_access(order):
     should_enable = order.asset.is_free or order.status in DOWNLOAD_READY_STATUSES
-    should_disable = order.status in [Order.Status.REJECTED, Order.Status.FAILED, Order.Status.REFUNDED]
+    should_disable = not should_enable or order.status in [Order.Status.REJECTED, Order.Status.FAILED, Order.Status.REFUNDED]
     if should_enable and not order.download_enabled:
         order.download_enabled = True
         order.save(update_fields=["download_enabled"])
@@ -363,13 +363,17 @@ class OrderCreateView(generics.CreateAPIView):
         ).first()
         if existing_order:
             sync_order_download_access(existing_order)
-            ensure_cashfree_payment(existing_order, request)
+            cashfree_ready, cashfree_error = ensure_cashfree_payment(existing_order, request)
+            if not asset.is_free and not order_has_download_access(existing_order) and not cashfree_ready:
+                return Response({"detail": cashfree_error or "Cashfree checkout is not available."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
             return Response(OrderSerializer(existing_order, context={"request": request}).data, status=status.HTTP_200_OK)
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
         order = serializer.instance
-        ensure_cashfree_payment(order, request)
+        cashfree_ready, cashfree_error = ensure_cashfree_payment(order, request)
+        if not asset.is_free and not cashfree_ready:
+            return Response({"detail": cashfree_error or "Cashfree checkout is not available."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         data = OrderSerializer(order, context={"request": request}).data
         headers = self.get_success_headers(data)
         return Response(data, status=status.HTTP_201_CREATED, headers=headers)
@@ -400,9 +404,9 @@ class PaymentVerifyView(generics.GenericAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         order = get_object_or_404(Order, id=serializer.validated_data["order_id"], user=request.user)
-        if order.status in [Order.Status.APPROVED, Order.Status.PAID]:
+        if order.status == Order.Status.PAID:
             sync_order_download_access(order)
-            return Response(OrderSerializer(order).data)
+            return Response(OrderSerializer(order, context={"request": request}).data)
         if order.status == Order.Status.REJECTED:
             return Response({"detail": "This order was rejected. Please create a new order if you paid again."}, status=status.HTTP_400_BAD_REQUEST)
         payment = getattr(order, "payment", None)
@@ -660,7 +664,7 @@ class AdminOrderViewSet(viewsets.ModelViewSet):
 
     def perform_update(self, serializer):
         order = serializer.save()
-        if order.status in [Order.Status.APPROVED, Order.Status.PAID]:
+        if order.status == Order.Status.PAID:
             order.download_enabled = True
             order.save(update_fields=["download_enabled"])
             Payment.objects.filter(order=order).update(status="approved")
@@ -724,7 +728,7 @@ class AdminActivityLogView(generics.ListAPIView):
 def create_download_response(request, asset):
     if asset.is_upcoming:
         return Response({"detail": "This asset is marked as upcoming and is not available for download yet."}, status=status.HTTP_403_FORBIDDEN)
-    allowed = asset.is_free or Order.objects.filter(user=request.user, asset=asset).filter(Q(download_enabled=True) | Q(status__in=DOWNLOAD_READY_STATUSES)).exists()
+    allowed = asset.is_free or Order.objects.filter(user=request.user, asset=asset, status__in=DOWNLOAD_READY_STATUSES).exists()
     if not allowed:
         return Response({"detail": "Purchase required before downloading this asset."}, status=status.HTTP_403_FORBIDDEN)
     if asset.private_download_key:
@@ -897,7 +901,7 @@ def asset_download_by_id(request, pk):
 @api_view(["GET"])
 @permission_classes([permissions.IsAdminUser])
 def admin_stats(request):
-    paid_orders = Order.objects.filter(status__in=[Order.Status.APPROVED, Order.Status.PAID])
+    paid_orders = Order.objects.filter(status=Order.Status.PAID)
     pending_orders = Order.objects.filter(status=Order.Status.PENDING)
     return Response(
         {

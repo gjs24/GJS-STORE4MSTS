@@ -183,7 +183,7 @@ class AssetDetailSerializer(AssetListSerializer):
             return False
         if obj.is_free:
             return True
-        return Order.objects.filter(user=user, asset=obj).filter(Q(download_enabled=True) | Q(status__in=[Order.Status.APPROVED, Order.Status.PAID])).exists()
+        return Order.objects.filter(user=user, asset=obj, status=Order.Status.PAID).exists()
 
 
 class AssetWriteSerializer(serializers.ModelSerializer):
@@ -226,7 +226,7 @@ class OrderSerializer(serializers.ModelSerializer):
         read_only_fields = ["amount", "status", "provider_order_id", "utr", "payer_name", "payment_submitted_at", "download_enabled", "manual_payment", "payment_session_id", "payment_provider", "created_at"]
 
     def get_download_enabled(self, obj):
-        return obj.asset.is_free or obj.download_enabled or obj.status in [Order.Status.APPROVED, Order.Status.PAID]
+        return obj.asset.is_free or obj.status == Order.Status.PAID
 
     def get_manual_payment(self, obj):
         payment = getattr(obj, "payment", None)

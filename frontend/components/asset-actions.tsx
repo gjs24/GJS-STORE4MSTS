@@ -30,19 +30,18 @@ export function AssetActions({ asset }: { asset: Asset }) {
 
   async function startCashfreeCheckout(nextOrder: StoreOrder) {
     if (!nextOrder.payment_session_id) {
-      return null;
+      return false;
     }
-    setMessage("Opening secure Cashfree checkout...");
+    setMessage("Redirecting to secure Cashfree checkout...");
     const cashfree = await load({ mode: cashfreeMode });
     const result = await cashfree.checkout({
       paymentSessionId: nextOrder.payment_session_id,
-      redirectTarget: "_modal"
+      redirectTarget: "_self"
     });
     if (result.error) {
       throw new Error(result.error.message || "Cashfree checkout could not be completed.");
     }
-    setMessage("Confirming payment with Cashfree...");
-    return verifyPayment(nextOrder.id);
+    return true;
   }
 
   async function startDownload() {
@@ -80,18 +79,12 @@ export function AssetActions({ asset }: { asset: Asset }) {
         const nextOrder = await createOrder(asset.id);
         setOrder(nextOrder);
         if (nextOrder.status === "PENDING" && nextOrder.payment_session_id) {
-          const paidOrder = await startCashfreeCheckout(nextOrder);
-          if (!paidOrder?.download_enabled) {
-            setMessage("Payment is not confirmed yet. Check your purchases page in a moment.");
-            return;
-          }
-          setOrder(paidOrder);
-          setMessage("Payment confirmed. Preparing secure download...");
+          await startCashfreeCheckout(nextOrder);
+          setMessage("Complete the Cashfree payment to unlock this download.");
+          return;
         } else if (nextOrder.status === "PENDING") {
           setMessage(
-            nextOrder.manual_payment
-              ? "Order created. Pay using the UPI details below, then submit your UTR / transaction ID for admin verification."
-              : "Order created. Admin verification is required before download access is enabled."
+            "Cashfree checkout could not start for this order. Please contact support or try again after payment settings are updated."
           );
           return;
         } else if (nextOrder.status === "VERIFICATION_PENDING") {

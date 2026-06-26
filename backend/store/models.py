@@ -84,8 +84,7 @@ class Asset(models.Model):
     def save(self, *args, **kwargs):
         if not self.slug:
             self.slug = slugify(self.title)
-        if self.price == 0:
-            self.is_free = True
+        self.is_free = self.price <= Decimal("0.00")
         super().save(*args, **kwargs)
 
     def __str__(self):
