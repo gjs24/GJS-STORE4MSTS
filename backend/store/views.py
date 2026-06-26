@@ -123,18 +123,18 @@ def fetch_cashfree_order(provider_order_id):
 
 def ensure_cashfree_payment(order, request):
     if order.asset.is_free or order.download_enabled or not cashfree_is_configured():
-        return
+        return cashfree_is_configured(), "" if cashfree_is_configured() else "Cashfree is not configured."
     payment = getattr(order, "payment", None)
     if (
         payment
         and payment.provider == Payment.Provider.CASHFREE
         and payment.raw_response.get("payment_session_id")
     ):
-        return
+        return True, ""
     data, error = create_cashfree_order(order, request)
     if not data:
         logger.warning("Cashfree checkout unavailable for order %s: %s", order.id, error)
-        return
+        return False, error
     Payment.objects.update_or_create(
         order=order,
         defaults={
@@ -145,6 +145,7 @@ def ensure_cashfree_payment(order, request):
             "raw_response": data,
         },
     )
+    return True, ""
 
 
 def log_admin_activity(request, action, target_type="", target_id="", message=""):
@@ -343,13 +344,17 @@ class OrderCreateView(generics.CreateAPIView):
             status__in=[Order.Status.PENDING, Order.Status.VERIFICATION_PENDING, Order.Status.APPROVED, Order.Status.PAID],
         ).first()
         if existing_order:
-            ensure_cashfree_payment(existing_order, request)
+            cashfree_ready, cashfree_error = ensure_cashfree_payment(existing_order, request)
+            if not asset.is_free and not existing_order.download_enabled and not cashfree_ready:
+                return Response({"detail": cashfree_error or "Cashfree checkout is not available."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
             return Response(OrderSerializer(existing_order, context={"request": request}).data, status=status.HTTP_200_OK)
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
         order = serializer.instance
-        ensure_cashfree_payment(order, request)
+        cashfree_ready, cashfree_error = ensure_cashfree_payment(order, request)
+        if not asset.is_free and not cashfree_ready:
+            return Response({"detail": cashfree_error or "Cashfree checkout is not available."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         data = OrderSerializer(order, context={"request": request}).data
         headers = self.get_success_headers(data)
         return Response(data, status=status.HTTP_201_CREATED, headers=headers)

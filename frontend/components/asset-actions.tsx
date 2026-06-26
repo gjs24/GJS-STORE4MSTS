@@ -88,7 +88,7 @@ export function AssetActions({ asset }: { asset: Asset }) {
           setOrder(paidOrder);
           setMessage("Payment confirmed. Preparing secure download...");
         } else if (nextOrder.status === "PENDING") {
-          setMessage("Order created. Complete the payment details shown below.");
+          setMessage("Cashfree checkout is not ready. Please contact support or try again after payment settings are updated.");
           return;
         } else if (nextOrder.status === "VERIFICATION_PENDING") {
           setMessage("Your payment is waiting for admin verification.");

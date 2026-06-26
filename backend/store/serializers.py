@@ -231,6 +231,8 @@ class OrderSerializer(serializers.ModelSerializer):
         if obj.asset.is_free or obj.download_enabled:
             return None
         upi_id = getattr(settings, "MANUAL_UPI_ID", "")
+        if not upi_id:
+            return None
         payee_name = getattr(settings, "MANUAL_UPI_PAYEE_NAME", "MSTS-GJS Production Store")
         note = f"Order {obj.provider_order_id or obj.id}"
         return {
