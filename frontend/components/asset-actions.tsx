@@ -88,7 +88,11 @@ export function AssetActions({ asset }: { asset: Asset }) {
           setOrder(paidOrder);
           setMessage("Payment confirmed. Preparing secure download...");
         } else if (nextOrder.status === "PENDING") {
-          setMessage("Cashfree checkout is not ready. Please contact support or try again after payment settings are updated.");
+          setMessage(
+            nextOrder.manual_payment
+              ? "Order created. Pay using the UPI details below, then submit your UTR / transaction ID for admin verification."
+              : "Order created. Admin verification is required before download access is enabled."
+          );
           return;
         } else if (nextOrder.status === "VERIFICATION_PENDING") {
           setMessage("Your payment is waiting for admin verification.");

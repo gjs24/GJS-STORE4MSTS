@@ -1,6 +1,6 @@
 from django.contrib.auth.models import User
 from django.conf import settings
-from django.db.models import Avg
+from django.db.models import Avg, Q
 from urllib.parse import quote
 from rest_framework import serializers
 
@@ -183,7 +183,7 @@ class AssetDetailSerializer(AssetListSerializer):
             return False
         if obj.is_free:
             return True
-        return Order.objects.filter(user=user, asset=obj, download_enabled=True).exists()
+        return Order.objects.filter(user=user, asset=obj).filter(Q(download_enabled=True) | Q(status__in=[Order.Status.APPROVED, Order.Status.PAID])).exists()
 
 
 class AssetWriteSerializer(serializers.ModelSerializer):
@@ -197,6 +197,7 @@ class OrderSerializer(serializers.ModelSerializer):
     asset_id = serializers.PrimaryKeyRelatedField(source="asset", queryset=Asset.objects.all(), write_only=True)
     user = UserSerializer(read_only=True)
     order_id = serializers.CharField(source="provider_order_id", read_only=True)
+    download_enabled = serializers.SerializerMethodField()
     manual_payment = serializers.SerializerMethodField()
     payment_session_id = serializers.SerializerMethodField()
     payment_provider = serializers.SerializerMethodField()
@@ -224,11 +225,14 @@ class OrderSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["amount", "status", "provider_order_id", "utr", "payer_name", "payment_submitted_at", "download_enabled", "manual_payment", "payment_session_id", "payment_provider", "created_at"]
 
+    def get_download_enabled(self, obj):
+        return obj.asset.is_free or obj.download_enabled or obj.status in [Order.Status.APPROVED, Order.Status.PAID]
+
     def get_manual_payment(self, obj):
         payment = getattr(obj, "payment", None)
         if payment and payment.provider == Payment.Provider.CASHFREE:
             return None
-        if obj.asset.is_free or obj.download_enabled:
+        if self.get_download_enabled(obj):
             return None
         upi_id = getattr(settings, "MANUAL_UPI_ID", "")
         if not upi_id:
