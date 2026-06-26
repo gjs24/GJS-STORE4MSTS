@@ -147,6 +147,7 @@ def ensure_cashfree_payment(order, request):
             "raw_response": data,
         },
     )
+    order._state.fields_cache.pop("payment", None)
     return True, ""
 
 
