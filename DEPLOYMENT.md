@@ -32,7 +32,7 @@ npm run start
 Set `NEXT_PUBLIC_API_URL=https://your-api-domain.com/api`.
 
 ## Public Business Contact
-These details must match the live Contact Us page before Razorpay submission:
+These details must match the live Contact Us page before Cashfree submission:
 
 - Business name: MSTS-GJS Production Store
 - Support email: gjs2721@gmail.com
@@ -52,27 +52,29 @@ npx eas build -p android
 Set `EXPO_PUBLIC_API_URL=https://your-api-domain.com/api`.
 
 ## Payments
-- Razorpay is the primary India payment provider.
+- Cashfree Payments is the primary India payment provider.
 - `POST /api/orders/create/` creates a pending order for premium assets.
-- `POST /api/payments/verify/` marks the order paid only after signature verification.
+- `POST /api/payments/verify/` marks the order paid only after Cashfree payment status verification.
 - In development, payment verification is relaxed when `DJANGO_DEBUG=True`.
 
-## Razorpay Verification Checklist
-Complete this before submitting the website/app to Razorpay:
+## Cashfree Verification Checklist
+Complete this before submitting the website/app to Cashfree:
 
 1. Confirm all public contact details are set in production environment variables:
    - `NEXT_PUBLIC_BUSINESS_NAME`
    - `NEXT_PUBLIC_SUPPORT_EMAIL`
    - `NEXT_PUBLIC_SUPPORT_PHONE`
    - `NEXT_PUBLIC_BUSINESS_ADDRESS`
-2. Deploy the website on a real HTTPS domain. Razorpay should be able to open `/`, `/assets`, `/privacy-policy`, `/terms-and-conditions`, `/cancellation-refund-policy`, `/shipping-delivery-policy`, and `/contact` without login.
+2. Deploy the website on a real HTTPS domain. Cashfree should be able to open `/`, `/assets`, `/privacy-policy`, `/terms-and-conditions`, `/cancellation-refund-policy`, `/shipping-delivery-policy`, and `/contact` without login.
 3. Confirm the footer links open Privacy Policy, Terms & Conditions, Cancellation & Refund Policy, Shipping/Delivery Policy, and Contact Us on the live domain.
-4. Configure production Razorpay keys:
-   - Backend: `RAZORPAY_KEY_ID`
-   - Backend: `RAZORPAY_KEY_SECRET`
-   - Frontend: `NEXT_PUBLIC_RAZORPAY_KEY_ID`
+4. Configure production Cashfree keys:
+   - Backend: `CASHFREE_CLIENT_ID`
+   - Backend: `CASHFREE_CLIENT_SECRET`
+   - Backend: `CASHFREE_ENVIRONMENT=production`
+   - Backend: `CASHFREE_RETURN_URL=https://your-domain.com/dashboard/purchases`
+   - Frontend: `NEXT_PUBLIC_CASHFREE_MODE=production`
 5. Confirm every paid product page shows product name, INR price, category, file size, version, description, requirements or installation notes, and digital download context before payment.
-6. Test one paid checkout on the live site: create order, open Razorpay Checkout, complete payment, verify order status becomes `PAID`, and confirm download access works.
+6. Test one paid checkout on the live site: create order, open Cashfree Checkout, complete payment, verify order status becomes `PAID`, and confirm download access works.
 7. Confirm the Shipping/Delivery Policy states this is instant digital delivery, no physical shipping, and download/account access is provided after successful payment.
 8. Confirm the Cancellation & Refund Policy states no refund after successful download, refund/replacement only for corrupted or inaccessible files or duplicate payment, and approved refunds are usually initiated within 5-7 business days.
 

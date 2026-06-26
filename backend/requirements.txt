@@ -14,4 +14,5 @@ boto3
 django-storages
 razorpay
 stripe
+requests
 Pillow

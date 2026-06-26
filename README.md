@@ -22,7 +22,7 @@ desktop/    Electron + Next.js desktop EXE launcher/store
 - Custom admin support through `/admin-dashboard`; Django Admin is kept only at `/developer-admin/` for developer maintenance.
 - Premium dark admin dashboard with collapsible sidebar, charts, railway asset cards, analytics tables, and shadcn-style UI components.
 - Admin asset create/edit forms support direct `.zip`, `.rar`, and `.7z` package uploads for downloadable products.
-- Razorpay-first payment verification with development fallback.
+- Cashfree-first payment verification with development fallback.
 - Cloudinary/S3-ready file storage settings.
 - GJS RailForge Launcher desktop app with downloads, installs, updates, settings, and EXE build support.
 

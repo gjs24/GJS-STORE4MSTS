@@ -29,7 +29,7 @@ export function AccountList({ type }: AccountListProps) {
 
   useEffect(() => {
     const path = type === "purchases" ? "/user/purchases/" : type === "downloads" ? "/user/downloads/" : "/wishlist/";
-    userGet<Array<StoreOrder | DownloadLog | WishlistItem>>(path)
+    const loadRows = () => userGet<Array<StoreOrder | DownloadLog | WishlistItem>>(path)
       .then((data) => {
         const nextRows = data.map((item) => ({
           id: item.id,
@@ -46,6 +46,10 @@ export function AccountList({ type }: AccountListProps) {
         setMessage(nextRows.length ? "" : "No items yet. Browse the marketplace to build your simulator library.");
       })
       .catch((error) => setMessage(error instanceof Error ? error.message : "Please login to view this page."));
+    loadRows();
+    if (type !== "purchases") return;
+    const interval = window.setInterval(loadRows, 10000);
+    return () => window.clearInterval(interval);
   }, [type]);
 
   async function handleDownload(asset: Asset) {
@@ -124,15 +128,17 @@ export function AccountList({ type }: AccountListProps) {
                   <ShoppingCart className="mr-2 inline" size={16} /> View
                 </Link>
               ) : null}
-              {type === "purchases" ? (
+              {type === "purchases" && row.status && ["APPROVED", "PAID"].includes(row.status) ? (
                 <button onClick={() => handleInvoice(row.id)} disabled={busyId === row.id} className="rounded border border-white/10 px-4 py-2 text-sm font-semibold disabled:opacity-60">
                   <FileText className="mr-2 inline" size={16} /> Invoice
                 </button>
               ) : null}
-              <button onClick={() => handleDownload(row.asset)} disabled={busyId === row.asset.id} className="rounded bg-rail-red px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
-                {type === "purchases" ? <PackageCheck className="mr-2 inline" size={16} /> : <Download className="mr-2 inline" size={16} />}
-                Download
-              </button>
+              {type !== "purchases" || (row.status && ["APPROVED", "PAID"].includes(row.status)) ? (
+                <button onClick={() => handleDownload(row.asset)} disabled={busyId === row.asset.id} className="rounded bg-rail-red px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
+                  {type === "purchases" ? <PackageCheck className="mr-2 inline" size={16} /> : <Download className="mr-2 inline" size={16} />}
+                  Download
+                </button>
+              ) : null}
             </div>
           </div>
         ))}

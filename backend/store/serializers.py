@@ -1,6 +1,7 @@
 from django.contrib.auth.models import User
 from django.conf import settings
 from django.db.models import Avg
+from urllib.parse import quote
 from rest_framework import serializers
 
 from .models import AdminActivityLog, Asset, AssetImage, Category, DownloadLog, NotifyRequest, Order, Payment, Review, SiteSetting, UpdateLog, Wishlist
@@ -182,7 +183,7 @@ class AssetDetailSerializer(AssetListSerializer):
             return False
         if obj.is_free:
             return True
-        return Order.objects.filter(user=user, asset=obj, status=Order.Status.PAID).exists()
+        return Order.objects.filter(user=user, asset=obj, download_enabled=True).exists()
 
 
 class AssetWriteSerializer(serializers.ModelSerializer):
@@ -195,18 +196,53 @@ class OrderSerializer(serializers.ModelSerializer):
     asset = AssetListSerializer(read_only=True)
     asset_id = serializers.PrimaryKeyRelatedField(source="asset", queryset=Asset.objects.all(), write_only=True)
     user = UserSerializer(read_only=True)
+    order_id = serializers.CharField(source="provider_order_id", read_only=True)
+    manual_payment = serializers.SerializerMethodField()
 
     class Meta:
         model = Order
-        fields = ["id", "user", "asset", "asset_id", "amount", "currency", "status", "provider_order_id", "created_at"]
-        read_only_fields = ["amount", "status", "provider_order_id", "created_at"]
+        fields = [
+            "id",
+            "order_id",
+            "user",
+            "asset",
+            "asset_id",
+            "amount",
+            "currency",
+            "status",
+            "provider_order_id",
+            "utr",
+            "payer_name",
+            "payment_submitted_at",
+            "download_enabled",
+            "manual_payment",
+            "created_at",
+        ]
+        read_only_fields = ["amount", "status", "provider_order_id", "utr", "payer_name", "payment_submitted_at", "download_enabled", "manual_payment", "created_at"]
+
+    def get_manual_payment(self, obj):
+        if obj.asset.is_free or obj.download_enabled:
+            return None
+        upi_id = getattr(settings, "MANUAL_UPI_ID", "")
+        payee_name = getattr(settings, "MANUAL_UPI_PAYEE_NAME", "MSTS-GJS Production Store")
+        note = f"Order {obj.provider_order_id or obj.id}"
+        return {
+            "upi_id": upi_id,
+            "payee_name": payee_name,
+            "amount": str(obj.amount),
+            "currency": obj.currency,
+            "upi_uri": (
+                f"upi://pay?pa={quote(upi_id)}&pn={quote(payee_name)}&am={obj.amount}"
+                f"&cu={quote(obj.currency)}&tn={quote(note)}"
+            ),
+            "instructions": "Pay the exact amount by UPI, then submit the UTR / transaction ID for admin verification.",
+        }
 
 
 class PaymentVerifySerializer(serializers.Serializer):
     order_id = serializers.IntegerField()
-    provider_payment_id = serializers.CharField(required=False, allow_blank=True)
-    provider_signature = serializers.CharField(required=False, allow_blank=True)
-    provider = serializers.ChoiceField(choices=Payment.Provider.choices, default=Payment.Provider.RAZORPAY)
+    utr = serializers.CharField(min_length=6, max_length=80)
+    payer_name = serializers.CharField(required=False, allow_blank=True, max_length=160)
 
 
 class DownloadLogSerializer(serializers.ModelSerializer):

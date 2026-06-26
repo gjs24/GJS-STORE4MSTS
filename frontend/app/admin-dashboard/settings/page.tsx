@@ -9,7 +9,7 @@ import { fallbackSiteSettings } from "@/lib/api";
 
 const fallbackSettings: AdminSettings = {
   api_status: "offline",
-  payments: { razorpay_configured: false, stripe_configured: false },
+  payments: { cashfree_configured: false, razorpay_configured: false, stripe_configured: false },
   storage: { cloudinary_configured: false, media_url: "/media/" },
   security: { debug: true, allowed_hosts: ["localhost"], download_rate_limit: "20/hour" },
   site: fallbackSiteSettings
@@ -74,7 +74,7 @@ export default function AdminSettingsPage() {
         <div className="rounded border border-white/10 bg-white/[0.03] p-5">
           <CreditCard className="text-rail-amber" />
           <h2 className="mt-4 font-semibold">Payments</h2>
-          <p className="mt-3 text-sm text-slate-400">Razorpay: {settings.payments.razorpay_configured ? "Configured" : "Missing keys"}</p>
+          <p className="mt-3 text-sm text-slate-400">Cashfree: {settings.payments.cashfree_configured ? "Configured" : "Missing keys"}</p>
           <p className="mt-1 text-sm text-slate-400">Stripe: {settings.payments.stripe_configured ? "Configured" : "Optional / not configured"}</p>
         </div>
         <div className="rounded border border-white/10 bg-white/[0.03] p-5">

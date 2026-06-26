@@ -4,59 +4,18 @@ import Link from "next/link";
 import { useState } from "react";
 import { CheckCircle2, Download, Heart, Lock, ShoppingCart } from "lucide-react";
 import { priceLabel, type Asset } from "@/lib/api";
-import { addToWishlist, createOrder, downloadAsset, isLoggedIn, notifyMe, verifyDebugPayment } from "@/lib/store-api";
+import { addToWishlist, createOrder, downloadAsset, isLoggedIn, notifyMe, verifyPayment, type StoreOrder } from "@/lib/store-api";
 
-const RAZORPAY_KEY_ID = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || "";
-
-type RazorpaySuccessResponse = {
-  razorpay_payment_id: string;
-  razorpay_order_id: string;
-  razorpay_signature: string;
-};
-
-type RazorpayOptions = {
-  key: string;
-  amount: number;
-  currency: string;
-  name: string;
-  description: string;
-  order_id: string;
-  handler: (response: RazorpaySuccessResponse) => void;
-  prefill?: { name?: string; email?: string };
-  theme?: { color?: string };
-  modal?: { ondismiss?: () => void };
-};
-
-declare global {
-  interface Window {
-    Razorpay?: new (options: RazorpayOptions) => { open: () => void };
-  }
-}
-
-function loadRazorpayCheckout() {
-  return new Promise<void>((resolve, reject) => {
-    if (window.Razorpay) {
-      resolve();
-      return;
-    }
-    const existingScript = document.querySelector<HTMLScriptElement>("script[src='https://checkout.razorpay.com/v1/checkout.js']");
-    if (existingScript) {
-      existingScript.addEventListener("load", () => resolve(), { once: true });
-      existingScript.addEventListener("error", () => reject(new Error("Could not load Razorpay Checkout.")), { once: true });
-      return;
-    }
-    const script = document.createElement("script");
-    script.src = "https://checkout.razorpay.com/v1/checkout.js";
-    script.async = true;
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error("Could not load Razorpay Checkout."));
-    document.body.appendChild(script);
-  });
+function qrCodeUrl(value: string) {
+  return `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(value)}`;
 }
 
 export function AssetActions({ asset }: { asset: Asset }) {
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const [order, setOrder] = useState<StoreOrder | null>(null);
+  const [utr, setUtr] = useState("");
+  const [payerName, setPayerName] = useState("");
 
   async function requireLogin() {
     if (!isLoggedIn()) {
@@ -86,38 +45,19 @@ export function AssetActions({ asset }: { asset: Asset }) {
     setMessage(asset.is_free ? "Preparing secure download..." : "Creating your order...");
     try {
       if (!asset.is_free && !asset.can_download) {
-        const order = await createOrder(asset.id);
-        if (order.status === "PENDING" && order.provider_order_id && RAZORPAY_KEY_ID) {
-          const providerOrderId = order.provider_order_id;
-          setMessage("Opening Razorpay secure checkout...");
-          await loadRazorpayCheckout();
-          await new Promise<void>((resolve, reject) => {
-            const checkout = new window.Razorpay!({
-              key: RAZORPAY_KEY_ID,
-              amount: Math.round(Number(order.amount) * 100),
-              currency: order.currency,
-              name: "MSTS-GJS Production Store",
-              description: asset.title,
-              order_id: providerOrderId,
-              handler: async (response) => {
-                try {
-                  await verifyDebugPayment(order.id, {
-                    provider: "RAZORPAY",
-                    provider_payment_id: response.razorpay_payment_id,
-                    provider_signature: response.razorpay_signature
-                  });
-                  resolve();
-                } catch (error) {
-                  reject(error);
-                }
-              },
-              theme: { color: "#dc2626" },
-              modal: { ondismiss: () => reject(new Error("Payment was cancelled before completion.")) }
-            });
-            checkout.open();
-          });
-        } else if (order.status === "PENDING") {
-          await verifyDebugPayment(order.id);
+        const nextOrder = await createOrder(asset.id);
+        setOrder(nextOrder);
+        if (nextOrder.status === "PENDING") {
+          setMessage("Order created. Pay by UPI and submit your UTR for verification.");
+          return;
+        }
+        if (nextOrder.status === "VERIFICATION_PENDING") {
+          setMessage("Your payment is waiting for admin verification.");
+          return;
+        }
+        if (nextOrder.status === "REJECTED") {
+          setMessage("This payment was rejected. Contact support if you believe this is a mistake.");
+          return;
         }
         setMessage("Purchase confirmed. Preparing secure download...");
       }
@@ -132,6 +72,25 @@ export function AssetActions({ asset }: { asset: Asset }) {
       if (download.revoke) setTimeout(download.revoke, 1000);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not complete this action.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleUtrSubmit() {
+    if (!order) return;
+    if (!utr.trim()) {
+      setMessage("Enter the UTR / transaction ID after making the UPI payment.");
+      return;
+    }
+    setBusy(true);
+    setMessage("Submitting payment details for verification...");
+    try {
+      const updated = await verifyPayment(order.id, { utr: utr.trim(), payer_name: payerName.trim() });
+      setOrder(updated);
+      setMessage("Payment details submitted. Admin verification is pending.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not submit payment details.");
     } finally {
       setBusy(false);
     }
@@ -173,6 +132,26 @@ export function AssetActions({ asset }: { asset: Asset }) {
               </Link>
             ) : null}
           </span>
+        </div>
+      ) : null}
+      {order?.manual_payment && order.status === "PENDING" ? (
+        <div className="max-w-xl rounded border border-white/10 bg-white/[0.04] p-4 text-sm text-slate-300">
+          <div className="grid gap-4 sm:grid-cols-[220px_1fr]">
+            <img src={qrCodeUrl(order.manual_payment.upi_uri)} alt={`UPI QR code for order ${order.order_id || order.id}`} className="h-[220px] w-[220px] rounded bg-white p-2" />
+            <div className="space-y-2">
+              <p><span className="font-semibold text-white">Order ID:</span> {order.order_id || order.provider_order_id || `#${order.id}`}</p>
+              <p><span className="font-semibold text-white">Amount:</span> {order.currency} {order.amount}</p>
+              <p><span className="font-semibold text-white">UPI ID:</span> {order.manual_payment.upi_id || "Not configured"}</p>
+              <p>{order.manual_payment.instructions}</p>
+            </div>
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <input value={utr} onChange={(event) => setUtr(event.target.value)} placeholder="UTR / Transaction ID" className="rounded border border-white/10 bg-black/40 px-3 py-3 outline-none" />
+            <input value={payerName} onChange={(event) => setPayerName(event.target.value)} placeholder="Payer name (optional)" className="rounded border border-white/10 bg-black/40 px-3 py-3 outline-none" />
+          </div>
+          <button onClick={handleUtrSubmit} disabled={busy} className="mt-3 rounded bg-rail-red px-5 py-3 font-semibold text-white disabled:opacity-60">
+            Submit UTR for verification
+          </button>
         </div>
       ) : null}
     </div>

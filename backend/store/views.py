@@ -1,4 +1,3 @@
-import hmac
 import base64
 import json
 import logging
@@ -10,9 +9,9 @@ from django.contrib.auth.models import User
 from django.http import FileResponse, HttpResponse
 from django.db.models import Count, Q, Sum
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from rest_framework import generics, permissions, status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes, throttle_classes
-from rest_framework.exceptions import APIException
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.throttling import UserRateThrottle
@@ -204,7 +203,7 @@ class AssetViewSet(viewsets.ModelViewSet):
             qs = qs.filter(deal_is_open=True)
         return qs.annotate(review_count=Count("reviews", filter=Q(reviews__is_approved=True)))
 
-    @action(detail=True, methods=["post"], permission_classes=[permissions.IsAuthenticated], throttle_classes=[UserRateThrottle])
+    @action(detail=True, methods=["get", "post"], permission_classes=[permissions.IsAuthenticated], throttle_classes=[UserRateThrottle])
     def download(self, request, slug=None):
         asset = self.get_object()
         return create_download_response(request, asset)
@@ -232,9 +231,13 @@ class OrderCreateView(generics.CreateAPIView):
         asset = get_object_or_404(Asset, id=request.data.get("asset_id"), is_published=True)
         if asset.is_upcoming:
             return Response({"detail": "This asset is marked as upcoming and is not available for purchase yet."}, status=status.HTTP_400_BAD_REQUEST)
-        existing_paid_order = Order.objects.filter(user=request.user, asset=asset, status=Order.Status.PAID).first()
-        if existing_paid_order:
-            return Response(OrderSerializer(existing_paid_order, context={"request": request}).data, status=status.HTTP_200_OK)
+        existing_order = Order.objects.filter(
+            user=request.user,
+            asset=asset,
+            status__in=[Order.Status.PENDING, Order.Status.VERIFICATION_PENDING, Order.Status.APPROVED, Order.Status.PAID],
+        ).first()
+        if existing_order:
+            return Response(OrderSerializer(existing_order, context={"request": request}).data, status=status.HTTP_200_OK)
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
@@ -243,39 +246,20 @@ class OrderCreateView(generics.CreateAPIView):
 
     def perform_create(self, serializer):
         asset = serializer.validated_data["asset"]
-        status_value = Order.Status.PAID if asset.is_free else Order.Status.PENDING
-        order = serializer.save(user=self.request.user, amount=asset.price, currency="INR", status=status_value)
-        payment_defaults = {"provider": Payment.Provider.MANUAL, "status": status_value.lower()}
-        if not asset.is_free and settings.RAZORPAY_KEY_ID and settings.RAZORPAY_KEY_SECRET:
-            try:
-                import razorpay
-
-                client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
-                provider_order = client.order.create(
-                    {
-                        "amount": int(asset.price * 100),
-                        "currency": "INR",
-                        "receipt": f"order_{order.id}",
-                        "notes": {
-                            "order_id": str(order.id),
-                            "asset_id": str(asset.id),
-                            "user_id": str(self.request.user.id),
-                        },
-                    }
-                )
-            except Exception as exc:
-                order.status = Order.Status.FAILED
-                order.save(update_fields=["status"])
-                raise APIException("Could not create Razorpay order. Please try again.") from exc
-
-            order.provider_order_id = provider_order["id"]
-            order.save(update_fields=["provider_order_id"])
-            payment_defaults = {
-                "provider": Payment.Provider.RAZORPAY,
-                "status": provider_order.get("status", "created"),
-                "raw_response": provider_order,
-            }
-        Payment.objects.get_or_create(order=order, defaults=payment_defaults)
+        status_value = Order.Status.APPROVED if asset.is_free else Order.Status.PENDING
+        order = serializer.save(
+            user=self.request.user,
+            amount=asset.price,
+            currency="INR",
+            status=status_value,
+            download_enabled=asset.is_free,
+        )
+        order.provider_order_id = f"GJS-{order.id:06d}"
+        order.save(update_fields=["provider_order_id"])
+        Payment.objects.get_or_create(
+            order=order,
+            defaults={"provider": Payment.Provider.MANUAL, "status": status_value.lower()},
+        )
 
 
 class PaymentVerifyView(generics.GenericAPIView):
@@ -286,34 +270,31 @@ class PaymentVerifyView(generics.GenericAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         order = get_object_or_404(Order, id=serializer.validated_data["order_id"], user=request.user)
+        if order.status in [Order.Status.APPROVED, Order.Status.PAID]:
+            return Response(OrderSerializer(order).data)
+        if order.status == Order.Status.REJECTED:
+            return Response({"detail": "This order was rejected. Please create a new order if you paid again."}, status=status.HTTP_400_BAD_REQUEST)
+        if order.utr:
+            return Response({"detail": "A UTR was already submitted for this order."}, status=status.HTTP_400_BAD_REQUEST)
 
-        signature = serializer.validated_data.get("provider_signature", "")
-        payment_id = serializer.validated_data.get("provider_payment_id", "")
-        provider = serializer.validated_data["provider"]
-        verified = False
+        utr = serializer.validated_data["utr"].strip().upper()
+        if Order.objects.filter(utr__iexact=utr).exclude(id=order.id).exists():
+            return Response({"detail": "This UTR has already been submitted."}, status=status.HTTP_400_BAD_REQUEST)
 
-        if provider == Payment.Provider.RAZORPAY and settings.RAZORPAY_KEY_SECRET and order.provider_order_id:
-            message = f"{order.provider_order_id}|{payment_id}".encode()
-            expected = hmac.new(settings.RAZORPAY_KEY_SECRET.encode(), message, "sha256").hexdigest()
-            verified = hmac.compare_digest(expected, signature)
-        elif settings.DEBUG:
-            verified = True
-
-        if not verified:
-            order.status = Order.Status.FAILED
-            order.save(update_fields=["status"])
-            return Response({"detail": "Payment verification failed."}, status=status.HTTP_400_BAD_REQUEST)
-
-        order.status = Order.Status.PAID
-        order.save(update_fields=["status"])
+        order.utr = utr
+        order.payer_name = serializer.validated_data.get("payer_name", "").strip()
+        order.payment_submitted_at = timezone.now()
+        order.status = Order.Status.VERIFICATION_PENDING
+        order.download_enabled = False
+        order.save(update_fields=["utr", "payer_name", "payment_submitted_at", "status", "download_enabled"])
         Payment.objects.update_or_create(
             order=order,
             defaults={
-                "provider": provider,
-                "provider_payment_id": payment_id,
-                "provider_signature": signature,
-                "status": "paid",
-                "raw_response": request.data,
+                "provider": Payment.Provider.MANUAL,
+                "provider_payment_id": utr,
+                "provider_signature": "",
+                "status": "verification_pending",
+                "raw_response": {"utr": utr, "payer_name": order.payer_name},
             },
         )
         return Response(OrderSerializer(order).data)
@@ -324,13 +305,13 @@ class PurchaseListView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return Order.objects.filter(user=self.request.user, status=Order.Status.PAID).select_related("asset", "asset__category")
+        return Order.objects.filter(user=self.request.user).select_related("asset", "asset__category")
 
 
 @api_view(["GET"])
 @permission_classes([permissions.IsAuthenticated])
 def order_invoice(request, pk):
-    order = get_object_or_404(Order.objects.select_related("asset", "user"), pk=pk, user=request.user, status=Order.Status.PAID)
+    order = get_object_or_404(Order.objects.select_related("asset", "user"), pk=pk, user=request.user, download_enabled=True)
     lines = [
         "MSTS-GJS Production Store",
         "Digital Product Invoice",
@@ -520,6 +501,17 @@ class AdminOrderViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAdminUser]
     http_method_names = ["get", "patch", "head", "options"]
 
+    def perform_update(self, serializer):
+        order = serializer.save()
+        if order.status in [Order.Status.APPROVED, Order.Status.PAID]:
+            order.download_enabled = True
+            order.save(update_fields=["download_enabled"])
+            Payment.objects.filter(order=order).update(status="approved")
+        elif order.status in [Order.Status.REJECTED, Order.Status.FAILED, Order.Status.REFUNDED]:
+            order.download_enabled = False
+            order.save(update_fields=["download_enabled"])
+            Payment.objects.filter(order=order).update(status=order.status.lower())
+
 
 class AdminUserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all().order_by("-date_joined")
@@ -575,7 +567,7 @@ class AdminActivityLogView(generics.ListAPIView):
 def create_download_response(request, asset):
     if asset.is_upcoming:
         return Response({"detail": "This asset is marked as upcoming and is not available for download yet."}, status=status.HTTP_403_FORBIDDEN)
-    allowed = asset.is_free or Order.objects.filter(user=request.user, asset=asset, status=Order.Status.PAID).exists()
+    allowed = asset.is_free or Order.objects.filter(user=request.user, asset=asset, download_enabled=True).exists()
     if not allowed:
         return Response({"detail": "Purchase required before downloading this asset."}, status=status.HTTP_403_FORBIDDEN)
     if asset.private_download_key:
@@ -730,7 +722,7 @@ def grant_google_drive_access(file_id, email):
         return "", "Google Drive access is not configured correctly. Check Render env and service account key."
 
 
-@api_view(["POST"])
+@api_view(["GET", "POST"])
 @permission_classes([permissions.IsAuthenticated])
 @throttle_classes([UserRateThrottle])
 def asset_download_by_id(request, pk):
@@ -748,7 +740,7 @@ def asset_download_by_id(request, pk):
 @api_view(["GET"])
 @permission_classes([permissions.IsAdminUser])
 def admin_stats(request):
-    paid_orders = Order.objects.filter(status=Order.Status.PAID)
+    paid_orders = Order.objects.filter(status__in=[Order.Status.APPROVED, Order.Status.PAID])
     pending_orders = Order.objects.filter(status=Order.Status.PENDING)
     return Response(
         {
@@ -789,7 +781,7 @@ def admin_settings(request):
         {
             "api_status": "online",
             "payments": {
-                "razorpay_configured": bool(settings.RAZORPAY_KEY_ID and settings.RAZORPAY_KEY_SECRET),
+                "manual_upi_configured": bool(settings.MANUAL_UPI_ID),
                 "stripe_configured": bool(settings.STRIPE_SECRET_KEY),
             },
             "storage": {

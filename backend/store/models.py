@@ -117,6 +117,9 @@ class AssetFile(models.Model):
 class Order(models.Model):
     class Status(models.TextChoices):
         PENDING = "PENDING", "Pending"
+        VERIFICATION_PENDING = "VERIFICATION_PENDING", "Verification Pending"
+        APPROVED = "APPROVED", "Approved"
+        REJECTED = "REJECTED", "Rejected"
         PAID = "PAID", "Paid"
         FAILED = "FAILED", "Failed"
         REFUNDED = "REFUNDED", "Refunded"
@@ -127,6 +130,10 @@ class Order(models.Model):
     currency = models.CharField(max_length=8, default="INR")
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
     provider_order_id = models.CharField(max_length=160, blank=True)
+    utr = models.CharField(max_length=80, blank=True, null=True, unique=True)
+    payer_name = models.CharField(max_length=160, blank=True)
+    payment_submitted_at = models.DateTimeField(blank=True, null=True)
+    download_enabled = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -143,12 +150,10 @@ class Order(models.Model):
 
 class Payment(models.Model):
     class Provider(models.TextChoices):
-        RAZORPAY = "RAZORPAY", "Razorpay"
-        STRIPE = "STRIPE", "Stripe"
         MANUAL = "MANUAL", "Manual"
 
     order = models.OneToOneField(Order, related_name="payment", on_delete=models.CASCADE)
-    provider = models.CharField(max_length=20, choices=Provider.choices, default=Provider.RAZORPAY)
+    provider = models.CharField(max_length=20, choices=Provider.choices, default=Provider.MANUAL)
     provider_payment_id = models.CharField(max_length=180, blank=True)
     provider_signature = models.CharField(max_length=255, blank=True)
     status = models.CharField(max_length=40, default="created")

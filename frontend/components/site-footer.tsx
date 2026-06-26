@@ -51,7 +51,7 @@ export function SiteFooter() {
             </p>
             <p className="flex gap-2">
               <ShieldCheck className="mt-0.5 h-4 w-4 text-rail-amber" />
-              Secure payments processed by Razorpay.
+              Secure payments processed by Cashfree Payments.
             </p>
           </div>
         </div>

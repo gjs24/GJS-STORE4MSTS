@@ -66,7 +66,7 @@ export type AdminActivityLog = {
 
 export type AdminSettings = {
   api_status: string;
-  payments: { razorpay_configured: boolean; stripe_configured: boolean };
+  payments: { cashfree_configured: boolean; razorpay_configured: boolean; stripe_configured: boolean };
   storage: { cloudinary_configured: boolean; media_url: string };
   security: { debug: boolean; allowed_hosts: string[]; download_rate_limit: string };
   site: SiteSettings;

@@ -37,7 +37,7 @@ export default async function HomePage() {
             </div>
             <div className="mt-8 grid max-w-2xl grid-cols-3 gap-3 text-sm text-slate-300">
               <span className="rounded border border-white/10 bg-white/5 p-3"><Download size={18} /> Protected downloads</span>
-              <span className="rounded border border-white/10 bg-white/5 p-3"><BadgeIndianRupee size={18} /> Razorpay ready</span>
+              <span className="rounded border border-white/10 bg-white/5 p-3"><BadgeIndianRupee size={18} /> Cashfree ready</span>
               <span className="rounded border border-white/10 bg-white/5 p-3"><ShieldCheck size={18} /> JWT secure</span>
             </div>
           </div>

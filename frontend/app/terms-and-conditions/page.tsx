@@ -36,7 +36,7 @@ export default function TermsAndConditionsPage() {
         {
           title: "Orders, Pricing, And Payments",
           body:
-            "Prices are shown in Indian Rupees where applicable. Payments are processed through Razorpay. An order is considered confirmed only after successful payment status is received and product access is enabled."
+            "Prices are shown in Indian Rupees where applicable. Payments are processed through Cashfree Payments. An order is considered confirmed only after successful payment status is received and product access is enabled."
         },
         {
           title: "Downloads And Compatibility",

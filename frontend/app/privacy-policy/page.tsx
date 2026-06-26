@@ -20,7 +20,7 @@ export default function PrivacyPolicyPage() {
           items: [
             "Name, email address, phone number, login/account details, and support messages.",
             "Billing details, payment status, order history, download history, and product access records.",
-            "Razorpay/payment transaction details such as order ID, payment ID, payment signature, refund status, and gateway response needed for payment verification and support.",
+            "Cashfree/payment transaction details such as order ID, payment ID, refund status, and gateway response needed for payment verification and support.",
             "Technical details such as device, browser, IP address, and activity needed to secure accounts and downloads."
           ]
         },
@@ -33,14 +33,14 @@ export default function PrivacyPolicyPage() {
           ]
         },
         {
-          title: "Payments Through Razorpay",
+          title: "Payments Through Cashfree",
           body:
-            "Payments are processed through Razorpay as our payment gateway/payment processor. We do not store full card numbers, UPI IDs, bank account details, CVV, PIN, or net banking credentials on our server. Sensitive payment information is handled securely by Razorpay according to its payment security practices."
+            "Payments are processed through Cashfree Payments as our payment gateway/payment processor. We do not store full card numbers, UPI IDs, bank account details, CVV, PIN, or net banking credentials on our server. Sensitive payment information is handled securely by Cashfree according to its payment security practices."
         },
         {
           title: "Sharing Of Information",
           body:
-            "We may share limited information with service providers such as Razorpay, hosting providers, analytics/security tools, and legal or regulatory authorities when required by applicable Indian law. We do not sell customer personal information."
+            "We may share limited information with service providers such as Cashfree, hosting providers, analytics/security tools, and legal or regulatory authorities when required by applicable Indian law. We do not sell customer personal information."
         },
         {
           title: "Data Security And Retention",

@@ -5,7 +5,7 @@ import { PriceDisplay } from "@/components/price-display";
 import type { Asset } from "@/lib/api";
 
 export function AssetCard({ asset }: { asset: Asset }) {
-  const showDeal = Boolean(asset.deal_is_open && !asset.is_upcoming && !asset.is_free && Number(asset.discount_percent || 0) > 0);
+  const showDeal = Boolean(asset.deal_is_open && !asset.is_upcoming);
   return (
     <Link href={`/assets/${asset.slug}`} className="cinematic-panel group overflow-hidden rounded-lg">
       <div className="relative flex aspect-video items-center justify-center bg-[radial-gradient(circle_at_center,#17385d,#05070b_70%)]">
@@ -17,7 +17,7 @@ export function AssetCard({ asset }: { asset: Asset }) {
         <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-black/20" />
         <span className="absolute left-3 top-3 rounded bg-black/70 px-2 py-1 text-xs text-white">{asset.simulator_type.replace("_", " ")}</span>
         <span className="absolute right-3 top-3 rounded bg-rail-red px-2 py-1 text-xs font-semibold">
-          {asset.is_upcoming ? asset.coming_soon_badge || "COMING SOON" : asset.is_free ? "FREE" : asset.discount_percent ? `${asset.discount_percent}% OFF` : `INR ${asset.price}`}
+          {asset.is_upcoming ? asset.coming_soon_badge || "COMING SOON" : showDeal ? asset.deal_title || "DEAL OPEN" : asset.is_free ? "FREE" : asset.discount_percent ? `${asset.discount_percent}% OFF` : `INR ${asset.price}`}
         </span>
         {showDeal ? (
           <span className="absolute bottom-3 left-3 rounded bg-rail-amber px-2 py-1 text-xs font-black uppercase text-black">{asset.deal_badge || "Limited Time"}</span>
@@ -33,7 +33,9 @@ export function AssetCard({ asset }: { asset: Asset }) {
           {asset.is_upcoming ? (
             <span className="font-semibold text-rail-amber">{asset.coming_soon_status_text || "Release Date: To Be Announced"}</span>
           ) : showDeal ? (
-            <span className="font-semibold text-emerald-300">{asset.deal_title || "Launch Offer"} {asset.deal_status_text ? `- ${asset.deal_status_text}` : ""}</span>
+            <span className="font-semibold text-emerald-300">
+              {asset.deal_status_text || (asset.discount_percent ? `${asset.discount_percent}% OFF now open` : "Special deal is open")}
+            </span>
           ) : (
             <PriceDisplay asset={asset} compact />
           )}

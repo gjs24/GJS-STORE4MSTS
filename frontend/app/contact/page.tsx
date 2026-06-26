@@ -42,7 +42,7 @@ export default function ContactPage() {
           <div className="rounded border border-white/10 bg-white/[0.03] p-5">
             <ShieldQuestion className="mb-3 text-rail-amber" />
             <h2 className="font-semibold text-white">Support Scope</h2>
-            <p className="mt-2 text-sm text-slate-400">Download access, Razorpay payment status, order issues, file access, and installation queries.</p>
+            <p className="mt-2 text-sm text-slate-400">Download access, Cashfree payment status, order issues, file access, and installation queries.</p>
           </div>
         </div>
         <form action={`mailto:${supportEmail}`} method="post" encType="text/plain" className="cinematic-panel space-y-4 rounded-lg p-6">

@@ -1,0 +1,21 @@
+<svg width="720" height="780" viewBox="0 0 720 780" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Abstract developer portrait</title>
+  <desc id="desc">A geometric portrait mark with interface panels and warm accent colors.</desc>
+  <rect x="56" y="52" width="608" height="676" rx="36" fill="#FFF9EE" stroke="#151515" stroke-width="10"/>
+  <path d="M148 612C178 498 250 440 365 438C480 436 551 493 578 612H148Z" fill="#1F7A68"/>
+  <path d="M237 334C219 239 269 157 362 156C455 155 508 239 486 335C468 412 422 453 363 453C303 453 252 412 237 334Z" fill="#E8B779" stroke="#151515" stroke-width="10"/>
+  <path d="M231 299C270 264 318 248 375 252C422 255 462 270 496 297C498 220 446 132 362 132C281 132 225 217 231 299Z" fill="#151515"/>
+  <path d="M274 350C298 369 325 379 356 379C390 379 419 368 443 347" stroke="#151515" stroke-width="11" stroke-linecap="round"/>
+  <circle cx="302" cy="315" r="11" fill="#151515"/>
+  <circle cx="421" cy="315" r="11" fill="#151515"/>
+  <rect x="124" y="98" width="188" height="116" rx="18" fill="#EDF1E7" stroke="#151515" stroke-width="8"/>
+  <path d="M154 139H232M154 173H276" stroke="#1F7A68" stroke-width="10" stroke-linecap="round"/>
+  <rect x="431" y="96" width="166" height="134" rx="18" fill="#F6D37C" stroke="#151515" stroke-width="8"/>
+  <path d="M475 163L505 133L535 163L505 193L475 163Z" fill="#D95D4F" stroke="#151515" stroke-width="7"/>
+  <rect x="102" y="514" width="178" height="124" rx="20" fill="#D95D4F" stroke="#151515" stroke-width="8"/>
+  <path d="M142 555H239M142 590H211" stroke="#FFF9EE" stroke-width="10" stroke-linecap="round"/>
+  <rect x="459" y="508" width="166" height="138" rx="20" fill="#EDF1E7" stroke="#151515" stroke-width="8"/>
+  <path d="M498 566L526 594L586 534" stroke="#1F7A68" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="360" cy="628" r="36" fill="#F6D37C" stroke="#151515" stroke-width="8"/>
+  <path d="M331 629H389" stroke="#151515" stroke-width="9" stroke-linecap="round"/>
+</svg>
