@@ -96,8 +96,11 @@ export function AssetActions({ asset }: { asset: Asset }) {
         } else if (nextOrder.status === "REJECTED") {
           setMessage("This payment was rejected. Contact support if you believe this is a mistake.");
           return;
-        } else {
+        } else if (nextOrder.download_enabled) {
           setMessage("Purchase confirmed. Preparing secure download...");
+        } else {
+          setMessage("Purchase required before downloading this asset. Complete payment or wait for admin verification.");
+          return;
         }
       }
       await startDownload();

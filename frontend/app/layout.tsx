@@ -8,7 +8,12 @@ import { EntrancePopup } from "@/components/entrance-popup";
 
 export const metadata: Metadata = {
   title: "MSTS-GJS Production Store",
-  description: "Premium MSTS and Open Rails train simulator assets by GJS Production."
+  description: "Premium MSTS and Open Rails train simulator assets by GJS Production.",
+  icons: {
+    icon: "/icon.svg",
+    shortcut: "/icon.svg",
+    apple: "/icon.svg"
+  }
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

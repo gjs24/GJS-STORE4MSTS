@@ -16,6 +16,7 @@ type Row = {
   asset: Asset;
   meta: string;
   status?: string;
+  downloadEnabled?: boolean;
 };
 
 function formatDate(value: string) {
@@ -40,7 +41,8 @@ export function AccountList({ type }: AccountListProps) {
               : type === "downloads"
                 ? `Downloaded ${formatDate((item as DownloadLog).downloaded_at)}`
                 : `Saved ${formatDate((item as WishlistItem).created_at)}`,
-          status: "status" in item ? item.status : undefined
+          status: "status" in item ? item.status : undefined,
+          downloadEnabled: "download_enabled" in item ? Boolean(item.download_enabled) : type === "downloads",
         }));
         setRows(nextRows);
         setMessage(nextRows.length ? "" : "No items yet. Browse the marketplace to build your simulator library.");
@@ -141,12 +143,12 @@ export function AccountList({ type }: AccountListProps) {
                   <ShoppingCart className="mr-2 inline" size={16} /> View
                 </Link>
               ) : null}
-              {type === "purchases" && row.status && ["APPROVED", "PAID"].includes(row.status) ? (
+              {type === "purchases" && row.downloadEnabled ? (
                 <button onClick={() => handleInvoice(row.id)} disabled={busyId === row.id} className="rounded border border-white/10 px-4 py-2 text-sm font-semibold disabled:opacity-60">
                   <FileText className="mr-2 inline" size={16} /> Invoice
                 </button>
               ) : null}
-              {type !== "purchases" || (row.status && ["APPROVED", "PAID"].includes(row.status)) ? (
+              {type !== "purchases" || row.downloadEnabled ? (
                 <button onClick={() => handleDownload(row.asset)} disabled={busyId === row.asset.id} className="rounded bg-rail-red px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
                   {type === "purchases" ? <PackageCheck className="mr-2 inline" size={16} /> : <Download className="mr-2 inline" size={16} />}
                   Download
