@@ -7,8 +7,21 @@ export type StoreOrder = {
   asset: Asset;
   amount: string;
   currency: string;
-  status: "PENDING" | "PAID" | "FAILED" | "REFUNDED";
+  status: "PENDING" | "VERIFICATION_PENDING" | "APPROVED" | "REJECTED" | "PAID" | "FAILED" | "REFUNDED";
+  order_id?: string;
   provider_order_id?: string;
+  utr?: string;
+  payer_name?: string;
+  payment_submitted_at?: string | null;
+  download_enabled?: boolean;
+  manual_payment?: {
+    upi_id: string;
+    payee_name: string;
+    amount: string;
+    currency: string;
+    upi_uri: string;
+    instructions: string;
+  } | null;
   created_at: string;
 };
 
@@ -143,31 +156,29 @@ export async function createOrder(assetId: number): Promise<StoreOrder> {
   return res.json();
 }
 
-export async function verifyDebugPayment(
+export async function verifyPayment(
   orderId: number,
-  payment?: { provider: "RAZORPAY" | "MANUAL"; provider_payment_id?: string; provider_signature?: string }
+  payment?: {
+    utr: string;
+    payer_name?: string;
+  }
 ): Promise<StoreOrder> {
   await validAccessToken();
+  const payload = {
+    order_id: orderId,
+    utr: payment?.utr || "",
+    payer_name: payment?.payer_name || ""
+  };
   let res = await fetch(`${API_URL}/payments/verify/`, {
     method: "POST",
     headers: { ...authHeaders(), "Content-Type": "application/json" },
-    body: JSON.stringify({
-      order_id: orderId,
-      provider: payment?.provider || "MANUAL",
-      provider_payment_id: payment?.provider_payment_id || `dev-${orderId}`,
-      provider_signature: payment?.provider_signature || ""
-    })
+    body: JSON.stringify(payload)
   });
   if (res.status === 401 && await refreshAccessToken()) {
     res = await fetch(`${API_URL}/payments/verify/`, {
       method: "POST",
       headers: { ...authHeaders(), "Content-Type": "application/json" },
-      body: JSON.stringify({
-        order_id: orderId,
-        provider: payment?.provider || "MANUAL",
-        provider_payment_id: payment?.provider_payment_id || `dev-${orderId}`,
-        provider_signature: payment?.provider_signature || ""
-      })
+      body: JSON.stringify(payload)
     });
   }
   if (!res.ok) throw new Error(await parseError(res, "Payment verification failed."));
