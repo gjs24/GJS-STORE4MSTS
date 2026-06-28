@@ -30,6 +30,8 @@ export function SiteFooter() {
             MSTS-GJS Production Store is a digital asset marketplace for MSTS and Open Rails downloads including train models,
             routes, textures, sounds, cab views, and 3D assets.
           </p>
+          <p className="mt-3 text-sm leading-6 text-slate-400">Legal Name / Merchant Name: {legalOwnerName}</p>
+          <p className="mt-1 text-sm leading-6 text-slate-400">Paid product currency: Indian Rupees (INR).</p>
         </div>
 
         <div>

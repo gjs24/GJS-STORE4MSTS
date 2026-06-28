@@ -69,6 +69,7 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ sl
           <h1 className="mt-2 text-4xl font-black">{asset.title}</h1>
           <div className="mt-4 text-xl">
             <PriceDisplay asset={asset} />
+            {!asset.is_free ? <p className="mt-1 text-sm text-slate-400">Currency: Indian Rupees (INR)</p> : null}
             {showDeal && Number(asset.savings_amount || 0) > 0 ? (
               <p className="mt-1 text-sm text-emerald-300">{asset.deal_title || "Launch Offer"} - You save INR {asset.savings_amount}</p>
             ) : null}

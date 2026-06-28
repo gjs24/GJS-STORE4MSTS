@@ -50,7 +50,7 @@ export default async function AssetsPage({ searchParams }: { searchParams: Promi
         <button className="rounded bg-rail-red px-4 py-2 text-sm font-semibold">Filter</button>
       </form>
       <div className="mb-8 flex flex-wrap items-center justify-between gap-3 text-sm text-slate-400">
-        <p>{assets.length} asset{assets.length === 1 ? "" : "s"} found</p>
+        <p>{assets.length} asset{assets.length === 1 ? "" : "s"} found. Paid products are priced in Indian Rupees (INR).</p>
         {hasFilters ? <Link href="/assets" className="font-semibold text-rail-amber">Clear filters</Link> : null}
       </div>
       {assets.length ? (
