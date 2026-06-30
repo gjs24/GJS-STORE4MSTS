@@ -42,6 +42,11 @@ from .serializers import (
 logger = logging.getLogger(__name__)
 DOWNLOAD_READY_STATUSES = [Order.Status.PAID]
 CASHFREE_TERMINAL_STATUSES = ["FAILED", "EXPIRED", "TERMINATED", "CANCELLED"]
+CASHFREE_ORDER_MISSING_MARKERS = [
+    "order reference id does not exist",
+    "order id does not exist",
+    "order does not exist",
+]
 
 
 def cashfree_base_url():
@@ -61,6 +66,11 @@ def cashfree_headers():
 
 def cashfree_is_configured():
     return bool(settings.CASHFREE_CLIENT_ID and settings.CASHFREE_CLIENT_SECRET)
+
+
+def cashfree_order_missing_error(error):
+    message = str(error or "").lower()
+    return any(marker in message for marker in CASHFREE_ORDER_MISSING_MARKERS)
 
 
 def cashfree_return_url(order):
@@ -163,10 +173,16 @@ def ensure_cashfree_payment(order, request):
     ):
         synced, error = sync_cashfree_order(order)
         if not synced:
-            return False, error
-        if order.status in [Order.Status.FAILED, Order.Status.REFUNDED, Order.Status.REJECTED]:
-            return False, "Cashfree reports this payment as failed or expired."
-        return True, ""
+            if not cashfree_order_missing_error(error):
+                return False, error
+            payment.raw_response = {}
+            payment.status = "missing"
+            payment.save(update_fields=["raw_response", "status"])
+            order._state.fields_cache.pop("payment", None)
+        else:
+            if order.status in [Order.Status.FAILED, Order.Status.REFUNDED, Order.Status.REJECTED]:
+                return False, "Cashfree reports this payment as failed or expired."
+            return True, ""
     data, error = create_cashfree_order(order, request)
     if not data:
         logger.warning("Cashfree checkout unavailable for order %s: %s", order.id, error)
@@ -401,7 +417,8 @@ class OrderCreateView(generics.CreateAPIView):
             if not asset.is_free and not order_has_download_access(existing_order):
                 synced, sync_error = sync_cashfree_order(existing_order)
                 if not synced:
-                    return Response({"detail": sync_error or "Cashfree payment status could not be checked."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+                    if not cashfree_order_missing_error(sync_error):
+                        return Response({"detail": sync_error or "Cashfree payment status could not be checked."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
                 if existing_order.status == Order.Status.FAILED:
                     existing_order = None
         if existing_order:
