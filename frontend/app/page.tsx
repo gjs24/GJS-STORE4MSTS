@@ -4,6 +4,8 @@ import { AssetCard } from "@/components/asset-card";
 import { HomeHeroSlideshow } from "@/components/home-hero-slideshow";
 import { getAssets, getCategories, getSiteSettings } from "@/lib/api";
 
+const legalOwnerName = process.env.NEXT_PUBLIC_LEGAL_OWNER_NAME || "GNANAJEBASEELAN G";
+
 export default async function HomePage() {
   const [assets, upcomingAssets, categories, siteSettings] = await Promise.all([
     getAssets("/assets/?featured=true"),
@@ -27,6 +29,9 @@ export default async function HomePage() {
             <p className="mt-5 max-w-2xl text-lg text-slate-300">
               Download professional train simulator assets from GJS Production: locomotives, routes, cab views, sounds, textures, updates, logos, and 3D-ready packs.
             </p>
+            <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-400">
+              Legal Name / Merchant Name: {legalOwnerName}. All paid digital downloads on this store are priced in Indian Rupees (INR) and processed through Cashfree Payments.
+            </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Link href="/assets" className="rounded bg-rail-red px-5 py-3 font-semibold text-white shadow-glow">
                 Browse assets <ArrowRight className="ml-2 inline" size={18} />
@@ -37,7 +42,7 @@ export default async function HomePage() {
             </div>
             <div className="mt-8 grid max-w-2xl grid-cols-3 gap-3 text-sm text-slate-300">
               <span className="rounded border border-white/10 bg-white/5 p-3"><Download size={18} /> Protected downloads</span>
-              <span className="rounded border border-white/10 bg-white/5 p-3"><BadgeIndianRupee size={18} /> Cashfree ready</span>
+              <span className="rounded border border-white/10 bg-white/5 p-3"><BadgeIndianRupee size={18} /> INR pricing</span>
               <span className="rounded border border-white/10 bg-white/5 p-3"><ShieldCheck size={18} /> JWT secure</span>
             </div>
           </div>
