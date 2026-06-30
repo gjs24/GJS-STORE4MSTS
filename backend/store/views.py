@@ -41,6 +41,7 @@ from .serializers import (
 
 logger = logging.getLogger(__name__)
 DOWNLOAD_READY_STATUSES = [Order.Status.PAID]
+CASHFREE_TERMINAL_STATUSES = ["FAILED", "EXPIRED", "TERMINATED", "CANCELLED"]
 
 
 def cashfree_base_url():
@@ -122,6 +123,34 @@ def fetch_cashfree_order(provider_order_id):
     return data, ""
 
 
+def sync_cashfree_order(order):
+    payment = getattr(order, "payment", None)
+    if not payment or payment.provider != Payment.Provider.CASHFREE or not order.provider_order_id:
+        return True, ""
+
+    data, error = fetch_cashfree_order(order.provider_order_id)
+    if not data:
+        return False, error
+
+    order_status = str(data.get("order_status", "")).upper()
+    payment.provider_payment_id = str(data.get("cf_order_id", payment.provider_payment_id or ""))
+    payment.status = order_status.lower() or payment.status
+    payment.raw_response = {**payment.raw_response, **data}
+    payment.save(update_fields=["provider_payment_id", "status", "raw_response"])
+
+    if order_status == "PAID":
+        order.status = Order.Status.PAID
+        order.download_enabled = True
+        order.save(update_fields=["status", "download_enabled"])
+    elif order_status in CASHFREE_TERMINAL_STATUSES:
+        order.status = Order.Status.FAILED
+        order.download_enabled = False
+        order.save(update_fields=["status", "download_enabled"])
+
+    order._state.fields_cache.pop("payment", None)
+    return True, ""
+
+
 def ensure_cashfree_payment(order, request):
     sync_order_download_access(order)
     if order_has_download_access(order) or not cashfree_is_configured():
@@ -132,6 +161,11 @@ def ensure_cashfree_payment(order, request):
         and payment.provider == Payment.Provider.CASHFREE
         and payment.raw_response.get("payment_session_id")
     ):
+        synced, error = sync_cashfree_order(order)
+        if not synced:
+            return False, error
+        if order.status in [Order.Status.FAILED, Order.Status.REFUNDED, Order.Status.REJECTED]:
+            return False, "Cashfree reports this payment as failed or expired."
         return True, ""
     data, error = create_cashfree_order(order, request)
     if not data:
@@ -364,6 +398,13 @@ class OrderCreateView(generics.CreateAPIView):
         ).first()
         if existing_order:
             sync_order_download_access(existing_order)
+            if not asset.is_free and not order_has_download_access(existing_order):
+                synced, sync_error = sync_cashfree_order(existing_order)
+                if not synced:
+                    return Response({"detail": sync_error or "Cashfree payment status could not be checked."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+                if existing_order.status == Order.Status.FAILED:
+                    existing_order = None
+        if existing_order:
             cashfree_ready, cashfree_error = ensure_cashfree_payment(existing_order, request)
             if not asset.is_free and not order_has_download_access(existing_order) and not cashfree_ready:
                 return Response({"detail": cashfree_error or "Cashfree checkout is not available."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
@@ -412,23 +453,13 @@ class PaymentVerifyView(generics.GenericAPIView):
             return Response({"detail": "This order was rejected. Please create a new order if you paid again."}, status=status.HTTP_400_BAD_REQUEST)
         payment = getattr(order, "payment", None)
         if payment and payment.provider == Payment.Provider.CASHFREE:
-            data, error = fetch_cashfree_order(order.provider_order_id)
-            if not data:
+            synced, error = sync_cashfree_order(order)
+            if not synced:
                 return Response({"detail": error}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-            order_status = str(data.get("order_status", "")).upper()
-            payment.provider_payment_id = str(data.get("cf_order_id", payment.provider_payment_id or ""))
-            payment.status = order_status.lower() or payment.status
-            payment.raw_response = {**payment.raw_response, **data}
-            payment.save(update_fields=["provider_payment_id", "status", "raw_response"])
-            if order_status == "PAID":
-                order.status = Order.Status.PAID
-                order.download_enabled = True
-                order.save(update_fields=["status", "download_enabled"])
+            order.refresh_from_db()
+            if order.status == Order.Status.PAID:
                 return Response(OrderSerializer(order, context={"request": request}).data)
-            if order_status in ["FAILED", "EXPIRED", "TERMINATED", "CANCELLED"]:
-                order.status = Order.Status.FAILED
-                order.download_enabled = False
-                order.save(update_fields=["status", "download_enabled"])
+            if order.status == Order.Status.FAILED:
                 return Response({"detail": "Cashfree reports this payment as failed or expired."}, status=status.HTTP_400_BAD_REQUEST)
             return Response({"detail": "Cashfree payment is not complete yet."}, status=status.HTTP_400_BAD_REQUEST)
         if order.utr:
