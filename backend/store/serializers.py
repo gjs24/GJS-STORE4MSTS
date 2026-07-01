@@ -113,6 +113,7 @@ class AssetListSerializer(serializers.ModelSerializer):
             "thumbnail",
             "thumbnail_url",
             "gallery_image_urls",
+            "media_gallery_urls",
             "has_file",
             "download_count",
             "average_rating",

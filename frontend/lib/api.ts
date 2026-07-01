@@ -40,6 +40,7 @@ export type Asset = {
   thumbnail?: string;
   thumbnail_url?: string;
   gallery_image_urls?: string;
+  media_gallery_urls?: string;
   has_file?: boolean;
   download_file?: string | null;
   external_download_url?: string;

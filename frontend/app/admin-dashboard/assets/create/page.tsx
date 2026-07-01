@@ -158,6 +158,11 @@ export default function CreateAssetPage() {
           <textarea name="gallery_image_urls" rows={4} placeholder={"https://res.cloudinary.com/.../image/upload/screenshot-1.jpg\nhttps://res.cloudinary.com/.../image/upload/screenshot-2.jpg"} className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-3" />
           <span className="mt-1 block text-xs text-slate-500">Paste one screenshot URL per line. These appear on the product detail page.</span>
         </label>
+        <label className="block md:col-span-2">
+          <span className="text-sm text-slate-300">Demo media URLs</span>
+          <textarea name="media_gallery_urls" rows={4} placeholder={"https://youtube.com/watch?v=demo-video-id\nhttps://res.cloudinary.com/.../video/upload/demo-output.mp4"} className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-3" />
+          <span className="mt-1 block text-xs text-slate-500">Paste one demo video or output preview URL per line. YouTube and direct MP4/WebM links are shown as playable previews.</span>
+        </label>
         <label className="flex items-center gap-3 rounded border border-white/10 bg-black/30 px-3 py-3">
           <input name="is_published" type="checkbox" defaultChecked />
           <span>Visible to users</span>

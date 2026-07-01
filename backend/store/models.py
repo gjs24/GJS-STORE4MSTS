@@ -61,6 +61,7 @@ class Asset(models.Model):
     thumbnail_url = models.URLField(blank=True)
     gallery_image_urls = models.TextField(blank=True)
     preview_video_url = models.URLField(blank=True)
+    media_gallery_urls = models.TextField(blank=True)
     requirements = models.TextField(blank=True)
     installation_steps = models.TextField(blank=True)
     changelog = models.TextField(blank=True)
