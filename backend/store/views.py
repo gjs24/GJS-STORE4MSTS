@@ -3,6 +3,7 @@ import json
 import logging
 import re
 from pathlib import PurePath
+from rest_framework.pagination import PageNumberPagination
 
 import requests
 from django.conf import settings
@@ -704,23 +705,48 @@ class AdminCategoryViewSet(viewsets.ModelViewSet):
     serializer_class = CategorySerializer
     permission_classes = [permissions.IsAdminUser]
 
+class AdminOrderPagination(PageNumberPagination):
+    page_size = 10
+    page_size_query_param = "page_size"
+    max_page_size = 100
+
 
 class AdminOrderViewSet(viewsets.ModelViewSet):
-    queryset = Order.objects.select_related("user", "asset", "asset__category")
+    queryset = Order.objects.select_related(
+        "user",
+        "asset",
+        "asset__category"
+    ).order_by("-id")
+
     serializer_class = OrderSerializer
     permission_classes = [permissions.IsAdminUser]
     http_method_names = ["get", "patch", "head", "options"]
 
+    # Pagination
+    pagination_class = AdminOrderPagination
+
     def perform_update(self, serializer):
         order = serializer.save()
+
         if order.status == Order.Status.PAID:
             order.download_enabled = True
             order.save(update_fields=["download_enabled"])
-            Payment.objects.filter(order=order).update(status="approved")
-        elif order.status in [Order.Status.REJECTED, Order.Status.FAILED, Order.Status.REFUNDED]:
+
+            Payment.objects.filter(order=order).update(
+                status="approved"
+            )
+
+        elif order.status in [
+            Order.Status.REJECTED,
+            Order.Status.FAILED,
+            Order.Status.REFUNDED,
+        ]:
             order.download_enabled = False
             order.save(update_fields=["download_enabled"])
-            Payment.objects.filter(order=order).update(status=order.status.lower())
+
+            Payment.objects.filter(order=order).update(
+                status=order.status.lower()
+            )
 
 
 class AdminUserViewSet(viewsets.ModelViewSet):

@@ -5,20 +5,40 @@ import { AdminLoginNote } from "@/components/admin-login-note";
 import { AdminLayout } from "@/components/admin-table";
 import { adminGet, adminPatch, type AdminOrder } from "@/lib/admin-api";
 
-const fallbackOrders: AdminOrder[] = [];
+type PaginatedOrders = {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: AdminOrder[];
+};
+
+
 
 export default function AdminOrdersPage() {
-  const [orders, setOrders] = useState<AdminOrder[]>(fallbackOrders);
+  const [orders, setOrders] = useState<AdminOrder[]>([]);
+const [page, setPage] = useState(1);
+const [count, setCount] = useState(0);
 
   useEffect(() => {
-    adminGet<AdminOrder[]>("/admin/orders/", fallbackOrders).then(setOrders);
-  }, []);
+  adminGet<PaginatedOrders>(
+    `/admin/orders/?page=${page}`,
+    {
+      count: 0,
+      next: null,
+      previous: null,
+      results: [],
+    }
+  ).then((data) => {
+    setOrders(data.results);
+    setCount(data.count);
+  });
+}, [page]);
 
   async function updateStatus(order: AdminOrder, status: AdminOrder["status"]) {
     const updated = await adminPatch<AdminOrder>(`/admin/orders/${order.id}/`, { status });
     setOrders((current) => current.map((item) => item.id === updated.id ? updated : item));
   }
-
+const totalPages = Math.ceil(count / 10);
   return (
     <AdminLayout title="Orders & Payments">
       <AdminLoginNote />
@@ -42,9 +62,33 @@ export default function AdminOrdersPage() {
               <option value="FAILED">Failed</option>
               <option value="REFUNDED">Refunded</option>
             </select>
+            
           </div>
         ))}
       </div>
+      {count > 0 && (
+  <div className="flex items-center justify-between border-t border-white/10 p-4">
+    <button
+      disabled={page === 1}
+      onClick={() => setPage(page - 1)}
+      className="rounded bg-white/10 px-4 py-2 disabled:opacity-40"
+    >
+      Previous
+    </button>
+
+    <span className="text-sm text-slate-400">
+      Page {page} of {totalPages}
+    </span>
+
+    <button
+      disabled={page === totalPages}
+      onClick={() => setPage(page + 1)}
+      className="rounded bg-white/10 px-4 py-2 disabled:opacity-40"
+    >
+      Next
+    </button>
+  </div>
+)}
     </AdminLayout>
   );
 }
