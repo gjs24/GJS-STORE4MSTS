@@ -52,12 +52,17 @@ export default function AdminDashboardPage() {
   useEffect(() => {
     Promise.all([
       adminGet<AdminStats>("/admin/stats/", fallbackStats),
-      adminGet<AdminOrder[]>("/admin/orders/", []),
+      adminGet<any>("/admin/orders/", {
+  count: 0,
+  next: null,
+  previous: null,
+  results: [],
+}),
       adminGet<AdminUser[]>("/admin/users/", []),
       adminGet<Asset[]>("/admin/assets/", [])
     ]).then(([nextStats, nextOrders, nextUsers, nextAssets]) => {
       setStats(nextStats);
-      setOrders(nextOrders);
+      setOrders(nextOrders.results);
       setUsers(nextUsers);
       setAssets(nextAssets);
     });
