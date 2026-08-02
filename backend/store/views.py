@@ -412,7 +412,21 @@ class OrderCreateView(generics.CreateAPIView):
             user=request.user,
             asset=asset,
             status__in=[Order.Status.PENDING, Order.Status.VERIFICATION_PENDING, Order.Status.APPROVED, Order.Status.PAID],
-        ).first()
+        ).order_by("-id").first()
+
+        # A pending order is an unpaid checkout quote, not a price lock.  Do
+        # not reuse it after an administrator changes the product price.
+        if (
+            existing_order
+            and existing_order.status == Order.Status.PENDING
+            and existing_order.amount != asset.price
+        ):
+            existing_order.status = Order.Status.EXPIRED
+            existing_order.download_enabled = False
+            existing_order.save(update_fields=["status", "download_enabled"])
+            Payment.objects.filter(order=existing_order).update(status="expired")
+            existing_order = None
+
         if existing_order:
             sync_order_download_access(existing_order)
             if not asset.is_free and not order_has_download_access(existing_order):
