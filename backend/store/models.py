@@ -122,6 +122,7 @@ class Order(models.Model):
         REJECTED = "REJECTED", "Rejected"
         PAID = "PAID", "Paid"
         FAILED = "FAILED", "Failed"
+        EXPIRED = "EXPIRED", "Expired"
         REFUNDED = "REFUNDED", "Refunded"
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="orders", on_delete=models.CASCADE)
