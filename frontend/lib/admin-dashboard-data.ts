@@ -105,8 +105,8 @@ export const topAssets: TopAsset[] = [];
 export const railwayCards: RailwayCard[] = [];
 
 export const quickActions = [
-  { label: "Upload Asset", icon: PackageCheck },
-  { label: "Create Coupon", icon: BadgeIndianRupee },
-  { label: "Feature Banner", icon: TrainFront },
-  { label: "Export Orders", icon: Download }
+  { label: "Upload Asset", icon: PackageCheck, href: "/admin-dashboard/assets/create" },
+  { label: "Store Settings", icon: BadgeIndianRupee, href: "/admin-dashboard/settings" },
+  { label: "Feature Products", icon: TrainFront, href: "/admin-dashboard/assets?filter=featured" },
+  { label: "Export Logs", icon: Download, href: "/admin-dashboard/downloads" }
 ];

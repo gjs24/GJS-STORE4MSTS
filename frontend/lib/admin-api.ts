@@ -10,9 +10,11 @@ export type AdminStats = {
   asset_count: number;
   review_count: number;
   pending_orders: number;
+  verification_pending_orders?: number;
   featured_assets: number;
   free_assets: number;
   premium_assets: number;
+  monthly_sales?: { month: string; sales: number; revenue: number }[];
 };
 
 export type AdminUser = {
@@ -24,6 +26,7 @@ export type AdminUser = {
   is_staff: boolean;
   is_active: boolean;
   date_joined: string;
+  paid_orders_count?: number;
 };
 
 export type AdminOrder = {
@@ -44,6 +47,8 @@ export type AdminOrder = {
 export type AdminReview = {
   id: number;
   asset: number;
+  asset_title?: string;
+  asset_slug?: string;
   user?: AdminUser;
   rating: number;
   comment: string;
@@ -254,7 +259,24 @@ export async function adminDelete(path: string): Promise<void> {
       headers: adminHeaders()
     });
   }
-  if (!res.ok) throw new Error("Delete failed");
+  if (!res.ok) throw new Error(await parseAdminError(res, "Delete failed"));
+}
+
+export async function downloadAdminInvoice(orderId: number): Promise<{ url: string; filename: string; revoke: () => void }> {
+  if (!hasAdminToken()) throw new Error("Admin login required.");
+  await validAccessToken();
+  let res = await fetch(`${API_URL}/orders/${orderId}/invoice/`, { headers: adminHeaders() });
+  if (res.status === 401 && await refreshAccessToken()) {
+    res = await fetch(`${API_URL}/orders/${orderId}/invoice/`, { headers: adminHeaders() });
+  }
+  if (!res.ok) throw new Error(await parseAdminError(res, "Could not download invoice."));
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  return {
+    url,
+    filename: `GJS-${orderId}-invoice.pdf`,
+    revoke: () => URL.revokeObjectURL(url)
+  };
 }
 
 export const fallbackStats: AdminStats = {
@@ -265,7 +287,9 @@ export const fallbackStats: AdminStats = {
   asset_count: 0,
   review_count: 0,
   pending_orders: 0,
+  verification_pending_orders: 0,
   featured_assets: 0,
   free_assets: 0,
-  premium_assets: 0
+  premium_assets: 0,
+  monthly_sales: []
 };

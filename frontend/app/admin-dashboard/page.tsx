@@ -1,8 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { BadgeIndianRupee, Boxes, Download, Eye, ShoppingCart, Users } from "lucide-react";
+import { AlertCircle, BadgeIndianRupee, Boxes, Download, Eye, ShoppingCart, Users } from "lucide-react";
 import { AdminLoginNote } from "@/components/admin-login-note";
 import { AdminLayout } from "@/components/admin-table";
 import {
@@ -34,8 +35,8 @@ function formatDate(value: string) {
 }
 
 function orderStatusLabel(status: AdminOrder["status"]): AdminOrderRow["status"] {
-  if (status === "PAID") return "Paid";
-  if (status === "PENDING") return "Pending";
+  if (status === "PAID" || status === "APPROVED") return "Paid";
+  if (status === "PENDING" || status === "VERIFICATION_PENDING") return "Pending";
   return "Failed";
 }
 
@@ -76,16 +77,25 @@ export default function AdminDashboardPage() {
     { label: "Total Sales", value: Number(stats.total_sales) || 0, displayValue: formatMoney(stats.total_sales), change: Number(stats.total_sales) ? "Paid revenue" : "No revenue yet", tone: "red", icon: BadgeIndianRupee },
     { label: "Total Downloads", value: stats.total_downloads, displayValue: formatNumber(stats.total_downloads), change: stats.total_downloads ? "Live downloads" : "No downloads yet", tone: "emerald", icon: Download },
     { label: "Total Assets", value: stats.asset_count, displayValue: formatNumber(stats.asset_count), change: stats.asset_count ? `${stats.featured_assets} featured` : "No assets yet", tone: "amber", icon: Boxes },
-    { label: "Page Views", value: 0, displayValue: "0", change: "Not tracked", tone: "cyan", icon: Eye }
+    { label: "Page Views", value: 0, displayValue: "0", change: "Not tracked", tone: "cyan", icon: Eye },
+    { label: "Pending UTRs", value: stats.verification_pending_orders || 0, displayValue: formatNumber(stats.verification_pending_orders || 0), change: (stats.verification_pending_orders || 0) > 0 ? "Awaiting verification" : "All verified", tone: (stats.verification_pending_orders || 0) > 0 ? "amber" : "cyan", icon: AlertCircle }
   ], [orderCount, stats]);
 
   const monthlyData = useMemo<SalesPoint[]>(() => {
+    if (stats.monthly_sales && stats.monthly_sales.length > 0) {
+      return stats.monthly_sales.map((item, index) => ({
+        month: item.month,
+        sales: item.sales,
+        revenue: item.revenue,
+        downloads: index === new Date().getMonth() ? stats.total_downloads : 0
+      }));
+    }
     const months = salesOverview.map((point) => ({ ...point }));
     orders.forEach((order) => {
       const index = monthIndex(order.created_at);
       if (index >= 0 && months[index]) {
         months[index].sales += 1;
-        if (order.status === "PAID") {
+        if (order.status === "PAID" || order.status === "APPROVED") {
           months[index].revenue += Number(order.amount) || 0;
         }
       }
@@ -94,7 +104,7 @@ export default function AdminDashboardPage() {
       months[new Date().getMonth()].downloads = stats.total_downloads;
     }
     return months;
-  }, [orders, stats.total_downloads]);
+  }, [orders, stats.monthly_sales, stats.total_downloads]);
 
   const statusData = useMemo(() => {
     const paid = orders.filter((order) => order.status === "PAID").length;
@@ -175,9 +185,38 @@ export default function AdminDashboardPage() {
             <div className="flex flex-wrap gap-3">
               <Button>Upload New Asset</Button>
               <Button variant="secondary">View Reports</Button>
+              <Button asChild>
+                <Link href="/admin-dashboard/assets/create">Upload New Asset</Link>
+              </Button>
+              <Button asChild variant="secondary">
+                <Link href="/admin-dashboard/downloads">View Download Reports</Link>
+              </Button>
             </div>
           </div>
         </motion.section>
+
+        {stats.verification_pending_orders && stats.verification_pending_orders > 0 ? (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 rounded-lg border border-amber-500/40 bg-amber-500/10 p-4 text-amber-200 shadow-lg"
+          >
+            <div className="flex items-center gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-amber-400 font-black animate-pulse">
+                {stats.verification_pending_orders}
+              </span>
+              <div>
+                <p className="font-bold text-white">Manual UPI Payments Awaiting Verification</p>
+                <p className="text-xs text-amber-300/80">
+                  {stats.verification_pending_orders} customer{stats.verification_pending_orders > 1 ? "s have" : " has"} submitted a UPI UTR reference awaiting your verification.
+                </p>
+              </div>
+            </div>
+            <Button asChild size="sm" className="bg-amber-500 text-black hover:bg-amber-400 font-bold shrink-0">
+              <Link href="/admin-dashboard/orders?status=VERIFICATION_PENDING">Review & Approve</Link>
+            </Button>
+          </motion.div>
+        ) : null}
 
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
           {metrics.map((metric, index) => (
@@ -194,6 +233,9 @@ export default function AdminDashboardPage() {
               <h2 className="text-2xl font-black">Marketplace highlights</h2>
             </div>
             <Button variant="ghost">Manage featured</Button>
+            <Button asChild variant="ghost">
+              <Link href="/admin-dashboard/assets?filter=featured">Manage featured</Link>
+            </Button>
           </div>
           <RailwayAssetCards assets={featuredCards} />
         </section>

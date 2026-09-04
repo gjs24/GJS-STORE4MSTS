@@ -16,3 +16,4 @@ razorpay
 stripe
 requests
 Pillow
+reportlab>=4.0.0

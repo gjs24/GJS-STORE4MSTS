@@ -52,6 +52,7 @@ from .serializers import (
 
 logger = logging.getLogger(__name__)
 DOWNLOAD_READY_STATUSES = [Order.Status.PAID]
+DOWNLOAD_READY_STATUSES = [Order.Status.PAID, Order.Status.APPROVED]
 CASHFREE_TERMINAL_STATUSES = ["FAILED", "EXPIRED", "TERMINATED", "CANCELLED"]
 CASHFREE_ORDER_MISSING_MARKERS = [
     "order reference id does not exist",
@@ -954,48 +955,30 @@ class PurchaseListView(generics.ListAPIView):
 @api_view(["GET"])
 @permission_classes([permissions.IsAuthenticated])
 def order_invoice(request, pk):
-    order = get_object_or_404(Order.objects.select_related("asset", "user"), pk=pk, user=request.user)
+    if request.user.is_staff:
+        order = get_object_or_404(Order.objects.select_related("asset", "asset__category", "user"), pk=pk)
+    else:
+        order = get_object_or_404(Order.objects.select_related("asset", "asset__category", "user"), pk=pk, user=request.user)
+
     sync_order_download_access(order)
-    if not order_has_download_access(order):
+    if not request.user.is_staff and not order_has_download_access(order):
         return Response({"detail": "Purchase approval is required before downloading this invoice."}, status=status.HTTP_403_FORBIDDEN)
-    lines = [
-        "MSTS-GJS Production Store",
-        "Digital Product Invoice",
-        "",
-        f"Invoice No: GJS-{order.id:06d}",
-        f"Date: {order.created_at:%d %b %Y}",
-        f"Customer: {order.user.get_full_name() or order.user.username}",
-        f"Email: {order.user.email}",
-        "",
-        f"Product: {order.asset.title}",
-        f"Version: {order.asset.version}",
-        f"Amount: {order.currency} {order.amount}",
-        f"Status: {order.status}",
-        "",
-        "Delivery: Instant digital download/account access after successful payment.",
-        "No physical shipping.",
-    ]
-    stream = "BT /F1 12 Tf 50 740 Td 16 TL " + " T* ".join(f"({line.replace('(', '').replace(')', '')})" for line in lines) + " ET"
-    objects = [
-        b"<< /Type /Catalog /Pages 2 0 R >>",
-        b"<< /Type /Pages /Count 1 /Kids [3 0 R] >>",
-        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
-        f"<< /Length {len(stream)} >>\nstream\n{stream}\nendstream".encode(),
-        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
-    ]
-    pdf = b"%PDF-1.4\n"
-    offsets = [0]
-    for index, obj in enumerate(objects, start=1):
-        offsets.append(len(pdf))
-        pdf += f"{index} 0 obj\n".encode() + obj + b"\nendobj\n"
-    xref_at = len(pdf)
-    pdf += f"xref\n0 {len(objects) + 1}\n0000000000 65535 f \n".encode()
-    for offset in offsets[1:]:
-        pdf += f"{offset:010d} 00000 n \n".encode()
-    pdf += f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref_at}\n%%EOF".encode()
-    response = HttpResponse(pdf, content_type="application/pdf")
-    response["Content-Disposition"] = f'attachment; filename="GJS-{order.id:06d}-invoice.pdf"'
-    return response
+
+    req_format = request.GET.get("format", "").lower()
+    if req_format == "html":
+        from .invoice import generate_invoice_html
+        return HttpResponse(generate_invoice_html(order), content_type="text/html; charset=utf-8")
+
+    try:
+        from .invoice import generate_invoice_pdf
+        pdf = generate_invoice_pdf(order)
+        response = HttpResponse(pdf, content_type="application/pdf")
+        response["Content-Disposition"] = f'attachment; filename="GJS-{order.id:06d}-invoice.pdf"'
+        return response
+    except Exception as exc:
+        logger.exception("Failed to generate PDF invoice for order %s: %s", order.id, exc)
+        from .invoice import generate_invoice_html
+        return HttpResponse(generate_invoice_html(order), content_type="text/html; charset=utf-8")
 
 
 class DownloadListView(generics.ListAPIView):
@@ -1211,10 +1194,38 @@ class AdminOrderViewSet(viewsets.ModelViewSet):
     # Pagination
     pagination_class = AdminOrderPagination
 
+    def get_queryset(self):
+        qs = Order.objects.select_related(
+            "user",
+            "asset",
+            "asset__category"
+        ).order_by("-id")
+
+        status_param = self.request.query_params.get("status")
+        if status_param and status_param != "all":
+            qs = qs.filter(status=status_param.upper())
+
+        search = self.request.query_params.get("search")
+        if search:
+            search = search.strip()
+            id_filter = Q(id=int(search)) if search.isdigit() else Q()
+            qs = qs.filter(
+                id_filter
+                | Q(utr__icontains=search)
+                | Q(payer_name__icontains=search)
+                | Q(provider_order_id__icontains=search)
+                | Q(user__username__icontains=search)
+                | Q(user__email__icontains=search)
+                | Q(asset__title__icontains=search)
+            )
+        return qs
+
     def perform_update(self, serializer):
+        previous_status = self.get_object().status
         order = serializer.save()
 
         if order.status == Order.Status.PAID:
+        if order.status in [Order.Status.PAID, Order.Status.APPROVED]:
             order.download_enabled = True
             order.save(update_fields=["download_enabled"])
 
@@ -1234,6 +1245,17 @@ class AdminOrderViewSet(viewsets.ModelViewSet):
                 status=order.status.lower()
             )
 
+        if previous_status != order.status:
+            user_label = order.user.username if order.user else "User"
+            asset_title = order.asset.title if order.asset else "Asset"
+            log_admin_activity(
+                self.request,
+                f"Order {order.status.lower()}",
+                "Order",
+                order.id,
+                f"Order #{order.id} status changed from {previous_status} to {order.status} for {user_label} ({asset_title})"
+            )
+
 
 class AdminUserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all().order_by("-date_joined")
@@ -1241,12 +1263,90 @@ class AdminUserViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAdminUser]
     http_method_names = ["get", "patch", "head", "options"]
 
+    def get_queryset(self):
+        qs = User.objects.annotate(
+            paid_orders_count=Count("orders", filter=Q(orders__status="PAID"))
+        ).order_by("-date_joined")
+
+        role = self.request.query_params.get("role")
+        if role == "staff":
+            qs = qs.filter(is_staff=True)
+        elif role == "user":
+            qs = qs.filter(is_staff=False)
+
+        status_filter = self.request.query_params.get("status")
+        if status_filter == "active":
+            qs = qs.filter(is_active=True)
+        elif status_filter == "disabled":
+            qs = qs.filter(is_active=False)
+
+        search = self.request.query_params.get("search")
+        if search:
+            search = search.strip()
+            qs = qs.filter(
+                Q(username__icontains=search)
+                | Q(email__icontains=search)
+                | Q(first_name__icontains=search)
+                | Q(last_name__icontains=search)
+            )
+        return qs
+
+    def perform_update(self, serializer):
+        user = self.get_object()
+        # Security: prevent admin from deactivating or removing staff privileges from themselves
+        if user == self.request.user:
+            if "is_active" in serializer.validated_data and not serializer.validated_data["is_active"]:
+                raise serializers.ValidationError({"detail": "You cannot deactivate your own admin account."})
+            if "is_staff" in serializer.validated_data and not serializer.validated_data["is_staff"]:
+                raise serializers.ValidationError({"detail": "You cannot remove staff privileges from your own account."})
+
+        previous_active = user.is_active
+        previous_staff = user.is_staff
+        updated_user = serializer.save()
+
+        if previous_active != updated_user.is_active:
+            log_admin_activity(
+                self.request,
+                "User activated" if updated_user.is_active else "User deactivated",
+                "User",
+                updated_user.id,
+                f"{'Activated' if updated_user.is_active else 'Deactivated'} user {updated_user.username}"
+            )
+        if previous_staff != updated_user.is_staff:
+            log_admin_activity(
+                self.request,
+                "Staff granted" if updated_user.is_staff else "Staff revoked",
+                "User",
+                updated_user.id,
+                f"{'Granted' if updated_user.is_staff else 'Revoked'} staff status for {updated_user.username}"
+            )
+
 
 class AdminReviewViewSet(viewsets.ModelViewSet):
     queryset = Review.objects.select_related("user", "asset")
     serializer_class = ReviewSerializer
     permission_classes = [permissions.IsAdminUser]
     http_method_names = ["get", "patch", "delete", "head", "options"]
+    http_method_names = ["get", "patch", "delete", "post", "head", "options"]
+
+    def get_queryset(self):
+        qs = Review.objects.select_related("user", "asset").order_by("-created_at")
+        status_param = self.request.query_params.get("status")
+        if status_param == "approved":
+            qs = qs.filter(is_approved=True)
+        elif status_param == "pending":
+            qs = qs.filter(is_approved=False)
+
+        search = self.request.query_params.get("search")
+        if search:
+            search = search.strip()
+            qs = qs.filter(
+                Q(comment__icontains=search)
+                | Q(user__username__icontains=search)
+                | Q(user__email__icontains=search)
+                | Q(asset__title__icontains=search)
+            )
+        return qs
 
     @action(detail=True, methods=["post"])
     def approve(self, request, pk=None):
@@ -1254,6 +1354,27 @@ class AdminReviewViewSet(viewsets.ModelViewSet):
         review.is_approved = True
         review.save(update_fields=["is_approved"])
         return Response(ReviewSerializer(review).data)
+        user_label = review.user.username if review.user else "User"
+        asset_title = review.asset.title if review.asset else "Asset"
+        log_admin_activity(request, "Review approved", "Review", review.id, f"Approved review by {user_label} on {asset_title}")
+        return Response(ReviewSerializer(review, context={"request": request}).data)
+
+    @action(detail=True, methods=["post"])
+    def reject(self, request, pk=None):
+        review = self.get_object()
+        review.is_approved = False
+        review.save(update_fields=["is_approved"])
+        user_label = review.user.username if review.user else "User"
+        asset_title = review.asset.title if review.asset else "Asset"
+        log_admin_activity(request, "Review unapproved", "Review", review.id, f"Unapproved review by {user_label} on {asset_title}")
+        return Response(ReviewSerializer(review, context={"request": request}).data)
+
+    def perform_destroy(self, instance):
+        review_id = instance.id
+        user_label = instance.user.username if instance.user else "User"
+        asset_title = instance.asset.title if instance.asset else "Asset"
+        instance.delete()
+        log_admin_activity(self.request, "Review deleted", "Review", review_id, f"Deleted review by {user_label} on {asset_title}")
 
 
 class AdminNotifyRequestView(generics.ListAPIView):
@@ -1262,6 +1383,7 @@ class AdminNotifyRequestView(generics.ListAPIView):
 
     def get_queryset(self):
         qs = NotifyRequest.objects.select_related("asset", "asset__category", "user")
+        qs = NotifyRequest.objects.select_related("asset", "asset__category", "user").order_by("-created_at")
         asset_id = self.request.query_params.get("asset")
         if asset_id:
             qs = qs.filter(asset_id=asset_id)
@@ -1274,9 +1396,19 @@ class AdminDownloadHistoryView(generics.ListAPIView):
 
     def get_queryset(self):
         qs = DownloadLog.objects.select_related("asset", "asset__category", "user")
+        qs = DownloadLog.objects.select_related("asset", "asset__category", "user").order_by("-downloaded_at")
         asset_id = self.request.query_params.get("asset")
         if asset_id:
             qs = qs.filter(asset_id=asset_id)
+        search = self.request.query_params.get("search")
+        if search:
+            search = search.strip()
+            qs = qs.filter(
+                Q(asset__title__icontains=search)
+                | Q(user__username__icontains=search)
+                | Q(user__email__icontains=search)
+                | Q(ip_address__icontains=search)
+            )
         return qs
 
 
@@ -1284,6 +1416,22 @@ class AdminActivityLogView(generics.ListAPIView):
     serializer_class = AdminActivityLogSerializer
     permission_classes = [permissions.IsAdminUser]
     queryset = AdminActivityLog.objects.select_related("actor")
+
+    def get_queryset(self):
+        qs = AdminActivityLog.objects.select_related("actor").order_by("-created_at")
+        action = self.request.query_params.get("action")
+        if action:
+            qs = qs.filter(action__icontains=action)
+        search = self.request.query_params.get("search")
+        if search:
+            search = search.strip()
+            qs = qs.filter(
+                Q(action__icontains=search)
+                | Q(message__icontains=search)
+                | Q(actor__username__icontains=search)
+                | Q(target_type__icontains=search)
+            )
+        return qs
 
 
 def create_download_response(request, asset):
@@ -1463,7 +1611,29 @@ def asset_download_by_id(request, pk):
 @permission_classes([permissions.IsAdminUser])
 def admin_stats(request):
     paid_orders = Order.objects.filter(status=Order.Status.PAID)
+    paid_orders = Order.objects.filter(Q(status=Order.Status.PAID) | Q(status=Order.Status.APPROVED))
     pending_orders = Order.objects.filter(status=Order.Status.PENDING)
+    verification_orders = Order.objects.filter(status=Order.Status.VERIFICATION_PENDING)
+
+    from django.db.models.functions import ExtractMonth
+    current_year = timezone.now().year
+    month_aggregates = (
+        paid_orders.filter(created_at__year=current_year)
+        .annotate(month=ExtractMonth("created_at"))
+        .values("month")
+        .annotate(revenue=Sum("amount"), count=Count("id"))
+    )
+    month_map = {m["month"]: {"revenue": float(m["revenue"] or 0), "sales": m["count"]} for m in month_aggregates}
+    months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    monthly_sales = [
+        {
+            "month": months[i],
+            "sales": month_map.get(i + 1, {}).get("sales", 0),
+            "revenue": month_map.get(i + 1, {}).get("revenue", 0),
+        }
+        for i in range(12)
+    ]
+
     return Response(
         {
             "total_users": User.objects.count(),
@@ -1473,9 +1643,11 @@ def admin_stats(request):
             "asset_count": Asset.objects.count(),
             "review_count": Review.objects.count(),
             "pending_orders": pending_orders.count(),
+            "verification_pending_orders": verification_orders.count(),
             "featured_assets": Asset.objects.filter(is_featured=True).count(),
             "free_assets": Asset.objects.filter(is_free=True).count(),
             "premium_assets": Asset.objects.filter(is_free=False).count(),
+            "monthly_sales": monthly_sales,
         }
     )
 

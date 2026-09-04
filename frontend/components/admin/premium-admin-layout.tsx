@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   Bell,
   ChevronLeft,
   ChevronRight,
+  Download,
   Gauge,
   Gift,
   History,
@@ -14,6 +15,7 @@ import {
   Layers,
   Mail,
   Megaphone,
+  LogOut,
   Menu,
   Moon,
   Package,
@@ -30,14 +32,17 @@ import {
   X,
   type LucideIcon
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { adminGet, fallbackStats, type AdminStats } from "@/lib/admin-api";
+import { AUTH_CHANGE_EVENT, clearAuth, getStoredUser, type CurrentUser } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 type SidebarItem = {
   label: string;
   href: string;
   icon: LucideIcon;
+  badgeCount?: number;
 };
 
 type SidebarSection = {
@@ -45,49 +50,48 @@ type SidebarSection = {
   items: SidebarItem[];
 };
 
-const sections: SidebarSection[] = [
-  {
-    title: "MAIN",
-    items: [
-      { label: "Dashboard", href: "/admin-dashboard", icon: Gauge },
-      { label: "Assets", href: "/admin-dashboard/assets", icon: Package },
-      { label: "Categories", href: "/admin-dashboard/assets", icon: Layers },
-      { label: "Orders", href: "/admin-dashboard/orders", icon: ShoppingCart },
-      { label: "Users", href: "/admin-dashboard/users", icon: Users },
-      { label: "Reviews", href: "/admin-dashboard/reviews", icon: Star },
-      { label: "Downloads", href: "/admin-dashboard/downloads", icon: ChevronRight }
-    ]
-  },
-  {
-    title: "STORE",
-    items: [
-      { label: "Free Assets", href: "/admin-dashboard/assets?type=free", icon: Gift },
-      { label: "Premium Assets", href: "/admin-dashboard/assets?type=premium", icon: ShieldCheck },
-      { label: "Featured Assets", href: "/admin-dashboard/assets?featured=true", icon: Sparkles },
-      { label: "Update Logs", href: "/admin-dashboard/settings", icon: History }
-    ]
-  },
-  {
-    title: "MARKETING",
-    items: [
-      { label: "Coupons", href: "/admin-dashboard/settings", icon: Tags },
-      { label: "Banners", href: "/admin-dashboard/settings", icon: Image },
-      { label: "Announcements", href: "/admin-dashboard/settings", icon: Megaphone }
-    ]
-  },
-  {
-    title: "SYSTEM",
-    items: [
-      { label: "Settings", href: "/admin-dashboard/settings", icon: Settings },
-      { label: "Payments", href: "/admin-dashboard/settings", icon: ShieldCheck },
-      { label: "Email Templates", href: "/admin-dashboard/settings", icon: Mail },
-      { label: "Activity Logs", href: "/admin-dashboard/activity-logs", icon: History }
-    ]
-  }
-];
+function getSections(verificationCount: number): SidebarSection[] {
+  return [
+    {
+      title: "MAIN",
+      items: [
+        { label: "Dashboard", href: "/admin-dashboard", icon: Gauge },
+        { label: "Assets", href: "/admin-dashboard/assets", icon: Package },
+        { label: "Orders", href: "/admin-dashboard/orders", icon: ShoppingCart, badgeCount: verificationCount },
+        { label: "Users", href: "/admin-dashboard/users", icon: Users },
+        { label: "Reviews", href: "/admin-dashboard/reviews", icon: Star },
+        { label: "Downloads", href: "/admin-dashboard/downloads", icon: Download }
+      ]
+    },
+    {
+      title: "STORE",
+      items: [
+        { label: "Free Assets", href: "/admin-dashboard/assets?type=free", icon: Gift },
+        { label: "Premium Assets", href: "/admin-dashboard/assets?type=premium", icon: ShieldCheck },
+        { label: "Featured Assets", href: "/admin-dashboard/assets?featured=true", icon: Sparkles }
+      ]
+    },
+    {
+      title: "SYSTEM",
+      items: [
+        { label: "Store Settings", href: "/admin-dashboard/settings", icon: Settings },
+        { label: "Activity Logs", href: "/admin-dashboard/activity-logs", icon: History }
+      ]
+    }
+  ];
+}
 
-function SidebarContent({ collapsed, closeMobile }: { collapsed: boolean; closeMobile?: () => void }) {
+function SidebarContent({
+  collapsed,
+  closeMobile,
+  verificationCount
+}: {
+  collapsed: boolean;
+  closeMobile?: () => void;
+  verificationCount: number;
+}) {
   const pathname = usePathname();
+  const sections = getSections(verificationCount);
 
   return (
     <div className="flex h-full flex-col">
@@ -116,13 +120,21 @@ function SidebarContent({ collapsed, closeMobile }: { collapsed: boolean; closeM
                     href={item.href}
                     onClick={closeMobile}
                     className={cn(
-                      "group flex items-center gap-3 rounded px-3 py-2.5 text-sm font-semibold transition",
+                      "group relative flex items-center gap-3 rounded px-3 py-2.5 text-sm font-semibold transition",
                       active ? "bg-rail-red text-white red-glow" : "text-slate-400 hover:bg-white/8 hover:text-white"
                     )}
                     title={collapsed ? item.label : undefined}
                   >
                     <item.icon className="h-4 w-4 shrink-0" />
                     {!collapsed ? <span className="truncate">{item.label}</span> : null}
+                    {item.badgeCount && item.badgeCount > 0 ? (
+                      <span className={cn(
+                        "rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-extrabold text-black",
+                        collapsed ? "absolute -right-1 -top-1" : "ml-auto"
+                      )}>
+                        {item.badgeCount}
+                      </span>
+                    ) : null}
                   </Link>
                 );
               })}
@@ -144,6 +156,45 @@ function SidebarContent({ collapsed, closeMobile }: { collapsed: boolean; closeM
 export function PremiumAdminLayout({ title, children }: { title: string; children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [user, setUser] = useState<CurrentUser | null>(null);
+  const [verificationPending, setVerificationPending] = useState(0);
+  const [globalSearch, setGlobalSearch] = useState("");
+  const router = useRouter();
+  const pathname = usePathname();
+
+  useEffect(() => {
+    const syncUser = () => setUser(getStoredUser());
+    syncUser();
+    window.addEventListener(AUTH_CHANGE_EVENT, syncUser);
+    window.addEventListener("storage", syncUser);
+
+    adminGet<AdminStats>("/admin/stats/", fallbackStats).then((stats) => {
+      setVerificationPending(stats.verification_pending_orders || 0);
+    });
+
+    return () => {
+      window.removeEventListener(AUTH_CHANGE_EVENT, syncUser);
+      window.removeEventListener("storage", syncUser);
+    };
+  }, []);
+
+  function handleSearchSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!globalSearch.trim()) return;
+    const term = encodeURIComponent(globalSearch.trim());
+    if (pathname.includes("/orders")) {
+      router.push(`/admin-dashboard/orders?search=${term}`);
+    } else if (pathname.includes("/users")) {
+      router.push(`/admin-dashboard/users?search=${term}`);
+    } else {
+      router.push(`/admin-dashboard/assets?search=${term}`);
+    }
+  }
+
+  function handleLogout() {
+    clearAuth();
+    router.push("/admin-login");
+  }
 
   return (
     <section className="admin-rail-bg relative min-h-screen overflow-hidden text-white">
@@ -151,7 +202,7 @@ export function PremiumAdminLayout({ title, children }: { title: string; childre
       <div className="pointer-events-none absolute left-0 top-0 h-48 w-full bg-gradient-to-b from-white/6 to-transparent" />
 
       <aside className={cn("fixed left-0 top-0 z-40 hidden h-screen border-r border-white/10 bg-black/35 backdrop-blur-xl transition-all lg:block", collapsed ? "w-20" : "w-72")}>
-        <SidebarContent collapsed={collapsed} />
+        <SidebarContent collapsed={collapsed} verificationCount={verificationPending} />
         <Button
           variant="secondary"
           size="icon"
@@ -170,7 +221,7 @@ export function PremiumAdminLayout({ title, children }: { title: string; childre
             <Button variant="ghost" size="icon" onClick={() => setMobileOpen(false)} className="absolute right-3 top-3">
               <X size={18} />
             </Button>
-            <SidebarContent collapsed={false} closeMobile={() => setMobileOpen(false)} />
+            <SidebarContent collapsed={false} closeMobile={() => setMobileOpen(false)} verificationCount={verificationPending} />
           </motion.aside>
         </div>
       ) : null}
@@ -188,25 +239,50 @@ export function PremiumAdminLayout({ title, children }: { title: string; childre
               </div>
             </div>
 
-            <div className="hidden min-w-0 max-w-xl flex-1 items-center gap-3 rounded-lg border border-white/10 bg-white/[0.06] px-4 py-3 md:flex">
+            <form onSubmit={handleSearchSubmit} className="hidden min-w-0 max-w-xl flex-1 items-center gap-3 rounded-lg border border-white/10 bg-white/[0.06] px-4 py-3 md:flex">
               <Search className="h-4 w-4 text-slate-500" />
-              <input className="w-full bg-transparent text-sm outline-none placeholder:text-slate-500" placeholder="Search assets, users, orders, downloads..." />
-            </div>
+              <input
+                value={globalSearch}
+                onChange={(e) => setGlobalSearch(e.target.value)}
+                className="w-full bg-transparent text-sm outline-none placeholder:text-slate-500"
+                placeholder="Search assets, orders, users (Press Enter)..."
+              />
+            </form>
 
             <div className="flex items-center gap-2">
               <Button variant="ghost" size="icon" title="Dark mode">
                 <Moon size={18} />
               </Button>
-              <Button variant="ghost" size="icon" title="Notifications" className="relative">
+              <Link
+                href="/admin-dashboard/orders?status=VERIFICATION_PENDING"
+                title={verificationPending > 0 ? `${verificationPending} payments waiting verification` : "No pending verifications"}
+                className="relative flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 hover:bg-white/10"
+              >
                 <Bell size={18} />
-                <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-rail-red" />
-              </Button>
+                {verificationPending > 0 ? (
+                  <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-amber-500 text-[10px] font-black text-black animate-pulse">
+                    {verificationPending}
+                  </span>
+                ) : (
+                  <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-emerald-500" />
+                )}
+              </Link>
               <div className="hidden items-center gap-3 rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 sm:flex">
-                <div className="flex h-9 w-9 items-center justify-center rounded bg-gradient-to-br from-rail-red to-rail-amber text-sm font-black">GJ</div>
-                <div>
-                  <p className="text-sm font-bold">Admin</p>
-                  <p className="text-xs text-slate-500">Store Manager</p>
+                <div className="flex h-9 w-9 items-center justify-center rounded bg-gradient-to-br from-rail-red to-rail-amber text-sm font-black">
+                  {(user?.username || "AD").slice(0, 2).toUpperCase()}
                 </div>
+                <div className="text-left">
+                  <p className="max-w-[120px] truncate text-sm font-bold">{user?.username || "Admin"}</p>
+                  <p className="text-xs text-slate-400">{user?.is_staff ? "Staff Manager" : "Administrator"}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  title="Logout from admin session"
+                  className="ml-2 rounded p-1.5 text-slate-400 hover:bg-white/10 hover:text-red-300"
+                >
+                  <LogOut size={16} />
+                </button>
               </div>
             </div>
           </div>

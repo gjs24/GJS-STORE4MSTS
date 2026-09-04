@@ -9,10 +9,11 @@ from .models import AdminActivityLog, Asset, AssetImage, Category, DownloadLog, 
 
 class UserSerializer(serializers.ModelSerializer):
     date_joined = serializers.DateTimeField(read_only=True)
+    paid_orders_count = serializers.IntegerField(read_only=True, default=0)
 
     class Meta:
         model = User
-        fields = ["id", "username", "email", "first_name", "last_name", "is_staff", "is_active", "date_joined"]
+        fields = ["id", "username", "email", "first_name", "last_name", "is_staff", "is_active", "date_joined", "paid_orders_count"]
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -80,10 +81,12 @@ class UpdateLogSerializer(serializers.ModelSerializer):
 class ReviewSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
     user_id = serializers.IntegerField(source="user.id", read_only=True)
+    asset_title = serializers.CharField(source="asset.title", read_only=True)
+    asset_slug = serializers.CharField(source="asset.slug", read_only=True)
 
     class Meta:
         model = Review
-        fields = ["id", "asset", "user", "user_id", "rating", "comment", "is_approved", "created_at"]
+        fields = ["id", "asset", "asset_title", "asset_slug", "user", "user_id", "rating", "comment", "is_approved", "created_at"]
         read_only_fields = ["user", "is_approved", "created_at"]
 
 
