@@ -38,6 +38,7 @@ export type DownloadLog = {
 export type WishlistItem = {
   id: number;
   asset: Asset;
+  download_enabled?: boolean;
   created_at: string;
 };
 

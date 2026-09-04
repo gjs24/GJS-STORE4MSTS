@@ -300,11 +300,21 @@ class DownloadLogSerializer(serializers.ModelSerializer):
 class WishlistSerializer(serializers.ModelSerializer):
     asset = AssetListSerializer(read_only=True)
     asset_id = serializers.PrimaryKeyRelatedField(source="asset", queryset=Asset.objects.all(), write_only=True)
+    download_enabled = serializers.SerializerMethodField()
 
     class Meta:
         model = Wishlist
-        fields = ["id", "asset", "asset_id", "created_at"]
+        fields = ["id", "asset", "asset_id", "download_enabled", "created_at"]
         read_only_fields = ["created_at"]
+
+    def get_download_enabled(self, obj):
+        request = self.context.get("request")
+        user = request.user if request and request.user.is_authenticated else None
+        if not user:
+            return False
+        if obj.asset.is_free:
+            return True
+        return Order.objects.filter(user=user, asset=obj.asset, status=Order.Status.PAID).exists()
 
 
 class NotifyRequestSerializer(serializers.ModelSerializer):

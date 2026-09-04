@@ -32,18 +32,29 @@ export function AccountList({ type }: AccountListProps) {
     const path = type === "purchases" ? "/user/purchases/" : type === "downloads" ? "/user/downloads/" : "/wishlist/";
     const loadRows = () => userGet<Array<StoreOrder | DownloadLog | WishlistItem>>(path)
       .then((data) => {
-        const nextRows = data.map((item) => ({
-          id: item.id,
-          asset: item.asset,
-          meta:
-            type === "purchases"
-              ? `Purchased ${formatDate((item as StoreOrder).created_at)}`
-              : type === "downloads"
-                ? `Downloaded ${formatDate((item as DownloadLog).downloaded_at)}`
-                : `Saved ${formatDate((item as WishlistItem).created_at)}`,
-          status: "status" in item ? item.status : undefined,
-          downloadEnabled: "download_enabled" in item ? Boolean(item.download_enabled) : type === "downloads",
-        }));
+        const nextRows = data.map((item) => {
+          let downloadEnabled = false;
+          if (type === "purchases") {
+            downloadEnabled = "download_enabled" in item ? Boolean(item.download_enabled) : false;
+          } else if (type === "downloads") {
+            downloadEnabled = true;
+          } else if (type === "wishlist") {
+            downloadEnabled = "download_enabled" in item ? Boolean(item.download_enabled) : Boolean(item.asset?.is_free);
+          }
+
+          return {
+            id: item.id,
+            asset: item.asset,
+            meta:
+              type === "purchases"
+                ? `Purchased ${formatDate((item as StoreOrder).created_at)}`
+                : type === "downloads"
+                  ? `Downloaded ${formatDate((item as DownloadLog).downloaded_at)}`
+                  : `Saved ${formatDate((item as WishlistItem).created_at)}`,
+            status: "status" in item ? item.status : undefined,
+            downloadEnabled,
+          };
+        });
         setRows(nextRows);
         setMessage(nextRows.length ? "" : "No items yet. Browse the marketplace to build your simulator library.");
       })
@@ -150,28 +161,87 @@ export function AccountList({ type }: AccountListProps) {
                 {row.status ? <span className="rounded border border-white/10 px-2 py-1">{row.status}</span> : null}
               </div>
             </div>
-            <div className="flex flex-wrap gap-2">
-              {type === "wishlist" ? (
+            <div className="flex flex-wrap items-center gap-2">
+              {type === "wishlist" && (
                 <>
-                  <Link href={`/assets/${row.asset.slug}`} className="rounded border border-white/10 px-4 py-2 text-sm font-semibold hover:border-white/30">
-                    <ShoppingCart className="mr-2 inline" size={16} /> View
+                  <Link
+                    href={`/assets/${row.asset.slug}`}
+                    className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3.5 py-2 text-xs font-semibold text-slate-200 transition-colors hover:border-white/20 hover:text-white"
+                  >
+                    <ShoppingCart size={15} />
+                    <span>View Product</span>
                   </Link>
-                  <button onClick={() => handleRemoveWishlist(row.id)} disabled={busyId === row.id} className="rounded border border-rose-500/30 px-3 py-2 text-sm font-semibold text-rose-300 hover:bg-rose-500/10 disabled:opacity-50">
-                    <Trash2 className="mr-1 inline" size={15} /> Remove
+
+                  {row.downloadEnabled ? (
+                    <button
+                      onClick={() => handleDownload(row.asset)}
+                      disabled={busyId === row.asset.id}
+                      className="flex items-center gap-1.5 rounded-lg bg-rail-red px-3.5 py-2 text-xs font-bold text-white shadow-glow transition-all hover:bg-rail-red/90 disabled:opacity-60"
+                    >
+                      <Download size={15} />
+                      <span>Download</span>
+                    </button>
+                  ) : !row.asset.is_upcoming ? (
+                    <Link
+                      href={`/assets/${row.asset.slug}`}
+                      className="flex items-center gap-1.5 rounded-lg bg-rail-red px-3.5 py-2 text-xs font-bold text-white shadow-glow transition-all hover:bg-rail-red/90"
+                    >
+                      <span>Buy {row.asset.is_free ? "Free" : `INR ${row.asset.price}`}</span>
+                    </Link>
+                  ) : null}
+
+                  <button
+                    onClick={() => handleRemoveWishlist(row.id)}
+                    disabled={busyId === row.id}
+                    className="flex items-center gap-1 rounded-lg border border-rose-500/30 px-3 py-2 text-xs font-semibold text-rose-300 transition-colors hover:bg-rose-500/10 disabled:opacity-50"
+                    title="Remove from wishlist"
+                  >
+                    <Trash2 size={14} />
+                    <span>Remove</span>
                   </button>
                 </>
-              ) : null}
-              {type === "purchases" && row.downloadEnabled ? (
-                <button onClick={() => handleInvoice(row.id)} disabled={busyId === row.id} className="rounded border border-white/10 px-4 py-2 text-sm font-semibold disabled:opacity-60">
-                  <FileText className="mr-2 inline" size={16} /> Invoice
+              )}
+
+              {type === "purchases" && (
+                <>
+                  {row.downloadEnabled && (
+                    <button
+                      onClick={() => handleInvoice(row.id)}
+                      disabled={busyId === row.id}
+                      className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3.5 py-2 text-xs font-semibold text-slate-200 transition-colors hover:border-white/20 hover:text-white disabled:opacity-60"
+                    >
+                      <FileText size={15} />
+                      <span>Invoice</span>
+                    </button>
+                  )}
+
+                  {row.downloadEnabled ? (
+                    <button
+                      onClick={() => handleDownload(row.asset)}
+                      disabled={busyId === row.asset.id}
+                      className="flex items-center gap-1.5 rounded-lg bg-rail-red px-3.5 py-2 text-xs font-bold text-white shadow-glow transition-all hover:bg-rail-red/90 disabled:opacity-60"
+                    >
+                      <PackageCheck size={15} />
+                      <span>Download</span>
+                    </button>
+                  ) : (
+                    <span className="rounded-lg border border-rail-amber/30 bg-rail-amber/10 px-3 py-1.5 text-xs font-semibold text-rail-amber">
+                      Payment Pending
+                    </span>
+                  )}
+                </>
+              )}
+
+              {type === "downloads" && (
+                <button
+                  onClick={() => handleDownload(row.asset)}
+                  disabled={busyId === row.asset.id}
+                  className="flex items-center gap-1.5 rounded-lg bg-rail-red px-3.5 py-2 text-xs font-bold text-white shadow-glow transition-all hover:bg-rail-red/90 disabled:opacity-60"
+                >
+                  <Download size={15} />
+                  <span>Download Again</span>
                 </button>
-              ) : null}
-              {type !== "purchases" || row.downloadEnabled ? (
-                <button onClick={() => handleDownload(row.asset)} disabled={busyId === row.asset.id} className="rounded bg-rail-red px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
-                  {type === "purchases" ? <PackageCheck className="mr-2 inline" size={16} /> : <Download className="mr-2 inline" size={16} />}
-                  Download
-                </button>
-              ) : null}
+              )}
             </div>
           </div>
         ))}
