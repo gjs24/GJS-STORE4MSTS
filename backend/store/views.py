@@ -1,6 +1,8 @@
 import base64
+from datetime import timedelta
 import json
 import logging
+import random
 import re
 from pathlib import PurePath
 from rest_framework.pagination import PageNumberPagination
@@ -8,6 +10,7 @@ from rest_framework.pagination import PageNumberPagination
 import requests
 from django.conf import settings
 from django.contrib.auth.models import User
+from django.core.mail import EmailMultiAlternatives
 from django.http import FileResponse, HttpResponse
 from django.db import transaction
 from django.db.models import Avg, Count, Q, Sum
@@ -25,7 +28,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 
 from .throttles import DownloadRateThrottle
 
-from .models import AdminActivityLog, Asset, Category, DownloadLog, NotifyRequest, Order, Payment, Review, SiteSetting, Wishlist
+from .models import AdminActivityLog, Asset, Category, DownloadLog, EmailOTP, NotifyRequest, Order, Payment, Review, SiteSetting, Wishlist
 from .permissions import IsAdminOrReadOnly
 from .serializers import (
     AssetDetailSerializer,
@@ -39,8 +42,10 @@ from .serializers import (
     PaymentVerifySerializer,
     RegisterSerializer,
     ReviewSerializer,
+    SendOTPSerializer,
     SiteSettingSerializer,
     UserSerializer,
+    VerifyOTPSerializer,
     WishlistSerializer,
 )
 
@@ -314,6 +319,244 @@ class GoogleLoginView(APIView):
                 "refresh": str(refresh),
                 "user": UserSerializer(user).data,
             }
+        )
+
+
+def send_otp_email(email, otp_code, purpose):
+    subject_map = {
+        "signup": "Your Verification Code - MSTS-GJS Production Store",
+        "login": "Your Login Code - MSTS-GJS Production Store",
+        "reset": "Your Password Reset Code - MSTS-GJS Production Store",
+    }
+    subject = subject_map.get(purpose, "Your Verification Code - MSTS-GJS Production Store")
+
+    action_text = (
+        "complete your registration"
+        if purpose == "signup"
+        else "sign in to your account"
+        if purpose == "login"
+        else "reset your password"
+    )
+
+    text_content = f"""Hello,
+
+Your verification code for MSTS-GJS Production Store is: {otp_code}
+
+Please use this code to {action_text}.
+This code is valid for 10 minutes. For security, please do not share this code with anyone.
+
+Regards,
+MSTS-GJS Production Team
+https://msts-gjs.com
+"""
+
+    html_content = f"""<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #0b0f19; color: #f8fafc; margin: 0; padding: 20px; }}
+    .container {{ max-width: 520px; margin: 0 auto; background: #111827; border: 1px solid #1f2937; border-radius: 12px; padding: 32px; }}
+    .logo {{ color: #e11d48; font-size: 20px; font-weight: bold; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 20px; text-align: center; }}
+    .code-box {{ background: #1f2937; border: 1px solid #374151; border-radius: 8px; text-align: center; padding: 20px; margin: 24px 0; }}
+    .code {{ font-size: 36px; font-weight: 800; letter-spacing: 8px; color: #f43f5e; margin: 0; font-family: monospace; }}
+    .validity {{ color: #94a3b8; font-size: 13px; margin-top: 8px; }}
+    .footer {{ color: #64748b; font-size: 12px; text-align: center; margin-top: 24px; }}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">MSTS-GJS Production Store</div>
+    <h2 style="margin-top:0; color:#fff; font-size:18px;">Email Verification</h2>
+    <p style="color:#cbd5e1; font-size:14px; line-height:1.5;">
+      Use the 6-digit verification code below to {action_text}:
+    </p>
+    <div class="code-box">
+      <div class="code">{otp_code}</div>
+      <div class="validity">Valid for 10 minutes</div>
+    </div>
+    <p style="color:#94a3b8; font-size:13px; line-height:1.4;">
+      If you did not request this verification code, you can safely ignore this email.
+    </p>
+    <div class="footer">
+      &copy; {timezone.now().year} MSTS-GJS Production Store. All rights reserved.
+    </div>
+  </div>
+</body>
+</html>
+"""
+    try:
+        from_email = getattr(settings, "DEFAULT_FROM_EMAIL", "noreply@msts-gjs.com")
+        msg = EmailMultiAlternatives(subject, text_content, from_email, [email])
+        msg.attach_alternative(html_content, "text/html")
+        msg.send(fail_silently=False)
+        return True, ""
+    except Exception as exc:
+        logger.exception("Failed to send OTP email to %s: %s", email, exc)
+        return False, str(exc)
+
+
+class SendOTPView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        serializer = SendOTPSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        email = serializer.validated_data["email"].lower().strip()
+        purpose = serializer.validated_data.get("purpose", "login")
+
+        if purpose == "login":
+            if not User.objects.filter(email__iexact=email).exists():
+                return Response(
+                    {"detail": "No account found with this email address. Please sign up first."},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+        elif purpose == "signup":
+            if User.objects.filter(email__iexact=email).exists():
+                return Response(
+                    {"detail": "An account with this email address already exists. Please login instead."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        recent_otp = EmailOTP.objects.filter(
+            email__iexact=email,
+            created_at__gte=timezone.now() - timedelta(seconds=60),
+        ).first()
+        if recent_otp:
+            return Response(
+                {"detail": "Please wait a minute before requesting another verification code."},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+
+        EmailOTP.objects.filter(email__iexact=email, purpose=purpose, is_used=False).update(is_used=True)
+
+        otp_code = f"{random.SystemRandom().randint(100000, 999999)}"
+        expires_at = timezone.now() + timedelta(minutes=10)
+
+        EmailOTP.objects.create(
+            email=email,
+            otp_code=otp_code,
+            purpose=purpose,
+            expires_at=expires_at,
+        )
+
+        sent, err = send_otp_email(email, otp_code, purpose)
+        if not sent:
+            return Response(
+                {"detail": f"Could not send email: {err}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        return Response(
+            {
+                "success": True,
+                "message": f"A 6-digit verification code has been sent to {email}.",
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class VerifyOTPView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        serializer = VerifyOTPSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        email = serializer.validated_data["email"].lower().strip()
+        otp_code = serializer.validated_data["otp"].strip()
+        purpose = serializer.validated_data.get("purpose", "login")
+
+        otp_record = EmailOTP.objects.filter(
+            email__iexact=email,
+            purpose=purpose,
+            is_used=False,
+        ).order_by("-created_at").first()
+
+        if not otp_record:
+            return Response(
+                {"detail": "No active verification code found. Please request a new code."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not otp_record.is_valid():
+            if otp_record.attempts >= 5:
+                return Response(
+                    {"detail": "Too many failed attempts. Please request a new verification code."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            return Response(
+                {"detail": "Verification code has expired. Please request a new code."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if otp_record.otp_code != otp_code:
+            otp_record.attempts += 1
+            otp_record.save(update_fields=["attempts"])
+            remaining = max(0, 5 - otp_record.attempts)
+            return Response(
+                {"detail": f"Incorrect verification code. {remaining} attempt(s) remaining."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        otp_record.is_used = True
+        otp_record.save(update_fields=["is_used"])
+
+        if purpose == "login":
+            user = User.objects.filter(email__iexact=email).first()
+            if not user:
+                return Response(
+                    {"detail": "Account not found."},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+        elif purpose == "signup":
+            username = serializer.validated_data.get("username", "").strip()
+            password = serializer.validated_data.get("password", "").strip()
+            first_name = serializer.validated_data.get("first_name", "").strip()
+            last_name = serializer.validated_data.get("last_name", "").strip()
+
+            if not username:
+                base = re.sub(r"[^a-zA-Z0-9_]", "_", email.split("@")[0]).strip("_") or "user"
+                username = base[:140]
+                suffix = 1
+                while User.objects.filter(username=username).exists():
+                    suffix_text = f"_{suffix}"
+                    username = f"{base[:150 - len(suffix_text)]}{suffix_text}"
+                    suffix += 1
+
+            if User.objects.filter(username=username).exists():
+                return Response(
+                    {"detail": "This username is already taken. Please choose a different username."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            user = User(
+                username=username,
+                email=email,
+                first_name=first_name,
+                last_name=last_name,
+                is_active=True,
+            )
+            if password:
+                user.set_password(password)
+            else:
+                user.set_unusable_password()
+            user.save()
+        else:
+            return Response({"success": True, "message": "Verification successful."})
+
+        refresh = RefreshToken.for_user(user)
+        return Response(
+            {
+                "access": str(refresh.access_token),
+                "refresh": str(refresh),
+                "user": UserSerializer(user).data,
+                "message": "Login successful.",
+            },
+            status=status.HTTP_200_OK,
         )
 
 

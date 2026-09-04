@@ -261,3 +261,32 @@ class SiteSetting(models.Model):
     def load(cls):
         setting, _ = cls.objects.get_or_create(pk=1)
         return setting
+
+
+class EmailOTP(models.Model):
+    class Purpose(models.TextChoices):
+        SIGNUP = "signup", "Signup"
+        LOGIN = "login", "Login"
+        RESET = "reset", "Password Reset"
+
+    email = models.EmailField(db_index=True)
+    otp_code = models.CharField(max_length=6)
+    purpose = models.CharField(max_length=20, choices=Purpose.choices, default=Purpose.LOGIN)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    is_used = models.BooleanField(default=False)
+    attempts = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["email", "purpose", "is_used"]),
+        ]
+
+    def __str__(self):
+        return f"OTP for {self.email} ({self.purpose}) - Used: {self.is_used}"
+
+    def is_valid(self):
+        from django.utils import timezone
+        return not self.is_used and self.attempts < 5 and timezone.now() <= self.expires_at
+
