@@ -82,9 +82,12 @@ export function AssetActions({ asset }: { asset: Asset }) {
           await startCashfreeCheckout(nextOrder);
           setMessage("Complete the Cashfree payment to unlock this download.");
           return;
+        } else if (nextOrder.status === "PENDING" && nextOrder.manual_payment) {
+          setMessage("Scan the UPI QR code below and submit your UTR / Transaction ID for admin verification.");
+          return;
         } else if (nextOrder.status === "PENDING") {
           setMessage(
-            "Cashfree checkout could not start for this order. Please contact support or try again after payment settings are updated."
+            "Payment checkout could not start for this order. Please contact support or try again shortly."
           );
           return;
         } else if (nextOrder.status === "VERIFICATION_PENDING") {

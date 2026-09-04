@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Download, FileText, PackageCheck, ShoppingCart } from "lucide-react";
+import { Download, FileText, PackageCheck, ShoppingCart, Trash2 } from "lucide-react";
 import { PriceDisplay } from "@/components/price-display";
 import type { Asset } from "@/lib/api";
-import { downloadAsset, downloadInvoice, type DownloadLog, type StoreOrder, type WishlistItem, userGet, verifyPayment } from "@/lib/store-api";
+import { downloadAsset, downloadInvoice, removeFromWishlist, type DownloadLog, type StoreOrder, type WishlistItem, userGet, verifyPayment } from "@/lib/store-api";
 
 type AccountListProps = {
   type: "purchases" | "downloads" | "wishlist";
@@ -107,6 +107,19 @@ export function AccountList({ type }: AccountListProps) {
     }
   }
 
+  async function handleRemoveWishlist(wishlistId: number) {
+    setBusyId(wishlistId);
+    try {
+      await removeFromWishlist(wishlistId);
+      setRows((current) => current.filter((r) => r.id !== wishlistId));
+      setMessage("Item removed from your wishlist.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not remove item from wishlist.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   if (message && rows.length === 0) {
     return (
       <div className="rounded border border-white/10 bg-white/[0.03] p-6 text-slate-300">
@@ -139,9 +152,14 @@ export function AccountList({ type }: AccountListProps) {
             </div>
             <div className="flex flex-wrap gap-2">
               {type === "wishlist" ? (
-                <Link href={`/assets/${row.asset.slug}`} className="rounded border border-white/10 px-4 py-2 text-sm font-semibold">
-                  <ShoppingCart className="mr-2 inline" size={16} /> View
-                </Link>
+                <>
+                  <Link href={`/assets/${row.asset.slug}`} className="rounded border border-white/10 px-4 py-2 text-sm font-semibold hover:border-white/30">
+                    <ShoppingCart className="mr-2 inline" size={16} /> View
+                  </Link>
+                  <button onClick={() => handleRemoveWishlist(row.id)} disabled={busyId === row.id} className="rounded border border-rose-500/30 px-3 py-2 text-sm font-semibold text-rose-300 hover:bg-rose-500/10 disabled:opacity-50">
+                    <Trash2 className="mr-1 inline" size={15} /> Remove
+                  </button>
+                </>
               ) : null}
               {type === "purchases" && row.downloadEnabled ? (
                 <button onClick={() => handleInvoice(row.id)} disabled={busyId === row.id} className="rounded border border-white/10 px-4 py-2 text-sm font-semibold disabled:opacity-60">

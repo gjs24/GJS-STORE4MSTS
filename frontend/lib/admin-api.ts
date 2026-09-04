@@ -32,7 +32,12 @@ export type AdminOrder = {
   asset?: Asset;
   amount: string;
   currency: string;
-  status: "PENDING" | "PAID" | "FAILED" | "REFUNDED";
+  status: "PENDING" | "VERIFICATION_PENDING" | "APPROVED" | "PAID" | "REJECTED" | "FAILED" | "REFUNDED";
+  order_id?: string;
+  provider_order_id?: string;
+  utr?: string;
+  payer_name?: string;
+  payment_submitted_at?: string | null;
   created_at: string;
 };
 

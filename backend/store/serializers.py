@@ -122,6 +122,8 @@ class AssetListSerializer(serializers.ModelSerializer):
         ]
 
     def get_average_rating(self, obj):
+        if hasattr(obj, "avg_rating") and obj.avg_rating is not None:
+            return round(float(obj.avg_rating), 1)
         rating = obj.reviews.filter(is_approved=True).aggregate(avg=Avg("rating"))["avg"]
         return round(rating or 0, 1)
 
@@ -144,11 +146,9 @@ class AssetListSerializer(serializers.ModelSerializer):
         if not obj.thumbnail:
             return None
         try:
-            if not obj.thumbnail.storage.exists(obj.thumbnail.name):
-                return None
+            url = obj.thumbnail.url
         except Exception:
             return None
-        url = obj.thumbnail.url
         if url.startswith("http://") or url.startswith("https://"):
             return url
         request = self.context.get("request")
@@ -157,7 +157,7 @@ class AssetListSerializer(serializers.ModelSerializer):
 
 class AssetDetailSerializer(AssetListSerializer):
     images = AssetImageSerializer(many=True, read_only=True)
-    reviews = ReviewSerializer(many=True, read_only=True)
+    reviews = serializers.SerializerMethodField()
     updates = UpdateLogSerializer(many=True, read_only=True)
     can_download = serializers.SerializerMethodField()
 
@@ -177,6 +177,10 @@ class AssetDetailSerializer(AssetListSerializer):
             "can_download",
             "updated_at",
         ]
+
+    def get_reviews(self, obj):
+        approved = obj.reviews.filter(is_approved=True).select_related("user")
+        return ReviewSerializer(approved, many=True, context=self.context).data
 
     def get_can_download(self, obj):
         user = self.context["request"].user

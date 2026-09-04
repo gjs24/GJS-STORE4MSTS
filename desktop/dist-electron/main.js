@@ -19,6 +19,9 @@ function createWindow() {
     if (isDev) {
         win.loadURL(process.env.ELECTRON_RENDERER_URL);
     }
+    else {
+        win.loadFile(node_path_1.default.join(__dirname, "../renderer/out/index.html"));
+    }
 }
 electron_1.app.whenReady().then(createWindow);
 electron_1.app.on("window-all-closed", () => {

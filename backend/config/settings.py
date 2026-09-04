@@ -99,7 +99,6 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_CLASSES": [
         "rest_framework.throttling.UserRateThrottle",
         "rest_framework.throttling.AnonRateThrottle",
-        "store.throttles.DownloadRateThrottle",
     ],
     "DEFAULT_THROTTLE_RATES": {
         "user": env("DRF_USER_THROTTLE_RATE", default="5000/day"),

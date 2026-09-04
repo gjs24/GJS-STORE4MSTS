@@ -1,5 +1,8 @@
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
-import { Heart, Search, TrainFront } from "lucide-react";
+import { Heart, Menu, Search, TrainFront, X } from "lucide-react";
 import { AuthNav } from "@/components/auth-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { AdminNotification } from "@/components/admin-notification";
@@ -13,6 +16,8 @@ const links = [
 ];
 
 export function SiteHeader() {
+  const [mobileOpen, setMobileOpen] = useState(false);
+
   return (
     <header className="sticky top-0 z-50 border-b border-white/10 bg-rail-black/85 backdrop-blur-xl">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
@@ -27,7 +32,7 @@ export function SiteHeader() {
         </Link>
         <nav className="hidden items-center gap-6 text-sm text-slate-300 md:flex">
           {links.map(([label, href]) => (
-            <Link key={href} href={href} className="hover:text-white">
+            <Link key={href} href={href} className="hover:text-white transition-colors">
               {label}
             </Link>
           ))}
@@ -35,15 +40,45 @@ export function SiteHeader() {
         <div className="flex items-center gap-2">
           <ThemeToggle />
           <AdminNotification />
-          <Link aria-label="Search assets" href="/assets" className="rounded border border-white/10 p-2 text-slate-300 hover:text-white">
+          <Link aria-label="Search assets" href="/assets" className="rounded border border-white/10 p-2 text-slate-300 hover:text-white transition-colors">
             <Search size={18} />
           </Link>
-          <Link aria-label="Wishlist" href="/wishlist" className="rounded border border-white/10 p-2 text-slate-300 hover:text-white">
+          <Link aria-label="Wishlist" href="/wishlist" className="rounded border border-white/10 p-2 text-slate-300 hover:text-white transition-colors">
             <Heart size={18} />
           </Link>
-          <AuthNav />
+          <div className="hidden sm:block">
+            <AuthNav />
+          </div>
+          <button
+            type="button"
+            aria-label="Toggle navigation menu"
+            onClick={() => setMobileOpen((prev) => !prev)}
+            className="rounded border border-white/10 p-2 text-slate-300 hover:text-white md:hidden"
+          >
+            {mobileOpen ? <X size={18} /> : <Menu size={18} />}
+          </button>
         </div>
       </div>
+
+      {mobileOpen && (
+        <div className="border-t border-white/10 bg-rail-black/95 px-4 py-4 md:hidden">
+          <nav className="flex flex-col gap-3 text-sm text-slate-200">
+            {links.map(([label, href]) => (
+              <Link
+                key={href}
+                href={href}
+                onClick={() => setMobileOpen(false)}
+                className="rounded px-3 py-2 transition-colors hover:bg-white/5 hover:text-white"
+              >
+                {label}
+              </Link>
+            ))}
+          </nav>
+          <div className="mt-4 border-t border-white/10 pt-4 sm:hidden">
+            <AuthNav />
+          </div>
+        </div>
+      )}
     </header>
   );
 }

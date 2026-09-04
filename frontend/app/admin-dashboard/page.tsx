@@ -46,6 +46,7 @@ function monthIndex(value: string) {
 export default function AdminDashboardPage() {
   const [stats, setStats] = useState<AdminStats>(fallbackStats);
   const [orders, setOrders] = useState<AdminOrder[]>([]);
+  const [orderCount, setOrderCount] = useState(0);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
 
@@ -53,16 +54,17 @@ export default function AdminDashboardPage() {
     Promise.all([
       adminGet<AdminStats>("/admin/stats/", fallbackStats),
       adminGet<any>("/admin/orders/", {
-  count: 0,
-  next: null,
-  previous: null,
-  results: [],
-}),
+        count: 0,
+        next: null,
+        previous: null,
+        results: [],
+      }),
       adminGet<AdminUser[]>("/admin/users/", []),
       adminGet<Asset[]>("/admin/assets/", [])
     ]).then(([nextStats, nextOrders, nextUsers, nextAssets]) => {
       setStats(nextStats);
-      setOrders(nextOrders.results);
+      setOrders(nextOrders.results || []);
+      setOrderCount(typeof nextOrders.count === "number" ? nextOrders.count : (nextOrders.results?.length || 0));
       setUsers(nextUsers);
       setAssets(nextAssets);
     });
@@ -70,12 +72,12 @@ export default function AdminDashboardPage() {
 
   const metrics = useMemo<DashboardMetric[]>(() => [
     { label: "Total Users", value: stats.total_users, displayValue: formatNumber(stats.total_users), change: stats.total_users ? "Live user count" : "Start phase", tone: "cyan", icon: Users },
-    { label: "Total Orders", value: orders.length, displayValue: formatNumber(orders.length), change: orders.length ? "Live orders" : "No orders yet", tone: "amber", icon: ShoppingCart },
+    { label: "Total Orders", value: orderCount, displayValue: formatNumber(orderCount), change: orderCount ? "Live orders" : "No orders yet", tone: "amber", icon: ShoppingCart },
     { label: "Total Sales", value: Number(stats.total_sales) || 0, displayValue: formatMoney(stats.total_sales), change: Number(stats.total_sales) ? "Paid revenue" : "No revenue yet", tone: "red", icon: BadgeIndianRupee },
     { label: "Total Downloads", value: stats.total_downloads, displayValue: formatNumber(stats.total_downloads), change: stats.total_downloads ? "Live downloads" : "No downloads yet", tone: "emerald", icon: Download },
     { label: "Total Assets", value: stats.asset_count, displayValue: formatNumber(stats.asset_count), change: stats.asset_count ? `${stats.featured_assets} featured` : "No assets yet", tone: "amber", icon: Boxes },
     { label: "Page Views", value: 0, displayValue: "0", change: "Not tracked", tone: "cyan", icon: Eye }
-  ], [orders.length, stats]);
+  ], [orderCount, stats]);
 
   const monthlyData = useMemo<SalesPoint[]>(() => {
     const months = salesOverview.map((point) => ({ ...point }));

@@ -9,7 +9,9 @@ import requests
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.http import FileResponse, HttpResponse
-from django.db.models import Count, Q, Sum
+from django.db import transaction
+from django.db.models import Avg, Count, Q, Sum
+from django.db.models.deletion import ProtectedError
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import generics, permissions, status, viewsets
@@ -20,6 +22,8 @@ from rest_framework.throttling import UserRateThrottle
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
+
+from .throttles import DownloadRateThrottle
 
 from .models import AdminActivityLog, Asset, Category, DownloadLog, NotifyRequest, Order, Payment, Review, SiteSetting, Wishlist
 from .permissions import IsAdminOrReadOnly
@@ -164,8 +168,12 @@ def sync_cashfree_order(order):
 
 def ensure_cashfree_payment(order, request):
     sync_order_download_access(order)
-    if order_has_download_access(order) or not cashfree_is_configured():
-        return cashfree_is_configured(), "" if cashfree_is_configured() else "Cashfree payment is not configured. Add Cashfree client ID and secret before selling paid products."
+    if order_has_download_access(order):
+        return True, ""
+    if not cashfree_is_configured():
+        if getattr(settings, "MANUAL_UPI_ID", ""):
+            return True, ""
+        return False, "Neither Cashfree payment nor Manual UPI is configured. Please contact the administrator."
     payment = getattr(order, "payment", None)
     if (
         payment
@@ -376,11 +384,12 @@ class AssetViewSet(viewsets.ModelViewSet):
             qs = qs.filter(is_featured=True)
         if upcoming == "true":
             qs = qs.filter(is_upcoming=True)
-        if deal == "true":
-            qs = qs.filter(deal_is_open=True)
-        return qs.annotate(review_count=Count("reviews", filter=Q(reviews__is_approved=True)))
+        return qs.annotate(
+            review_count=Count("reviews", filter=Q(reviews__is_approved=True)),
+            avg_rating=Avg("reviews__rating", filter=Q(reviews__is_approved=True)),
+        )
 
-    @action(detail=True, methods=["get", "post"], permission_classes=[permissions.IsAuthenticated], throttle_classes=[UserRateThrottle])
+    @action(detail=True, methods=["get", "post"], permission_classes=[permissions.IsAuthenticated], throttle_classes=[DownloadRateThrottle])
     def download(self, request, slug=None):
         asset = self.get_object()
         return create_download_response(request, asset)
@@ -589,8 +598,25 @@ class ReviewCreateView(generics.CreateAPIView):
     serializer_class = ReviewSerializer
     permission_classes = [permissions.IsAuthenticated]
 
-    def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+    def create(self, request, *args, **kwargs):
+        asset_id = request.data.get("asset") or request.data.get("asset_id")
+        if not asset_id:
+            return Response({"detail": "asset is required."}, status=status.HTTP_400_BAD_REQUEST)
+        asset = get_object_or_404(Asset, pk=asset_id)
+        rating = request.data.get("rating")
+        if not rating or not str(rating).isdigit() or not (1 <= int(rating) <= 5):
+            return Response({"detail": "rating must be an integer between 1 and 5."}, status=status.HTTP_400_BAD_REQUEST)
+        comment = str(request.data.get("comment", "")).strip()
+        review, created = Review.objects.update_or_create(
+            user=request.user,
+            asset=asset,
+            defaults={
+                "rating": int(rating),
+                "comment": comment,
+                "is_approved": True,
+            },
+        )
+        return Response(ReviewSerializer(review, context={"request": request}).data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
 
 
 class WishlistView(generics.ListCreateAPIView):
@@ -600,8 +626,28 @@ class WishlistView(generics.ListCreateAPIView):
     def get_queryset(self):
         return Wishlist.objects.filter(user=self.request.user).select_related("asset", "asset__category")
 
-    def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+    def create(self, request, *args, **kwargs):
+        asset_id = request.data.get("asset_id")
+        if not asset_id:
+            return Response({"detail": "asset_id is required."}, status=status.HTTP_400_BAD_REQUEST)
+        asset = get_object_or_404(Asset, pk=asset_id)
+        wishlist_item, created = Wishlist.objects.get_or_create(user=request.user, asset=asset)
+        return Response(WishlistSerializer(wishlist_item, context={"request": request}).data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+
+    def delete(self, request, *args, **kwargs):
+        asset_id = request.query_params.get("asset_id") or request.data.get("asset_id")
+        if asset_id:
+            Wishlist.objects.filter(user=request.user, asset_id=asset_id).delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        return Response({"detail": "asset_id is required to delete wishlist item."}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class WishlistDetailView(generics.DestroyAPIView):
+    serializer_class = WishlistSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return Wishlist.objects.filter(user=self.request.user)
 
 
 class AdminAssetViewSet(viewsets.ModelViewSet):
@@ -704,6 +750,20 @@ class AdminAssetViewSet(viewsets.ModelViewSet):
             return Response(
                 {"detail": f"Asset update failed while saving files: {type(exc).__name__}. Check Cloudinary storage settings, file size, and file type."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    def destroy(self, request, *args, **kwargs):
+        asset = self.get_object()
+        try:
+            response = super().destroy(request, *args, **kwargs)
+            log_admin_activity(request, "Product deleted", "Asset", asset.id, f"Deleted product {asset.title}")
+            return response
+        except ProtectedError:
+            return Response(
+                {
+                    "detail": f'Cannot delete "{asset.title}" because customers have already purchased or ordered it. You can toggle "Visible" off instead to hide it from the store.'
+                },
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
     @action(detail=True, methods=["post"])
@@ -974,7 +1034,7 @@ def grant_google_drive_access(file_id, email):
 
 @api_view(["GET", "POST"])
 @permission_classes([permissions.IsAuthenticated])
-@throttle_classes([UserRateThrottle])
+@throttle_classes([DownloadRateThrottle])
 def asset_download_by_id(request, pk):
     asset = get_object_or_404(Asset, pk=pk)
     try:
@@ -1048,3 +1108,31 @@ def admin_settings(request):
             "site": SiteSettingSerializer(site_setting).data,
         }
     )
+
+
+@api_view(["POST"])
+@permission_classes([permissions.AllowAny])
+def cashfree_webhook(request):
+    try:
+        data = request.data
+        cf_order_id = ""
+        if isinstance(data, dict):
+            cf_order_id = (
+                data.get("data", {}).get("order", {}).get("order_id")
+                or data.get("order_id")
+                or data.get("orderId")
+                or ""
+            )
+        if not cf_order_id:
+            return Response({"status": "ignored", "detail": "No order_id in webhook payload"}, status=status.HTTP_200_OK)
+
+        order = Order.objects.filter(provider_order_id=cf_order_id).first()
+        if not order:
+            return Response({"status": "ignored", "detail": f"Order {cf_order_id} not found"}, status=status.HTTP_200_OK)
+
+        synced, error = sync_cashfree_order(order)
+        return Response({"status": "processed", "order_id": order.id, "synced": synced, "order_status": order.status}, status=status.HTTP_200_OK)
+    except Exception as exc:
+        logger.exception("Cashfree webhook processing failed")
+        return Response({"status": "error", "detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+

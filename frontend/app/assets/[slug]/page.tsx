@@ -1,9 +1,11 @@
 import Link from "next/link";
 import Image from "next/image";
+import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { CheckCircle2, HardDriveDownload, ShieldCheck, Star, TrainFront } from "lucide-react";
 import { AssetActions } from "@/components/asset-actions";
 import { PriceDisplay } from "@/components/price-display";
+import { ReviewSection } from "@/components/review-section";
 import { API_URL, Asset, fallbackAssets } from "@/lib/api";
 
 async function getAsset(slug: string): Promise<Asset> {
@@ -12,7 +14,9 @@ async function getAsset(slug: string): Promise<Asset> {
     if (!res.ok) throw new Error("not found");
     return res.json();
   } catch {
-    return fallbackAssets.find((asset) => asset.slug === slug) || fallbackAssets[0];
+    const fallback = fallbackAssets.find((asset) => asset.slug === slug);
+    if (fallback) return fallback;
+    notFound();
   }
 }
 
@@ -138,8 +142,9 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ sl
           </div>
         ))}
       </div>
-      <div className="mx-auto mt-8 max-w-7xl">
-        <Link href="/assets" className="text-sm text-rail-amber">Back to marketplace</Link>
+      <ReviewSection assetId={asset.id} initialReviews={asset.reviews} />
+      <div className="mx-auto mt-12 max-w-7xl">
+        <Link href="/assets" className="text-sm text-rail-amber hover:underline">← Back to marketplace</Link>
       </div>
     </section>
   );

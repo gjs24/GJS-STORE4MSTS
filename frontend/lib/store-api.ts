@@ -232,6 +232,40 @@ export async function addToWishlist(assetId: number): Promise<WishlistItem> {
   return res.json();
 }
 
+export async function removeFromWishlist(wishlistId: number): Promise<void> {
+  await validAccessToken();
+  let res = await fetch(`${API_URL}/wishlist/${wishlistId}/`, {
+    method: "DELETE",
+    headers: authHeaders()
+  });
+  if (res.status === 401 && await refreshAccessToken()) {
+    res = await fetch(`${API_URL}/wishlist/${wishlistId}/`, {
+      method: "DELETE",
+      headers: authHeaders()
+    });
+  }
+  if (!res.ok && res.status !== 204) throw new Error(await parseError(res, "Could not remove from wishlist."));
+}
+
+export async function submitReview(assetId: number, rating: number, comment: string): Promise<any> {
+  await validAccessToken();
+  const payload = { asset: assetId, rating, comment };
+  let res = await fetch(`${API_URL}/reviews/`, {
+    method: "POST",
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  if (res.status === 401 && await refreshAccessToken()) {
+    res = await fetch(`${API_URL}/reviews/`, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+  }
+  if (!res.ok) throw new Error(await parseError(res, "Could not submit review."));
+  return res.json();
+}
+
 export async function notifyMe(assetSlug: string): Promise<{ detail: string; created: boolean }> {
   await validAccessToken();
   let res = await fetch(`${API_URL}/assets/${assetSlug}/notify/`, {
