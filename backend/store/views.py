@@ -1227,7 +1227,6 @@ class AdminOrderViewSet(viewsets.ModelViewSet):
         previous_status = self.get_object().status
         order = serializer.save()
 
-        if order.status == Order.Status.PAID:
         if order.status in [Order.Status.PAID, Order.Status.APPROVED]:
             order.download_enabled = True
             order.save(update_fields=["download_enabled"])
