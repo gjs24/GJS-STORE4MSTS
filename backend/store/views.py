@@ -1052,7 +1052,10 @@ class AdminAssetViewSet(viewsets.ModelViewSet):
     parser_classes = [JSONParser, FormParser, MultiPartParser]
 
     def list(self, request, *args, **kwargs):
-        assets = self.get_queryset().annotate(review_count=Count("reviews", filter=Q(reviews__is_approved=True)))
+        assets = self.get_queryset().annotate(
+            review_count=Count("reviews", filter=Q(reviews__is_approved=True)),
+            avg_rating=Avg("reviews__rating", filter=Q(reviews__is_approved=True)),
+        )
         return Response(AssetListSerializer(assets, many=True, context={"request": request}).data)
 
     def clean_cloudinary_file_payload(self, request):

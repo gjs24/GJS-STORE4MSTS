@@ -107,10 +107,20 @@ export function AssetCard({ asset }: { asset: Asset }) {
             )}
           </div>
 
-          <span className="flex items-center gap-1 rounded-md bg-white/[0.06] px-2 py-0.5 text-[11px] font-semibold text-slate-300">
-            <Star size={12} className="fill-rail-amber text-rail-amber" />
-            <span>{Number(asset.average_rating || 5).toFixed(1)}</span>
-          </span>
+          {Number(asset.average_rating) > 0 ? (
+            <span className="flex items-center gap-1 rounded-md bg-white/[0.06] px-2 py-0.5 text-[11px] font-semibold text-slate-300">
+              <Star size={12} className="fill-rail-amber text-rail-amber" />
+              <span>{Number(asset.average_rating).toFixed(1)}</span>
+              {asset.review_count && asset.review_count > 0 ? (
+                <span className="text-slate-500 font-normal">({asset.review_count})</span>
+              ) : null}
+            </span>
+          ) : (
+            <span className="flex items-center gap-1 rounded-md bg-white/[0.04] px-2 py-0.5 text-[11px] font-medium text-slate-400">
+              <Star size={12} className="text-slate-500" />
+              <span>New</span>
+            </span>
+          )}
         </div>
 
         <div className="flex items-center justify-between text-[11px] text-slate-400">

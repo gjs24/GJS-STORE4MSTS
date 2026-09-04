@@ -97,7 +97,7 @@ class AssetListSerializer(serializers.ModelSerializer):
     has_file = serializers.SerializerMethodField()
     savings_amount = serializers.SerializerMethodField()
     thumbnail = serializers.SerializerMethodField()
-    review_count = serializers.IntegerField(read_only=True, default=0)
+    review_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Asset
@@ -143,7 +143,12 @@ class AssetListSerializer(serializers.ModelSerializer):
         if hasattr(obj, "avg_rating") and obj.avg_rating is not None:
             return round(float(obj.avg_rating), 1)
         rating = obj.reviews.filter(is_approved=True).aggregate(avg=Avg("rating"))["avg"]
-        return round(rating or 0, 1)
+        return round(float(rating), 1) if rating is not None else 0.0
+
+    def get_review_count(self, obj):
+        if hasattr(obj, "review_count") and obj.review_count is not None:
+            return int(obj.review_count)
+        return obj.reviews.filter(is_approved=True).count()
 
     def get_discount_percent(self, obj):
         if obj.is_free or not obj.original_price or obj.original_price <= obj.price:

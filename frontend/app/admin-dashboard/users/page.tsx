@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
@@ -35,10 +35,16 @@ function UsersManagementContent() {
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<number | null>(null);
+  const [page, setPage] = useState(1);
+  const itemsPerPage = 10;
 
   useEffect(() => {
     setCurrentUser(getStoredUser());
   }, []);
+
+  useEffect(() => {
+    setPage(1);
+  }, [query, roleFilter, statusFilter]);
 
   const loadUsers = useCallback(async () => {
     setLoading(true);
@@ -49,8 +55,9 @@ function UsersManagementContent() {
 
     const path = queryParts.length ? `/admin/users/?${queryParts.join("&")}` : "/admin/users/";
     try {
-      const data = await adminGet<AdminUser[]>(path, []);
-      setUsers(data);
+      const data = await adminGet<any>(path, []);
+      const userList = Array.isArray(data) ? data : Array.isArray(data?.results) ? data.results : [];
+      setUsers(userList);
     } catch {
       setFeedback({ type: "error", message: "Failed to load user accounts." });
     } finally {
@@ -69,6 +76,13 @@ function UsersManagementContent() {
     const buyersCount = users.filter((u) => (u.paid_orders_count || 0) > 0).length;
     return { total, staffCount, activeCount, buyersCount };
   }, [users]);
+
+  const totalPages = Math.max(1, Math.ceil(users.length / itemsPerPage));
+  const currentPage = Math.min(page, totalPages);
+  const paginatedUsers = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return users.slice(start, start + itemsPerPage);
+  }, [users, currentPage, itemsPerPage]);
 
   async function toggleActive(user: AdminUser) {
     if (currentUser && currentUser.username === user.username && user.is_active) {
@@ -263,7 +277,7 @@ function UsersManagementContent() {
               : "No user accounts found."}
           </div>
         ) : (
-          users.map((user) => {
+          paginatedUsers.map((user) => {
             const isSelf = currentUser?.username === user.username;
             return (
               <div
@@ -343,6 +357,47 @@ function UsersManagementContent() {
           })
         )}
       </div>
+
+      {/* Pagination Controls */}
+      {!loading && users.length > 0 ? (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-t border-white/10 pt-4">
+          <p className="text-xs text-slate-400">
+            Showing <span className="font-semibold text-white">{(currentPage - 1) * itemsPerPage + 1}</span>–
+            <span className="font-semibold text-white">{Math.min(currentPage * itemsPerPage, users.length)}</span> of{" "}
+            <span className="font-semibold text-white">{users.length}</span> user accounts
+          </p>
+
+          {totalPages > 1 ? (
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={currentPage <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                className="h-8 px-3 text-xs"
+              >
+                Previous
+              </Button>
+              <div className="flex items-center gap-1 text-xs text-slate-300">
+                <span className="rounded bg-white/10 px-2.5 py-1 font-bold text-white">
+                  {currentPage}
+                </span>
+                <span className="text-slate-500">/</span>
+                <span className="px-1 text-slate-400">{totalPages}</span>
+              </div>
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={currentPage >= totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                className="h-8 px-3 text-xs"
+              >
+                Next
+              </Button>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }

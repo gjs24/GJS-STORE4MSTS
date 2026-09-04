@@ -82,7 +82,20 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ sl
           <div className="mt-5 flex flex-wrap gap-3 text-sm">
             <span className="rounded border border-white/10 px-3 py-2">{asset.simulator_type.replace("_", " ")}</span>
             <span className="rounded border border-white/10 px-3 py-2">{asset.file_size}</span>
-            <span className="rounded border border-white/10 px-3 py-2"><Star className="inline fill-rail-amber text-rail-amber" size={16} /> {asset.average_rating}</span>
+            {Number(asset.average_rating) > 0 ? (
+              <span className="inline-flex items-center gap-1.5 rounded border border-white/10 px-3 py-2 text-white">
+                <Star className="fill-rail-amber text-rail-amber" size={16} />
+                <span>{Number(asset.average_rating).toFixed(1)} / 5</span>
+                {asset.review_count ? (
+                  <span className="text-slate-400 font-normal">({asset.review_count} {asset.review_count === 1 ? "review" : "reviews"})</span>
+                ) : null}
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 rounded border border-white/10 px-3 py-2 text-slate-400">
+                <Star className="text-slate-500" size={16} />
+                <span>No reviews yet</span>
+              </span>
+            )}
             <span className="rounded border border-white/10 px-3 py-2"><HardDriveDownload className="inline text-rail-amber" size={16} /> {asset.download_count} downloads</span>
           </div>
           {asset.is_upcoming ? (
