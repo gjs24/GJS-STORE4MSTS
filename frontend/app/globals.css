@@ -318,3 +318,20 @@ main {
   animation: deal-pulse 2.2s ease-in-out infinite;
 }
 
+/* Railway Themed Native Select & Options Fallback */
+select {
+  background-color: #090e1a;
+  color: #f8fafc;
+}
+
+select option {
+  background-color: #0a0f1d;
+  color: #f1f5f9;
+  padding: 10px 14px;
+}
+
+select option:checked {
+  background-color: #1a263d;
+  color: #ff8a1f;
+  font-weight: 600;
+}

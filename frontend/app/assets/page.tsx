@@ -1,8 +1,9 @@
 import { AssetCard } from "@/components/asset-card";
 import { PageShell } from "@/components/page-shell";
+import { MarketplaceFilters } from "@/components/marketplace-filters";
 import { getAssets, getCategories } from "@/lib/api";
 import Link from "next/link";
-import { Filter, RotateCcw, Search, Sparkles, TrainFront } from "lucide-react";
+import { RotateCcw, Sparkles, TrainFront } from "lucide-react";
 
 type AssetsSearchParams = Record<string, string | string[] | undefined>;
 
@@ -22,94 +23,20 @@ export default async function AssetsPage({ searchParams }: { searchParams: Promi
 
   return (
     <PageShell title="Asset Marketplace" eyebrow="Search, Filter & Download">
-      {/* Modern Filter Toolbar */}
-      <form
-        action="/assets"
-        className="glass-panel mb-8 rounded-2xl border border-white/10 p-5 shadow-2xl space-y-4"
-      >
-        {/* Top Row: Search & Version */}
-        <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
-          <div className="relative">
-            <Search size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              name="search"
-              placeholder="Search by locomotive model, route name, pack..."
-              defaultValue={firstParam(params.search)}
-              className="w-full rounded-xl border border-white/10 bg-black/50 pl-10 pr-4 py-2.5 text-sm text-white placeholder:text-slate-500 focus:border-rail-red focus:outline-none focus:ring-1 focus:ring-rail-red transition-all"
-            />
-          </div>
-          <div className="flex gap-2">
-            <input
-              name="version"
-              placeholder="v1.0"
-              defaultValue={firstParam(params.version)}
-              className="w-24 rounded-xl border border-white/10 bg-black/50 px-3 py-2.5 text-sm text-white placeholder:text-slate-500 focus:border-rail-red focus:outline-none focus:ring-1 focus:ring-rail-red transition-all"
-            />
-            <button
-              type="submit"
-              className="flex items-center gap-2 rounded-xl bg-rail-red px-5 py-2.5 text-sm font-bold text-white shadow-glow transition-all hover:bg-rail-red/90 active:scale-95"
-            >
-              <Filter size={16} />
-              <span>Filter</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Secondary Row: Select Dropdowns */}
-        <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 pt-1">
-          <select
-            name="category"
-            defaultValue={firstParam(params.category) || ""}
-            className="rounded-xl border border-white/10 bg-black/50 px-3 py-2 text-xs sm:text-sm text-slate-200 focus:border-rail-red focus:outline-none focus:ring-1 focus:ring-rail-red transition-all"
-          >
-            <option value="">All Categories</option>
-            {categories.map((cat) => (
-              <option key={cat.slug} value={cat.slug}>
-                {cat.name}
-              </option>
-            ))}
-          </select>
-
-          <select
-            name="simulator_type"
-            defaultValue={firstParam(params.simulator_type) || ""}
-            className="rounded-xl border border-white/10 bg-black/50 px-3 py-2 text-xs sm:text-sm text-slate-200 focus:border-rail-red focus:outline-none focus:ring-1 focus:ring-rail-red transition-all"
-          >
-            <option value="">All Simulators</option>
-            <option value="BOTH">MSTS + Open Rails</option>
-            <option value="MSTS">MSTS Only</option>
-            <option value="OPEN_RAILS">Open Rails Only</option>
-          </select>
-
-          <select
-            name="price"
-            defaultValue={firstParam(params.price) || ""}
-            className="rounded-xl border border-white/10 bg-black/50 px-3 py-2 text-xs sm:text-sm text-slate-200 focus:border-rail-red focus:outline-none focus:ring-1 focus:ring-rail-red transition-all"
-          >
-            <option value="">Any Pricing</option>
-            <option value="free">Free Downloads</option>
-            <option value="premium">Premium (INR)</option>
-          </select>
-
-          <select
-            name="upcoming"
-            defaultValue={firstParam(params.upcoming) || ""}
-            className="rounded-xl border border-white/10 bg-black/50 px-3 py-2 text-xs sm:text-sm text-slate-200 focus:border-rail-red focus:outline-none focus:ring-1 focus:ring-rail-red transition-all"
-          >
-            <option value="">Any Status</option>
-            <option value="true">Coming Soon</option>
-          </select>
-
-          <select
-            name="deal"
-            defaultValue={firstParam(params.deal) || ""}
-            className="col-span-2 sm:col-span-1 rounded-xl border border-white/10 bg-black/50 px-3 py-2 text-xs sm:text-sm text-slate-200 focus:border-rail-red focus:outline-none focus:ring-1 focus:ring-rail-red transition-all"
-          >
-            <option value="">Any Deal</option>
-            <option value="true">Deals Open</option>
-          </select>
-        </div>
-      </form>
+      {/* Modern Themed Filter Toolbar with Railway Dropdowns */}
+      <MarketplaceFilters
+        categories={categories}
+        initialParams={{
+          search: firstParam(params.search),
+          version: firstParam(params.version),
+          category: firstParam(params.category),
+          simulator_type: firstParam(params.simulator_type),
+          price: firstParam(params.price),
+          upcoming: firstParam(params.upcoming),
+          deal: firstParam(params.deal),
+        }}
+        totalCount={assets.length}
+      />
 
       {/* Results Header */}
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3 text-xs sm:text-sm text-slate-400">
@@ -130,6 +57,7 @@ export default async function AssetsPage({ searchParams }: { searchParams: Promi
           </Link>
         )}
       </div>
+
 
       {/* Asset Grid */}
       {assets.length ? (

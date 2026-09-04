@@ -215,6 +215,18 @@ export async function downloadAsset(assetId: number): Promise<DownloadResult> {
   return { url: data.download_url };
 }
 
+export const WISHLIST_CHANGE_EVENT = "gjs_wishlist_change";
+
+export function emitWishlistChange(assetId: number, isWishlisted: boolean) {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent(WISHLIST_CHANGE_EVENT, {
+        detail: { assetId, isWishlisted }
+      })
+    );
+  }
+}
+
 export async function addToWishlist(assetId: number): Promise<WishlistItem> {
   await validAccessToken();
   let res = await fetch(`${API_URL}/wishlist/`, {
@@ -231,9 +243,29 @@ export async function addToWishlist(assetId: number): Promise<WishlistItem> {
   }
   if (!res.ok) throw new Error(await parseError(res, "Could not save this asset."));
   return res.json();
+  const data = await res.json();
+  emitWishlistChange(assetId, true);
+  return data;
 }
 
 export async function removeFromWishlist(wishlistId: number): Promise<void> {
+export async function removeAssetFromWishlist(assetId: number): Promise<void> {
+  await validAccessToken();
+  let res = await fetch(`${API_URL}/wishlist/?asset_id=${assetId}`, {
+    method: "DELETE",
+    headers: authHeaders()
+  });
+  if (res.status === 401 && await refreshAccessToken()) {
+    res = await fetch(`${API_URL}/wishlist/?asset_id=${assetId}`, {
+      method: "DELETE",
+      headers: authHeaders()
+    });
+  }
+  if (!res.ok && res.status !== 204) throw new Error(await parseError(res, "Could not remove from wishlist."));
+  emitWishlistChange(assetId, false);
+}
+
+export async function removeFromWishlist(wishlistId: number, assetId?: number): Promise<void> {
   await validAccessToken();
   let res = await fetch(`${API_URL}/wishlist/${wishlistId}/`, {
     method: "DELETE",
@@ -246,6 +278,7 @@ export async function removeFromWishlist(wishlistId: number): Promise<void> {
     });
   }
   if (!res.ok && res.status !== 204) throw new Error(await parseError(res, "Could not remove from wishlist."));
+  if (assetId) emitWishlistChange(assetId, false);
 }
 
 export async function submitReview(assetId: number, rating: number, comment: string): Promise<any> {

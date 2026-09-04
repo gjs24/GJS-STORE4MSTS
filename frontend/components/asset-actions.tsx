@@ -4,8 +4,11 @@ import Link from "next/link";
 import { useState } from "react";
 import { load } from "@cashfreepayments/cashfree-js";
 import { CheckCircle2, Download, Heart, Lock, ShoppingCart } from "lucide-react";
+import { CheckCircle2, Download, Lock, ShoppingCart } from "lucide-react";
 import { priceLabel, type Asset } from "@/lib/api";
 import { addToWishlist, createOrder, downloadAsset, isLoggedIn, notifyMe, verifyPayment, type StoreOrder } from "@/lib/store-api";
+import { WishlistButton } from "@/components/wishlist-button";
+import { createOrder, downloadAsset, isLoggedIn, notifyMe, verifyPayment, type StoreOrder } from "@/lib/store-api";
 
 function qrCodeUrl(value: string) {
   return `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(value)}`;
@@ -154,6 +157,13 @@ export function AssetActions({ asset }: { asset: Asset }) {
         <button onClick={handleWishlist} disabled={busy} className="rounded border border-white/15 px-5 py-3 font-semibold disabled:opacity-60">
           <Heart className="mr-2 inline" size={18} /> Wishlist
         </button>
+        <WishlistButton
+          assetId={asset.id}
+          variant="button"
+          onWishlistChange={(inWishlist) => {
+            setMessage(inWishlist ? "Saved to your wishlist." : "Removed from your wishlist.");
+          }}
+        />
       </div>
       {message ? (
         <div className="flex max-w-xl items-start gap-2 rounded border border-white/10 bg-white/[0.04] px-3 py-3 text-sm text-slate-300">
