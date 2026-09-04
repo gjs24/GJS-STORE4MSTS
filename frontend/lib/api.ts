@@ -97,6 +97,14 @@ export const fallbackSiteSettings: SiteSettings = {
   scroller_message: ""
 };
 
+export const AUTH_CHANGE_EVENT = "gjs_auth_change";
+
+export function emitAuthChange() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(AUTH_CHANGE_EVENT));
+  }
+}
+
 export function getStoredUser(): CurrentUser | null {
   if (typeof window === "undefined") return null;
   const raw = localStorage.getItem("currentUser");
@@ -109,12 +117,24 @@ export function getStoredUser(): CurrentUser | null {
   }
 }
 
+export function setStoredUser(user: CurrentUser | null) {
+  if (typeof window === "undefined") return;
+  if (user) {
+    localStorage.setItem("currentUser", JSON.stringify(user));
+  } else {
+    localStorage.removeItem("currentUser");
+  }
+  emitAuthChange();
+}
+
 export function clearAuth() {
   if (typeof window === "undefined") return;
   localStorage.removeItem("accessToken");
   localStorage.removeItem("refreshToken");
   localStorage.removeItem("currentUser");
+  emitAuthChange();
 }
+
 
 export async function apiGet<T>(path: string): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, { next: { revalidate: 60 } });

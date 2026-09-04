@@ -1,6 +1,6 @@
 "use client";
 
-import { API_URL, type Asset, type SiteSettings } from "./api";
+import { API_URL, clearAuth, type Asset, type SiteSettings } from "./api";
 
 export type AdminStats = {
   total_users: number;
@@ -104,9 +104,7 @@ async function refreshAccessToken() {
     body: JSON.stringify({ refresh })
   });
   if (!res.ok) {
-    localStorage.removeItem("accessToken");
-    localStorage.removeItem("refreshToken");
-    localStorage.removeItem("currentUser");
+    clearAuth();
     return "";
   }
   const data = await res.json();

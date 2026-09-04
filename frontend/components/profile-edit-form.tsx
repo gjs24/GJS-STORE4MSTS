@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Save } from "lucide-react";
-import { clearAuth, getStoredUser, type CurrentUser } from "@/lib/api";
+import { clearAuth, getStoredUser, setStoredUser, type CurrentUser } from "@/lib/api";
 import { userGet, userPatch } from "@/lib/store-api";
 
 export function ProfileEditForm() {
@@ -17,7 +17,7 @@ export function ProfileEditForm() {
 
     userGet<CurrentUser>("/auth/me/")
       .then((freshUser) => {
-        localStorage.setItem("currentUser", JSON.stringify(freshUser));
+        setStoredUser(freshUser);
         setUser(freshUser);
         setMessage("");
       })
@@ -36,7 +36,7 @@ export function ProfileEditForm() {
         last_name: formData.get("last_name"),
         email: formData.get("email")
       });
-      localStorage.setItem("currentUser", JSON.stringify(updated));
+      setStoredUser(updated);
       setUser(updated);
       setMessage("Profile updated successfully.");
     } catch (error) {

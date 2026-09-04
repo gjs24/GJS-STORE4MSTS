@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { GoogleLogin } from "@react-oauth/google";
 import { KeyRound, Mail, RefreshCw, ShieldCheck } from "lucide-react";
-import { API_URL, clearAuth } from "@/lib/api";
+import { API_URL, clearAuth, emitAuthChange, setStoredUser, type CurrentUser } from "@/lib/api";
 
 type AuthFormProps = {
   mode: "login" | "register";
@@ -39,16 +39,23 @@ export function AuthForm({ mode, portal = "user" }: AuthFormProps) {
     return () => clearInterval(interval);
   }, [timer]);
 
-  function finishLogin(data: { access: string; refresh: string; user?: { is_staff?: boolean } }) {
+  function finishLogin(data: { access: string; refresh: string; user?: any }) {
     localStorage.setItem("accessToken", data.access);
     localStorage.setItem("refreshToken", data.refresh);
-    localStorage.setItem("currentUser", JSON.stringify(data.user));
+
+    if (data.user) {
+      setStoredUser(data.user as CurrentUser);
+    } else {
+      emitAuthChange();
+    }
 
     if (portal === "admin" && !data.user?.is_staff) {
       clearAuth();
       setMessage("This is a user account. Admin login requires a staff or superuser account.");
       return;
     }
+
+    router.refresh();
 
     if (portal === "user" && data.user?.is_staff) {
       setMessage("Admin account detected. Opening admin dashboard...");

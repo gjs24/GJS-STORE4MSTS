@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { clearAuth, getStoredUser, type CurrentUser } from "@/lib/api";
+import { clearAuth, getStoredUser, setStoredUser, type CurrentUser } from "@/lib/api";
 import { userGet } from "@/lib/store-api";
 
 function displayName(user: CurrentUser) {
@@ -19,7 +19,7 @@ export function ProfilePanel() {
 
     userGet<CurrentUser>("/auth/me/")
       .then((freshUser) => {
-        localStorage.setItem("currentUser", JSON.stringify(freshUser));
+        setStoredUser(freshUser);
         setUser(freshUser);
         setMessage("");
       })

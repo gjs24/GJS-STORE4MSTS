@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { ShieldAlert } from "lucide-react";
 import { useEffect, useState } from "react";
-import { getStoredUser, type CurrentUser } from "@/lib/api";
+import { AUTH_CHANGE_EVENT, getStoredUser, type CurrentUser } from "@/lib/api";
 
 export function AdminLoginNote() {
   const [ready, setReady] = useState(false);
@@ -11,9 +11,21 @@ export function AdminLoginNote() {
   const [parsedUser, setParsedUser] = useState<CurrentUser | null>(null);
 
   useEffect(() => {
-    setHasToken(Boolean(localStorage.getItem("accessToken")));
-    setParsedUser(getStoredUser());
-    setReady(true);
+    const syncState = () => {
+      setHasToken(Boolean(localStorage.getItem("accessToken")));
+      setParsedUser(getStoredUser());
+      setReady(true);
+    };
+
+    syncState();
+
+    window.addEventListener(AUTH_CHANGE_EVENT, syncState);
+    window.addEventListener("storage", syncState);
+
+    return () => {
+      window.removeEventListener(AUTH_CHANGE_EVENT, syncState);
+      window.removeEventListener("storage", syncState);
+    };
   }, []);
 
   if (!ready) return null;
