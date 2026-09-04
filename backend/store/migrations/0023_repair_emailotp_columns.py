@@ -1,24 +1,10 @@
-import logging
-import os
+# Generated manually to repair missing columns in store_emailotp on PostgreSQL
 
-from django.core.wsgi import get_wsgi_application
+from django.db import migrations
 
-logger = logging.getLogger(__name__)
 
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
-application = get_wsgi_application()
-
-# Ensure all database migrations are applied on server startup
-try:
-    from django.core.management import call_command
-    call_command("migrate", interactive=False)
-    logger.info("Startup database migration check completed.")
-except Exception as exc:
-    logger.warning("Startup database migration check failed: %s", exc)
-
-# Direct PostgreSQL column check for store_emailotp
-try:
-    from django.db import connection
+def repair_emailotp_table(apps, schema_editor):
+    connection = schema_editor.connection
     with connection.cursor() as cursor:
         if connection.vendor == "postgresql":
             cursor.execute("""
@@ -37,8 +23,19 @@ try:
                 ALTER TABLE IF EXISTS store_emailotp 
                 ADD COLUMN IF NOT EXISTS attempts SMALLINT NOT NULL DEFAULT 0;
             """)
-            logger.info("Verified store_emailotp columns on PostgreSQL.")
-except Exception as exc:
-    logger.warning("Direct column check error: %s", exc)
+        elif connection.vendor == "sqlite":
+            cursor.execute("PRAGMA table_info(store_emailotp)")
+            columns = [row[1] for row in cursor.fetchall()]
+            if "otp_code" not in columns and len(columns) > 0:
+                cursor.execute("ALTER TABLE store_emailotp ADD COLUMN otp_code VARCHAR(6) NOT NULL DEFAULT ''")
 
 
+class Migration(migrations.Migration):
+
+    dependencies = [
+        ('store', '0022_emailotp'),
+    ]
+
+    operations = [
+        migrations.RunPython(repair_emailotp_table, reverse_code=migrations.RunPython.noop),
+    ]
