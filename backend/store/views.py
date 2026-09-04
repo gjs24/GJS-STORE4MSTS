@@ -458,7 +458,7 @@ class SendOTPView(APIView):
                 {
                     "detail": f"Failed to send email: {err}. Please check your EMAIL_HOST_USER and EMAIL_HOST_PASSWORD in Render environment variables."
                 },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
         return Response(
