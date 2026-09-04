@@ -22,6 +22,7 @@ import { getStoredUser, type CurrentUser } from "@/lib/api";
 
 type RoleFilter = "all" | "staff" | "user";
 type StatusFilter = "all" | "active" | "disabled";
+type UserSort = "newest" | "oldest" | "purchases_desc" | "username_asc";
 
 function UsersManagementContent() {
   const searchParams = useSearchParams();
@@ -32,6 +33,7 @@ function UsersManagementContent() {
   const [query, setQuery] = useState(searchParams.get("search") || "");
   const [roleFilter, setRoleFilter] = useState<RoleFilter>((searchParams.get("role") as RoleFilter) || "all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>((searchParams.get("status") as StatusFilter) || "all");
+  const [sortOrder, setSortOrder] = useState<UserSort>((searchParams.get("sort") as UserSort) || "newest");
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<number | null>(null);
@@ -44,7 +46,7 @@ function UsersManagementContent() {
 
   useEffect(() => {
     setPage(1);
-  }, [query, roleFilter, statusFilter]);
+  }, [query, roleFilter, statusFilter, sortOrder]);
 
   const loadUsers = useCallback(async () => {
     setLoading(true);
@@ -52,6 +54,7 @@ function UsersManagementContent() {
     if (roleFilter !== "all") queryParts.push(`role=${roleFilter}`);
     if (statusFilter !== "all") queryParts.push(`status=${statusFilter}`);
     if (query.trim()) queryParts.push(`search=${encodeURIComponent(query.trim())}`);
+    if (sortOrder !== "newest") queryParts.push(`ordering=${sortOrder}`);
 
     const path = queryParts.length ? `/admin/users/?${queryParts.join("&")}` : "/admin/users/";
     try {
@@ -63,7 +66,7 @@ function UsersManagementContent() {
     } finally {
       setLoading(false);
     }
-  }, [query, roleFilter, statusFilter]);
+  }, [query, roleFilter, statusFilter, sortOrder]);
 
   useEffect(() => {
     loadUsers();
@@ -77,12 +80,26 @@ function UsersManagementContent() {
     return { total, staffCount, activeCount, buyersCount };
   }, [users]);
 
-  const totalPages = Math.max(1, Math.ceil(users.length / itemsPerPage));
+  const sortedUsers = useMemo(() => {
+    const list = [...users];
+    if (sortOrder === "oldest") {
+      list.sort((a, b) => new Date(a.date_joined).getTime() - new Date(b.date_joined).getTime());
+    } else if (sortOrder === "purchases_desc") {
+      list.sort((a, b) => (b.paid_orders_count || 0) - (a.paid_orders_count || 0));
+    } else if (sortOrder === "username_asc") {
+      list.sort((a, b) => a.username.localeCompare(b.username));
+    } else {
+      list.sort((a, b) => new Date(b.date_joined).getTime() - new Date(a.date_joined).getTime());
+    }
+    return list;
+  }, [users, sortOrder]);
+
+  const totalPages = Math.max(1, Math.ceil(sortedUsers.length / itemsPerPage));
   const currentPage = Math.min(page, totalPages);
   const paginatedUsers = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage;
-    return users.slice(start, start + itemsPerPage);
-  }, [users, currentPage, itemsPerPage]);
+    return sortedUsers.slice(start, start + itemsPerPage);
+  }, [sortedUsers, currentPage, itemsPerPage]);
 
   async function toggleActive(user: AdminUser) {
     if (currentUser && currentUser.username === user.username && user.is_active) {
@@ -216,8 +233,8 @@ function UsersManagementContent() {
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="grid gap-3 lg:grid-cols-[1fr_180px_180px]">
-        <div className="relative">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_160px_160px_180px]">
+        <div className="relative sm:col-span-2 lg:col-span-1">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
           <input
             value={query}
@@ -254,6 +271,17 @@ function UsersManagementContent() {
           <option value="all">All Statuses</option>
           <option value="active">Active Only</option>
           <option value="disabled">Disabled Only</option>
+        </select>
+
+        <select
+          value={sortOrder}
+          onChange={(e) => setSortOrder(e.target.value as UserSort)}
+          className="rounded-lg border border-white/10 bg-black/50 px-3 py-2.5 text-sm text-white outline-none focus:border-rail-red"
+        >
+          <option value="newest">Sort: Newest Joined</option>
+          <option value="oldest">Sort: Oldest Joined</option>
+          <option value="purchases_desc">Most Purchases</option>
+          <option value="username_asc">Username (A–Z)</option>
         </select>
       </div>
 

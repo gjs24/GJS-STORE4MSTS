@@ -1221,6 +1221,16 @@ class AdminOrderViewSet(viewsets.ModelViewSet):
                 | Q(user__email__icontains=search)
                 | Q(asset__title__icontains=search)
             )
+
+        ordering = self.request.query_params.get("ordering") or self.request.query_params.get("sort")
+        if ordering in ["oldest", "id", "created_at"]:
+            qs = qs.order_by("id")
+        elif ordering in ["amount_high", "-total_amount"]:
+            qs = qs.order_by("-total_amount", "-id")
+        elif ordering in ["amount_low", "total_amount"]:
+            qs = qs.order_by("total_amount", "-id")
+        else:
+            qs = qs.order_by("-id")
         return qs
 
     def perform_update(self, serializer):
@@ -1291,6 +1301,16 @@ class AdminUserViewSet(viewsets.ModelViewSet):
                 | Q(first_name__icontains=search)
                 | Q(last_name__icontains=search)
             )
+
+        ordering = self.request.query_params.get("ordering") or self.request.query_params.get("sort")
+        if ordering in ["oldest", "date_joined"]:
+            qs = qs.order_by("date_joined")
+        elif ordering in ["purchases_desc", "-paid_orders_count"]:
+            qs = qs.order_by("-paid_orders_count", "-date_joined")
+        elif ordering in ["username_asc", "username"]:
+            qs = qs.order_by("username")
+        else:
+            qs = qs.order_by("-date_joined")
         return qs
 
     def perform_update(self, serializer):
@@ -1328,11 +1348,10 @@ class AdminReviewViewSet(viewsets.ModelViewSet):
     queryset = Review.objects.select_related("user", "asset")
     serializer_class = ReviewSerializer
     permission_classes = [permissions.IsAdminUser]
-    http_method_names = ["get", "patch", "delete", "head", "options"]
     http_method_names = ["get", "patch", "delete", "post", "head", "options"]
 
     def get_queryset(self):
-        qs = Review.objects.select_related("user", "asset").order_by("-created_at")
+        qs = Review.objects.select_related("user", "asset")
         status_param = self.request.query_params.get("status")
         if status_param == "approved":
             qs = qs.filter(is_approved=True)
@@ -1348,6 +1367,16 @@ class AdminReviewViewSet(viewsets.ModelViewSet):
                 | Q(user__email__icontains=search)
                 | Q(asset__title__icontains=search)
             )
+
+        ordering = self.request.query_params.get("ordering") or self.request.query_params.get("sort")
+        if ordering in ["oldest", "created_at"]:
+            qs = qs.order_by("created_at")
+        elif ordering in ["rating_desc", "-rating"]:
+            qs = qs.order_by("-rating", "-created_at")
+        elif ordering in ["rating_asc", "rating"]:
+            qs = qs.order_by("rating", "-created_at")
+        else:
+            qs = qs.order_by("-created_at")
         return qs
 
     @action(detail=True, methods=["post"])
@@ -1355,7 +1384,6 @@ class AdminReviewViewSet(viewsets.ModelViewSet):
         review = self.get_object()
         review.is_approved = True
         review.save(update_fields=["is_approved"])
-        return Response(ReviewSerializer(review).data)
         user_label = review.user.username if review.user else "User"
         asset_title = review.asset.title if review.asset else "Asset"
         log_admin_activity(request, "Review approved", "Review", review.id, f"Approved review by {user_label} on {asset_title}")
@@ -1384,7 +1412,6 @@ class AdminNotifyRequestView(generics.ListAPIView):
     permission_classes = [permissions.IsAdminUser]
 
     def get_queryset(self):
-        qs = NotifyRequest.objects.select_related("asset", "asset__category", "user")
         qs = NotifyRequest.objects.select_related("asset", "asset__category", "user").order_by("-created_at")
         asset_id = self.request.query_params.get("asset")
         if asset_id:
@@ -1398,7 +1425,6 @@ class AdminDownloadHistoryView(generics.ListAPIView):
 
     def get_queryset(self):
         qs = DownloadLog.objects.select_related("asset", "asset__category", "user")
-        qs = DownloadLog.objects.select_related("asset", "asset__category", "user").order_by("-downloaded_at")
         asset_id = self.request.query_params.get("asset")
         if asset_id:
             qs = qs.filter(asset_id=asset_id)
@@ -1411,6 +1437,12 @@ class AdminDownloadHistoryView(generics.ListAPIView):
                 | Q(user__email__icontains=search)
                 | Q(ip_address__icontains=search)
             )
+
+        ordering = self.request.query_params.get("ordering") or self.request.query_params.get("sort")
+        if ordering in ["oldest", "downloaded_at"]:
+            qs = qs.order_by("downloaded_at")
+        else:
+            qs = qs.order_by("-downloaded_at")
         return qs
 
 
@@ -1420,7 +1452,7 @@ class AdminActivityLogView(generics.ListAPIView):
     queryset = AdminActivityLog.objects.select_related("actor")
 
     def get_queryset(self):
-        qs = AdminActivityLog.objects.select_related("actor").order_by("-created_at")
+        qs = AdminActivityLog.objects.select_related("actor")
         action = self.request.query_params.get("action")
         if action:
             qs = qs.filter(action__icontains=action)
@@ -1433,6 +1465,12 @@ class AdminActivityLogView(generics.ListAPIView):
                 | Q(actor__username__icontains=search)
                 | Q(target_type__icontains=search)
             )
+
+        ordering = self.request.query_params.get("ordering") or self.request.query_params.get("sort")
+        if ordering in ["oldest", "created_at"]:
+            qs = qs.order_by("created_at")
+        else:
+            qs = qs.order_by("-created_at")
         return qs
 
 

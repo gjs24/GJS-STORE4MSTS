@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -26,12 +26,16 @@ import { adminDelete, adminGet, adminPatch, adminPost } from "@/lib/admin-api";
 import type { Asset } from "@/lib/api";
 
 type AssetFilter = "all" | "published" | "hidden" | "free" | "premium" | "featured" | "upcoming" | "deal";
+type AssetSort = "newest" | "oldest" | "price_high" | "price_low" | "downloads_desc" | "name_asc";
 
 function AssetsContent() {
   const searchParams = useSearchParams();
   const [assets, setAssets] = useState<Asset[]>([]);
   const [query, setQuery] = useState(searchParams.get("search") || "");
   const [filter, setFilter] = useState<AssetFilter>("all");
+  const [sortOrder, setSortOrder] = useState<AssetSort>("newest");
+  const [page, setPage] = useState(1);
+  const itemsPerPage = 12;
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -53,6 +57,10 @@ function AssetsContent() {
   }, [searchParams]);
 
   useEffect(() => {
+    setPage(1);
+  }, [filter, query, sortOrder]);
+
+  useEffect(() => {
     adminGet<Asset[]>("/admin/assets/", [])
       .then(setAssets)
       .finally(() => setLoading(false));
@@ -68,7 +76,7 @@ function AssetsContent() {
   }, [assets]);
 
   const filteredAssets = useMemo(() => {
-    return assets.filter((asset) => {
+    const list = assets.filter((asset) => {
       const matchesQuery = `${asset.title} ${asset.category?.name || ""} ${asset.simulator_type}`
         .toLowerCase()
         .includes(query.toLowerCase());
@@ -83,7 +91,29 @@ function AssetsContent() {
         (filter === "deal" && asset.deal_is_open);
       return matchesQuery && matchesFilter;
     });
-  }, [assets, filter, query]);
+
+    if (sortOrder === "oldest") {
+      list.sort((a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime() || a.id - b.id);
+    } else if (sortOrder === "price_high") {
+      list.sort((a, b) => Number(b.price || 0) - Number(a.price || 0));
+    } else if (sortOrder === "price_low") {
+      list.sort((a, b) => Number(a.price || 0) - Number(b.price || 0));
+    } else if (sortOrder === "downloads_desc") {
+      list.sort((a, b) => (b.download_count || 0) - (a.download_count || 0));
+    } else if (sortOrder === "name_asc") {
+      list.sort((a, b) => a.title.localeCompare(b.title));
+    } else {
+      list.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime() || b.id - a.id);
+    }
+    return list;
+  }, [assets, filter, query, sortOrder]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredAssets.length / itemsPerPage));
+  const currentPage = Math.min(page, totalPages);
+  const paginatedAssets = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredAssets.slice(start, start + itemsPerPage);
+  }, [filteredAssets, currentPage, itemsPerPage]);
 
   async function toggleFeature(asset: Asset) {
     try {
@@ -209,8 +239,8 @@ function AssetsContent() {
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="grid gap-3 lg:grid-cols-[1fr_220px]">
-        <div className="relative">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_200px_200px]">
+        <div className="relative sm:col-span-2 lg:col-span-1">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
           <input
             value={query}
@@ -243,6 +273,19 @@ function AssetsContent() {
           <option value="free">Free Only</option>
           <option value="premium">Premium Only</option>
         </select>
+
+        <select
+          value={sortOrder}
+          onChange={(e) => setSortOrder(e.target.value as AssetSort)}
+          className="rounded-lg border border-white/10 bg-black/50 px-3 py-2.5 text-sm text-white outline-none focus:border-rail-red"
+        >
+          <option value="newest">Sort: Newest Created</option>
+          <option value="oldest">Sort: Oldest Created</option>
+          <option value="price_high">Price: High to Low</option>
+          <option value="price_low">Price: Low to High</option>
+          <option value="downloads_desc">Most Downloads</option>
+          <option value="name_asc">Title (A–Z)</option>
+        </select>
       </div>
 
       {/* Assets Table */}
@@ -265,7 +308,7 @@ function AssetsContent() {
               : "No assets found in store catalog."}
           </div>
         ) : (
-          filteredAssets.map((asset) => (
+          paginatedAssets.map((asset) => (
             <div
               key={asset.id}
               className="grid items-center gap-3 border-t border-white/10 p-4 text-sm transition hover:bg-white/[0.03] md:grid-cols-[1.4fr_120px_120px_120px_130px_190px]"
@@ -364,6 +407,47 @@ function AssetsContent() {
           ))
         )}
       </div>
+
+      {/* Pagination Controls */}
+      {!loading && filteredAssets.length > 0 ? (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-t border-white/10 pt-4">
+          <p className="text-xs text-slate-400">
+            Showing <span className="font-semibold text-white">{(currentPage - 1) * itemsPerPage + 1}</span>–
+            <span className="font-semibold text-white">{Math.min(currentPage * itemsPerPage, filteredAssets.length)}</span> of{" "}
+            <span className="font-semibold text-white">{filteredAssets.length}</span> assets
+          </p>
+
+          {totalPages > 1 ? (
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={currentPage <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                className="h-8 px-3 text-xs"
+              >
+                Previous
+              </Button>
+              <div className="flex items-center gap-1 text-xs text-slate-300">
+                <span className="rounded bg-white/10 px-2.5 py-1 font-bold text-white">
+                  {currentPage}
+                </span>
+                <span className="text-slate-500">/</span>
+                <span className="px-1 text-slate-400">{totalPages}</span>
+              </div>
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={currentPage >= totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                className="h-8 px-3 text-xs"
+              >
+                Next
+              </Button>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }

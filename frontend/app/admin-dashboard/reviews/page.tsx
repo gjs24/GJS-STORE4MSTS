@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -22,6 +22,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { adminDelete, adminGet, adminPost, type AdminReview } from "@/lib/admin-api";
 
 type ReviewStatusFilter = "all" | "pending" | "approved";
+type ReviewSort = "newest" | "oldest" | "rating_desc" | "rating_asc";
 
 function ReviewsContent() {
   const searchParams = useSearchParams();
@@ -32,26 +33,37 @@ function ReviewsContent() {
     (searchParams.get("status") as ReviewStatusFilter) || "all"
   );
   const [query, setQuery] = useState(searchParams.get("search") || "");
+  const [sortOrder, setSortOrder] = useState<ReviewSort>(
+    (searchParams.get("sort") as ReviewSort) || "newest"
+  );
+  const [page, setPage] = useState(1);
+  const itemsPerPage = 10;
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionId, setActionId] = useState<number | null>(null);
+
+  useEffect(() => {
+    setPage(1);
+  }, [query, statusFilter, sortOrder]);
 
   const loadReviews = useCallback(async () => {
     setLoading(true);
     const queryParts: string[] = [];
     if (statusFilter !== "all") queryParts.push(`status=${statusFilter}`);
     if (query.trim()) queryParts.push(`search=${encodeURIComponent(query.trim())}`);
+    if (sortOrder !== "newest") queryParts.push(`ordering=${sortOrder}`);
 
     const path = queryParts.length ? `/admin/reviews/?${queryParts.join("&")}` : "/admin/reviews/";
     try {
-      const data = await adminGet<AdminReview[]>(path, []);
-      setReviews(data);
+      const data = await adminGet<any>(path, []);
+      const reviewList = Array.isArray(data) ? data : Array.isArray(data?.results) ? data.results : [];
+      setReviews(reviewList);
     } catch {
       setFeedback({ type: "error", message: "Failed to load reviews." });
     } finally {
       setLoading(false);
     }
-  }, [query, statusFilter]);
+  }, [query, statusFilter, sortOrder]);
 
   useEffect(() => {
     loadReviews();
@@ -63,6 +75,27 @@ function ReviewsContent() {
     const approved = reviews.filter((r) => r.is_approved).length;
     return { total, pending, approved };
   }, [reviews]);
+
+  const sortedReviews = useMemo(() => {
+    const list = [...reviews];
+    if (sortOrder === "oldest") {
+      list.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    } else if (sortOrder === "rating_desc") {
+      list.sort((a, b) => b.rating - a.rating || new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    } else if (sortOrder === "rating_asc") {
+      list.sort((a, b) => a.rating - b.rating || new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    } else {
+      list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    }
+    return list;
+  }, [reviews, sortOrder]);
+
+  const totalPages = Math.max(1, Math.ceil(sortedReviews.length / itemsPerPage));
+  const currentPage = Math.min(page, totalPages);
+  const paginatedReviews = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return sortedReviews.slice(start, start + itemsPerPage);
+  }, [sortedReviews, currentPage, itemsPerPage]);
 
   async function approve(review: AdminReview) {
     setActionId(review.id);
@@ -197,23 +230,36 @@ function ReviewsContent() {
           })}
         </div>
 
-        <div className="relative sm:w-80">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search by username or comment..."
-            className="w-full rounded-lg border border-white/10 bg-black/40 py-2 pl-9 pr-8 text-sm text-white outline-none focus:border-rail-red"
-          />
-          {query ? (
-            <button
-              type="button"
-              onClick={() => setQuery("")}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white"
-            >
-              <X size={14} />
-            </button>
-          ) : null}
+        <div className="flex flex-wrap items-center gap-3">
+          <select
+            value={sortOrder}
+            onChange={(e) => setSortOrder(e.target.value as ReviewSort)}
+            className="rounded-lg border border-white/10 bg-black/50 px-3 py-2 text-xs font-semibold text-white outline-none focus:border-rail-red"
+          >
+            <option value="newest">Sort: Newest First</option>
+            <option value="oldest">Sort: Oldest First</option>
+            <option value="rating_desc">Rating: High to Low (5★ → 1★)</option>
+            <option value="rating_asc">Rating: Low to High (1★ → 5★)</option>
+          </select>
+
+          <div className="relative sm:w-72">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search by username or comment..."
+              className="w-full rounded-lg border border-white/10 bg-black/40 py-2 pl-9 pr-8 text-sm text-white outline-none focus:border-rail-red"
+            />
+            {query ? (
+              <button
+                type="button"
+                onClick={() => setQuery("")}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white"
+              >
+                <X size={14} />
+              </button>
+            ) : null}
+          </div>
         </div>
       </div>
 
@@ -221,12 +267,12 @@ function ReviewsContent() {
       <div className="space-y-3">
         {loading ? (
           <div className="rounded-lg border border-white/10 p-8 text-center text-sm text-slate-400">Loading reviews...</div>
-        ) : reviews.length === 0 ? (
+        ) : sortedReviews.length === 0 ? (
           <div className="rounded-lg border border-white/10 p-8 text-center text-sm text-slate-400">
             {query || statusFilter !== "all" ? "No reviews match the current filter." : "No reviews submitted yet."}
           </div>
         ) : (
-          reviews.map((review) => (
+          paginatedReviews.map((review) => (
             <div
               key={review.id}
               className={`flex flex-col gap-4 rounded-lg border p-5 transition sm:flex-row sm:items-start sm:justify-between ${
@@ -318,6 +364,47 @@ function ReviewsContent() {
           ))
         )}
       </div>
+
+      {/* Pagination Controls */}
+      {!loading && sortedReviews.length > 0 ? (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-t border-white/10 pt-4">
+          <p className="text-xs text-slate-400">
+            Showing <span className="font-semibold text-white">{(currentPage - 1) * itemsPerPage + 1}</span>–
+            <span className="font-semibold text-white">{Math.min(currentPage * itemsPerPage, sortedReviews.length)}</span> of{" "}
+            <span className="font-semibold text-white">{sortedReviews.length}</span> reviews
+          </p>
+
+          {totalPages > 1 ? (
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={currentPage <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                className="h-8 px-3 text-xs"
+              >
+                Previous
+              </Button>
+              <div className="flex items-center gap-1 text-xs text-slate-300">
+                <span className="rounded bg-white/10 px-2.5 py-1 font-bold text-white">
+                  {currentPage}
+                </span>
+                <span className="text-slate-500">/</span>
+                <span className="px-1 text-slate-400">{totalPages}</span>
+              </div>
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={currentPage >= totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                className="h-8 px-3 text-xs"
+              >
+                Next
+              </Button>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }

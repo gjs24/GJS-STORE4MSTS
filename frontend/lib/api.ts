@@ -54,6 +54,7 @@ export type Asset = {
   average_rating: number;
   review_count: number;
   can_download?: boolean;
+  created_at?: string;
   images?: Array<{ id: number; image?: string | null; alt_text: string; sort_order: number }>;
   updates?: Array<{ id: number; version: string; changelog: string; created_at: string }>;
   reviews?: Array<{ id: number; rating: number; comment: string; created_at: string; user?: { username: string } }>;

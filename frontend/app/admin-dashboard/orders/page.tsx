@@ -34,19 +34,23 @@ type StatusFilter =
   | "FAILED"
   | "REFUNDED";
 
+type OrderSort = "newest" | "oldest" | "amount_high" | "amount_low";
+
 function OrdersContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  const urlStatus = (searchParams.get("status") || "ALL").toUpperCase() as StatusFilter;
-  const urlSearch = searchParams.get("search") || "";
-
   const [orders, setOrders] = useState<AdminOrder[]>([]);
-  const [page, setPage] = useState(1);
   const [count, setCount] = useState(0);
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>(urlStatus);
-  const [searchQuery, setSearchQuery] = useState(urlSearch);
-  const [activeSearch, setActiveSearch] = useState(urlSearch);
+  const [page, setPage] = useState(1);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>(
+    ((searchParams.get("status") || "ALL").toUpperCase() as StatusFilter) || "ALL"
+  );
+  const [sortOrder, setSortOrder] = useState<OrderSort>(
+    (searchParams.get("sort") as OrderSort) || "newest"
+  );
+  const [searchQuery, setSearchQuery] = useState(searchParams.get("search") || "");
+  const [activeSearch, setActiveSearch] = useState(searchParams.get("search") || "");
   const [copiedUtr, setCopiedUtr] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<number | null>(null);
   const [downloadingInvoiceId, setDownloadingInvoiceId] = useState<number | null>(null);
@@ -56,9 +60,11 @@ function OrdersContent() {
   useEffect(() => {
     const s = (searchParams.get("status") || "ALL").toUpperCase() as StatusFilter;
     const q = searchParams.get("search") || "";
+    const sort = (searchParams.get("sort") as OrderSort) || "newest";
     setStatusFilter(s);
     setSearchQuery(q);
     setActiveSearch(q);
+    setSortOrder(sort);
     setPage(1);
   }, [searchParams]);
 
@@ -70,6 +76,9 @@ function OrdersContent() {
     }
     if (activeSearch.trim()) {
       queryParts.push(`search=${encodeURIComponent(activeSearch.trim())}`);
+    }
+    if (sortOrder !== "newest") {
+      queryParts.push(`ordering=${sortOrder}`);
     }
 
     try {
@@ -89,7 +98,7 @@ function OrdersContent() {
     } finally {
       setLoading(false);
     }
-  }, [page, statusFilter, activeSearch]);
+  }, [page, statusFilter, activeSearch, sortOrder]);
 
   useEffect(() => {
     loadOrders();
@@ -255,29 +264,46 @@ function OrdersContent() {
           })}
         </div>
 
-        <form onSubmit={handleSearchSubmit} className="flex items-center gap-2">
-          <div className="relative flex-1 sm:w-80">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-            <input
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search UTR, order ID, customer..."
-              className="w-full rounded-lg border border-white/10 bg-black/40 py-2 pl-9 pr-8 text-sm text-white outline-none focus:border-rail-red"
-            />
-            {searchQuery ? (
-              <button
-                type="button"
-                onClick={clearSearch}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white"
-              >
-                <X size={14} />
-              </button>
-            ) : null}
-          </div>
-          <Button type="submit" size="sm" variant="secondary" className="gap-1.5 font-semibold">
-            Search
-          </Button>
-        </form>
+        <div className="flex flex-wrap items-center gap-3">
+          <select
+            value={sortOrder}
+            onChange={(e) => {
+              const val = e.target.value as OrderSort;
+              setSortOrder(val);
+              setPage(1);
+            }}
+            className="rounded-lg border border-white/10 bg-black/50 px-3 py-2 text-xs font-semibold text-white outline-none focus:border-rail-red"
+          >
+            <option value="newest">Sort: Newest First</option>
+            <option value="oldest">Sort: Oldest First</option>
+            <option value="amount_high">Amount: High to Low</option>
+            <option value="amount_low">Amount: Low to High</option>
+          </select>
+
+          <form onSubmit={handleSearchSubmit} className="flex items-center gap-2">
+            <div className="relative flex-1 sm:w-72">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+              <input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search UTR, order ID, customer..."
+                className="w-full rounded-lg border border-white/10 bg-black/40 py-2 pl-9 pr-8 text-sm text-white outline-none focus:border-rail-red"
+              />
+              {searchQuery ? (
+                <button
+                  type="button"
+                  onClick={clearSearch}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white"
+                >
+                  <X size={14} />
+                </button>
+              ) : null}
+            </div>
+            <Button type="submit" size="sm" variant="secondary" className="gap-1.5 font-semibold">
+              Search
+            </Button>
+          </form>
+        </div>
       </div>
 
       {/* Orders Table */}
@@ -433,27 +459,41 @@ function OrdersContent() {
       </div>
 
       {/* Pagination */}
-      {count > 0 && totalPages > 1 && (
-        <div className="flex items-center justify-between border-t border-white/10 pt-4">
-          <Button
-            size="sm"
-            variant="secondary"
-            disabled={page === 1}
-            onClick={() => setPage(page - 1)}
-          >
-            Previous
-          </Button>
-          <span className="text-xs text-slate-400">
-            Page {page} of {totalPages} ({count} total orders)
-          </span>
-          <Button
-            size="sm"
-            variant="secondary"
-            disabled={page === totalPages}
-            onClick={() => setPage(page + 1)}
-          >
-            Next
-          </Button>
+      {count > 0 && (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-t border-white/10 pt-4">
+          <p className="text-xs text-slate-400">
+            Showing <span className="font-semibold text-white">{(page - 1) * 10 + 1}</span>–
+            <span className="font-semibold text-white">{Math.min(page * 10, count)}</span> of{" "}
+            <span className="font-semibold text-white">{count}</span> total orders
+          </p>
+
+          {totalPages > 1 ? (
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={page === 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                className="h-8 px-3 text-xs"
+              >
+                Previous
+              </Button>
+              <div className="flex items-center gap-1 text-xs text-slate-300">
+                <span className="rounded bg-white/10 px-2.5 py-1 font-bold text-white">{page}</span>
+                <span className="text-slate-500">/</span>
+                <span className="px-1 text-slate-400">{totalPages}</span>
+              </div>
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={page === totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                className="h-8 px-3 text-xs"
+              >
+                Next
+              </Button>
+            </div>
+          ) : null}
         </div>
       )}
     </div>

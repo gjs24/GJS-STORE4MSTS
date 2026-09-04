@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
@@ -15,6 +15,7 @@ import {
 import { AdminLoginNote } from "@/components/admin-login-note";
 import { AdminLayout } from "@/components/admin-table";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { adminGet, type AdminActivityLog } from "@/lib/admin-api";
 
 function getActionTone(action: string) {
@@ -47,24 +48,33 @@ function ActivityLogsContent() {
   const [logs, setLogs] = useState<AdminActivityLog[]>([]);
   const [query, setQuery] = useState(searchParams.get("search") || "");
   const [filterAction, setFilterAction] = useState(searchParams.get("action") || "all");
+  const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest");
+  const [page, setPage] = useState(1);
+  const itemsPerPage = 15;
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setPage(1);
+  }, [query, filterAction, sortOrder]);
 
   const loadLogs = useCallback(async () => {
     setLoading(true);
     const queryParts: string[] = [];
     if (filterAction !== "all") queryParts.push(`action=${encodeURIComponent(filterAction)}`);
     if (query.trim()) queryParts.push(`search=${encodeURIComponent(query.trim())}`);
+    if (sortOrder !== "newest") queryParts.push(`ordering=${sortOrder}`);
 
     const path = queryParts.length ? `/admin/activity-logs/?${queryParts.join("&")}` : "/admin/activity-logs/";
     try {
-      const data = await adminGet<AdminActivityLog[]>(path, []);
-      setLogs(data);
+      const data = await adminGet<any>(path, []);
+      const logList = Array.isArray(data) ? data : Array.isArray(data?.results) ? data.results : [];
+      setLogs(logList);
     } catch {
       // ignore
     } finally {
       setLoading(false);
     }
-  }, [query, filterAction]);
+  }, [query, filterAction, sortOrder]);
 
   useEffect(() => {
     loadLogs();
@@ -77,6 +87,23 @@ function ActivityLogsContent() {
     const users = logs.filter((l) => l.action.toLowerCase().includes("user") || l.action.toLowerCase().includes("staff")).length;
     return { total, orders, products, users };
   }, [logs]);
+
+  const sortedLogs = useMemo(() => {
+    const list = [...logs];
+    if (sortOrder === "oldest") {
+      list.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    } else {
+      list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    }
+    return list;
+  }, [logs, sortOrder]);
+
+  const totalPages = Math.max(1, Math.ceil(sortedLogs.length / itemsPerPage));
+  const currentPage = Math.min(page, totalPages);
+  const paginatedLogs = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return sortedLogs.slice(start, start + itemsPerPage);
+  }, [sortedLogs, currentPage, itemsPerPage]);
 
   return (
     <div className="space-y-6">
@@ -158,23 +185,34 @@ function ActivityLogsContent() {
           })}
         </div>
 
-        <div className="relative w-full sm:w-80">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search action or message..."
-            className="w-full rounded-lg border border-white/10 bg-black/40 py-2 pl-9 pr-8 text-sm text-white outline-none focus:border-rail-red"
-          />
-          {query ? (
-            <button
-              type="button"
-              onClick={() => setQuery("")}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white"
-            >
-              <X size={14} />
-            </button>
-          ) : null}
+        <div className="flex flex-wrap items-center gap-3">
+          <select
+            value={sortOrder}
+            onChange={(e) => setSortOrder(e.target.value as "newest" | "oldest")}
+            className="rounded-lg border border-white/10 bg-black/50 px-3 py-2 text-xs font-semibold text-white outline-none focus:border-rail-red"
+          >
+            <option value="newest">Sort: Newest First</option>
+            <option value="oldest">Sort: Oldest First</option>
+          </select>
+
+          <div className="relative w-full sm:w-72">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search action or message..."
+              className="w-full rounded-lg border border-white/10 bg-black/40 py-2 pl-9 pr-8 text-sm text-white outline-none focus:border-rail-red"
+            />
+            {query ? (
+              <button
+                type="button"
+                onClick={() => setQuery("")}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white"
+              >
+                <X size={14} />
+              </button>
+            ) : null}
+          </div>
         </div>
       </div>
 
@@ -182,14 +220,14 @@ function ActivityLogsContent() {
       <div className="overflow-hidden rounded-lg border border-white/10 bg-white/[0.02]">
         {loading ? (
           <div className="p-8 text-center text-sm text-slate-400">Loading audit history...</div>
-        ) : logs.length === 0 ? (
+        ) : sortedLogs.length === 0 ? (
           <div className="p-8 text-center text-sm text-slate-400">
             {query || filterAction !== "all"
               ? "No activity logs match your search or filter."
               : "No administrative activity recorded yet."}
           </div>
         ) : (
-          logs.map((log) => {
+          paginatedLogs.map((log) => {
             const tone = getActionTone(log.action);
             const ActionIcon = getActionIcon(log.action);
             return (
@@ -237,6 +275,47 @@ function ActivityLogsContent() {
           })
         )}
       </div>
+
+      {/* Pagination Controls */}
+      {!loading && sortedLogs.length > 0 ? (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-t border-white/10 pt-4">
+          <p className="text-xs text-slate-400">
+            Showing <span className="font-semibold text-white">{(currentPage - 1) * itemsPerPage + 1}</span>–
+            <span className="font-semibold text-white">{Math.min(currentPage * itemsPerPage, sortedLogs.length)}</span> of{" "}
+            <span className="font-semibold text-white">{sortedLogs.length}</span> audit logs
+          </p>
+
+          {totalPages > 1 ? (
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={currentPage <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                className="h-8 px-3 text-xs"
+              >
+                Previous
+              </Button>
+              <div className="flex items-center gap-1 text-xs text-slate-300">
+                <span className="rounded bg-white/10 px-2.5 py-1 font-bold text-white">
+                  {currentPage}
+                </span>
+                <span className="text-slate-500">/</span>
+                <span className="px-1 text-slate-400">{totalPages}</span>
+              </div>
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={currentPage >= totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                className="h-8 px-3 text-xs"
+              >
+                Next
+              </Button>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }
