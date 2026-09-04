@@ -32,13 +32,13 @@ class RegisterSerializer(serializers.ModelSerializer):
 
 class SendOTPSerializer(serializers.Serializer):
     email = serializers.EmailField()
-    purpose = serializers.ChoiceField(choices=["login", "signup", "reset"], default="login")
+    purpose = serializers.ChoiceField(choices=["login", "signup", "reset", "profile_edit"], default="login")
 
 
 class VerifyOTPSerializer(serializers.Serializer):
     email = serializers.EmailField()
     otp = serializers.CharField(max_length=6, min_length=6)
-    purpose = serializers.ChoiceField(choices=["login", "signup", "reset"], default="login")
+    purpose = serializers.ChoiceField(choices=["login", "signup", "reset", "profile_edit"], default="login")
     username = serializers.CharField(max_length=150, required=False, allow_blank=True)
     password = serializers.CharField(min_length=8, required=False, allow_blank=True, write_only=True)
     first_name = serializers.CharField(max_length=150, required=False, allow_blank=True)

@@ -268,6 +268,7 @@ class EmailOTP(models.Model):
         SIGNUP = "signup", "Signup"
         LOGIN = "login", "Login"
         RESET = "reset", "Password Reset"
+        PROFILE_EDIT = "profile_edit", "Profile Edit"
 
     email = models.EmailField(db_index=True)
     otp_code = models.CharField(max_length=6)

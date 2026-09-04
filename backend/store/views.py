@@ -328,6 +328,7 @@ def send_otp_email(email, otp_code, purpose):
         "signup": "Your Verification Code - MSTS-GJS Production Store",
         "login": "Your Login Code - MSTS-GJS Production Store",
         "reset": "Your Password Reset Code - MSTS-GJS Production Store",
+        "profile_edit": "Profile Update Verification Code - MSTS-GJS Production Store",
     }
     subject = subject_map.get(purpose, "Your Verification Code - MSTS-GJS Production Store")
 
@@ -336,6 +337,8 @@ def send_otp_email(email, otp_code, purpose):
         if purpose == "signup"
         else "sign in to your account"
         if purpose == "login"
+        else "verify and save your profile changes"
+        if purpose == "profile_edit"
         else "reset your password"
     )
 
@@ -503,6 +506,14 @@ class SendOTPView(APIView):
                         {"detail": "An account with this email address already exists. Please login instead."},
                         status=status.HTTP_400_BAD_REQUEST,
                     )
+            elif purpose == "profile_edit":
+                existing = User.objects.filter(email__iexact=email).first()
+                if request.user.is_authenticated:
+                    if existing and existing.id != request.user.id:
+                        return Response(
+                            {"detail": "This email address is already in use by another account."},
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
 
             recent_otp = EmailOTP.objects.filter(
                 email__iexact=email,
@@ -668,11 +679,57 @@ class VerifyOTPView(APIView):
 @permission_classes([permissions.IsAuthenticated])
 def current_user(request):
     if request.method == "PATCH":
-        allowed_fields = ["first_name", "last_name", "email"]
-        for field in allowed_fields:
-            if field in request.data:
-                setattr(request.user, field, str(request.data.get(field, "")).strip())
-        request.user.save(update_fields=allowed_fields)
+        otp_code = str(request.data.get("otp", "")).strip()
+        new_email = str(request.data.get("email", request.user.email or "")).strip().lower()
+        new_first_name = str(request.data.get("first_name", request.user.first_name or "")).strip()
+        new_last_name = str(request.data.get("last_name", request.user.last_name or "")).strip()
+
+        # Check if email is already taken by another user
+        if new_email and new_email != (request.user.email or "").lower():
+            if User.objects.filter(email__iexact=new_email).exclude(id=request.user.id).exists():
+                return Response(
+                    {"detail": "This email address is already registered by another account."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        # Require OTP authentication
+        if not otp_code or len(otp_code) != 6:
+            return Response(
+                {"detail": "Please enter the 6-digit email verification code to save profile changes."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        possible_emails = [e for e in [new_email, (request.user.email or "").lower()] if e]
+        otp_record = EmailOTP.objects.filter(
+            email__in=possible_emails,
+            purpose="profile_edit",
+            is_used=False,
+        ).order_by("-created_at").first()
+
+        if not otp_record or not otp_record.is_valid():
+            return Response(
+                {"detail": "Verification code has expired or was not found. Please request a new code."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if otp_record.otp_code != otp_code:
+            otp_record.attempts += 1
+            otp_record.save(update_fields=["attempts"])
+            remaining = max(0, 5 - otp_record.attempts)
+            return Response(
+                {"detail": f"Incorrect verification code. {remaining} attempt(s) remaining."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        otp_record.is_used = True
+        otp_record.save(update_fields=["is_used"])
+
+        request.user.first_name = new_first_name
+        request.user.last_name = new_last_name
+        if new_email:
+            request.user.email = new_email
+        request.user.save(update_fields=["first_name", "last_name", "email"])
+
     return Response(UserSerializer(request.user).data)
 
 
