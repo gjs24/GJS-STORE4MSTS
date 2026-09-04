@@ -407,45 +407,57 @@ class SendOTPView(APIView):
         email = serializer.validated_data["email"].lower().strip()
         purpose = serializer.validated_data.get("purpose", "login")
 
-        if purpose == "login":
-            if not User.objects.filter(email__iexact=email).exists():
+        try:
+            if purpose == "login":
+                if not User.objects.filter(email__iexact=email).exists():
+                    return Response(
+                        {"detail": "No account found with this email address. Please sign up first."},
+                        status=status.HTTP_404_NOT_FOUND,
+                    )
+            elif purpose == "signup":
+                if User.objects.filter(email__iexact=email).exists():
+                    return Response(
+                        {"detail": "An account with this email address already exists. Please login instead."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+            recent_otp = EmailOTP.objects.filter(
+                email__iexact=email,
+                created_at__gte=timezone.now() - timedelta(seconds=60),
+            ).first()
+            if recent_otp:
                 return Response(
-                    {"detail": "No account found with this email address. Please sign up first."},
-                    status=status.HTTP_404_NOT_FOUND,
-                )
-        elif purpose == "signup":
-            if User.objects.filter(email__iexact=email).exists():
-                return Response(
-                    {"detail": "An account with this email address already exists. Please login instead."},
-                    status=status.HTTP_400_BAD_REQUEST,
+                    {"detail": "Please wait a minute before requesting another verification code."},
+                    status=status.HTTP_429_TOO_MANY_REQUESTS,
                 )
 
-        recent_otp = EmailOTP.objects.filter(
-            email__iexact=email,
-            created_at__gte=timezone.now() - timedelta(seconds=60),
-        ).first()
-        if recent_otp:
-            return Response(
-                {"detail": "Please wait a minute before requesting another verification code."},
-                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            EmailOTP.objects.filter(email__iexact=email, purpose=purpose, is_used=False).update(is_used=True)
+
+            otp_code = f"{random.SystemRandom().randint(100000, 999999)}"
+            expires_at = timezone.now() + timedelta(minutes=10)
+
+            EmailOTP.objects.create(
+                email=email,
+                otp_code=otp_code,
+                purpose=purpose,
+                expires_at=expires_at,
             )
-
-        EmailOTP.objects.filter(email__iexact=email, purpose=purpose, is_used=False).update(is_used=True)
-
-        otp_code = f"{random.SystemRandom().randint(100000, 999999)}"
-        expires_at = timezone.now() + timedelta(minutes=10)
-
-        EmailOTP.objects.create(
-            email=email,
-            otp_code=otp_code,
-            purpose=purpose,
-            expires_at=expires_at,
-        )
+        except Exception as db_exc:
+            logger.exception("Database error while processing OTP for %s: %s", email, db_exc)
+            return Response(
+                {
+                    "detail": f"Database error: {db_exc}. Ensure database migrations are run on the server ('python manage.py migrate')."
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
         sent, err = send_otp_email(email, otp_code, purpose)
         if not sent:
+            logger.error("Email sending failed for %s: %s", email, err)
             return Response(
-                {"detail": f"Could not send email: {err}"},
+                {
+                    "detail": f"Failed to send email: {err}. Please check your EMAIL_HOST_USER and EMAIL_HOST_PASSWORD in Render environment variables."
+                },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
@@ -470,11 +482,20 @@ class VerifyOTPView(APIView):
         otp_code = serializer.validated_data["otp"].strip()
         purpose = serializer.validated_data.get("purpose", "login")
 
-        otp_record = EmailOTP.objects.filter(
-            email__iexact=email,
-            purpose=purpose,
-            is_used=False,
-        ).order_by("-created_at").first()
+        try:
+            otp_record = EmailOTP.objects.filter(
+                email__iexact=email,
+                purpose=purpose,
+                is_used=False,
+            ).order_by("-created_at").first()
+        except Exception as db_exc:
+            logger.exception("Database error in VerifyOTPView for %s: %s", email, db_exc)
+            return Response(
+                {
+                    "detail": f"Database error: {db_exc}. Ensure database migrations are run on the server ('python manage.py migrate')."
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
         if not otp_record:
             return Response(

@@ -115,7 +115,11 @@ export function AuthForm({ mode, portal = "user" }: AuthFormProps) {
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        setMessage(data.detail || "Could not send verification code.");
+        setMessage(
+          data.detail ||
+          data.message ||
+          `Server returned error ${res.status}. Check backend logs.`
+        );
         return;
       }
 
@@ -465,12 +469,16 @@ export function AuthForm({ mode, portal = "user" }: AuthFormProps) {
             or
             <span className="h-px flex-1 bg-white/10" />
           </div>
-          <GoogleLogin
-            onSuccess={(credentialResponse) => googleLogin(credentialResponse.credential)}
-            onError={() => setMessage("Google login failed.")}
-            text={mode === "register" ? "signup_with" : "signin_with"}
-            width="100%"
-          />
+          <div className="flex justify-center">
+            <GoogleLogin
+              onSuccess={(credentialResponse) => googleLogin(credentialResponse.credential)}
+              onError={() => setMessage("Google login failed.")}
+              text={mode === "register" ? "signup_with" : "signin_with"}
+              theme="filled_black"
+              shape="rectangular"
+              width="360"
+            />
+          </div>
         </div>
       ) : null}
 
