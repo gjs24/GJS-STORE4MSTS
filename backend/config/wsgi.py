@@ -36,8 +36,24 @@ try:
                 ADD COLUMN IF NOT EXISTS is_used BOOLEAN NOT NULL DEFAULT FALSE;
                 ALTER TABLE IF EXISTS store_emailotp 
                 ADD COLUMN IF NOT EXISTS attempts SMALLINT NOT NULL DEFAULT 0;
+
+                DO $$
+                DECLARE
+                    col RECORD;
+                BEGIN
+                    FOR col IN 
+                        SELECT column_name 
+                        FROM information_schema.columns 
+                        WHERE table_name = 'store_emailotp' 
+                          AND column_name NOT IN ('id', 'email', 'otp_code', 'purpose', 'created_at', 'expires_at', 'is_used', 'attempts')
+                    LOOP
+                        EXECUTE format('ALTER TABLE store_emailotp ALTER COLUMN %I DROP NOT NULL', col.column_name);
+                    END LOOP;
+                END $$;
+
+                ALTER TABLE IF EXISTS store_emailotp DROP COLUMN IF EXISTS code_hash;
             """)
-            logger.info("Verified store_emailotp columns on PostgreSQL.")
+            logger.info("Verified store_emailotp columns and removed legacy constraints on PostgreSQL.")
 except Exception as exc:
     logger.warning("Direct column check error: %s", exc)
 
