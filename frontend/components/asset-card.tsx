@@ -35,11 +35,6 @@ export function AssetCard({ asset }: { asset: Asset }) {
             {asset.simulator_type.replace("_", " ")}
           </span>
 
-          {/* Price / Status Badge */}
-          <span
-            className={`absolute right-3 top-3 rounded-full px-2.5 py-1 text-xs font-bold tracking-wide shadow-md backdrop-blur-md ${
-              asset.is_upcoming
-                ? "bg-gradient-to-r from-amber-400 to-amber-500 text-black font-black"
           {/* Price / Status Badge & Quick Wishlist Heart */}
           <div className="absolute right-3 top-3 z-10 flex items-center gap-1.5">
             <span
@@ -58,26 +53,10 @@ export function AssetCard({ asset }: { asset: Asset }) {
               {asset.is_upcoming
                 ? asset.coming_soon_badge || "COMING SOON"
                 : showDeal
-                ? "animate-deal-pulse bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-extrabold"
                 ? asset.deal_title || "DEAL OPEN"
                 : asset.is_free
-                ? "bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-extrabold"
                 ? "FREE"
                 : asset.discount_percent
-                ? "bg-rail-red text-white font-extrabold shadow-glow"
-                : "border border-white/20 bg-rail-red text-white"
-            }`}
-          >
-            {asset.is_upcoming
-              ? asset.coming_soon_badge || "COMING SOON"
-              : showDeal
-              ? asset.deal_title || "DEAL OPEN"
-              : asset.is_free
-              ? "FREE"
-              : asset.discount_percent
-              ? `${asset.discount_percent}% OFF`
-              : `INR ${asset.price}`}
-          </span>
                 ? `${asset.discount_percent}% OFF`
                 : `INR ${asset.price}`}
             </span>

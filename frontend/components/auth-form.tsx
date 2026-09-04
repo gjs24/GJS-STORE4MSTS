@@ -122,11 +122,19 @@ export function AuthForm({ mode, portal = "user" }: AuthFormProps) {
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        setMessage(
-          data.detail ||
-          data.message ||
-          `Server returned error ${res.status}. Check backend logs.`
-        );
+        const errorMsg =
+          typeof data.detail === "string"
+            ? data.detail
+            : typeof data.message === "string"
+              ? data.message
+              : typeof data.email === "object" && data.email?.[0]
+                ? String(data.email[0])
+                : typeof data.purpose === "object" && data.purpose?.[0]
+                  ? String(data.purpose[0])
+                  : typeof data.non_field_errors === "object" && data.non_field_errors?.[0]
+                    ? String(data.non_field_errors[0])
+                    : `Server returned error ${res.status}.`;
+        setMessage(errorMsg);
         return;
       }
 

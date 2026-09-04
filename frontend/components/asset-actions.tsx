@@ -3,10 +3,8 @@
 import Link from "next/link";
 import { useState } from "react";
 import { load } from "@cashfreepayments/cashfree-js";
-import { CheckCircle2, Download, Heart, Lock, ShoppingCart } from "lucide-react";
 import { CheckCircle2, Download, Lock, ShoppingCart } from "lucide-react";
 import { priceLabel, type Asset } from "@/lib/api";
-import { addToWishlist, createOrder, downloadAsset, isLoggedIn, notifyMe, verifyPayment, type StoreOrder } from "@/lib/store-api";
 import { WishlistButton } from "@/components/wishlist-button";
 import { createOrder, downloadAsset, isLoggedIn, notifyMe, verifyPayment, type StoreOrder } from "@/lib/store-api";
 
@@ -133,29 +131,12 @@ export function AssetActions({ asset }: { asset: Asset }) {
     }
   }
 
-  async function handleWishlist() {
-    if (!(await requireLogin())) return;
-    setBusy(true);
-    setMessage("Saving to wishlist...");
-    try {
-      await addToWishlist(asset.id);
-      setMessage("Saved to your wishlist.");
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Could not update wishlist.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
   return (
     <div className="mt-8 space-y-4">
       <div className="flex flex-wrap gap-3">
         <button onClick={handlePrimaryAction} disabled={busy} className="rounded bg-rail-red px-5 py-3 font-semibold text-white disabled:opacity-60">
           {asset.is_free || asset.can_download ? <Download className="mr-2 inline" size={18} /> : <ShoppingCart className="mr-2 inline" size={18} />}
           {asset.is_upcoming ? asset.coming_soon_button_text || "Notify Me" : asset.is_free || asset.can_download ? "Download package" : `Buy for ${priceLabel(asset)}`}
-        </button>
-        <button onClick={handleWishlist} disabled={busy} className="rounded border border-white/15 px-5 py-3 font-semibold disabled:opacity-60">
-          <Heart className="mr-2 inline" size={18} /> Wishlist
         </button>
         <WishlistButton
           assetId={asset.id}

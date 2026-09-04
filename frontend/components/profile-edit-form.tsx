@@ -74,7 +74,17 @@ export function ProfileEditForm() {
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        setMessage(data.detail || data.message || "Failed to send verification code.");
+        const errorMsg =
+          typeof data.detail === "string"
+            ? data.detail
+            : typeof data.message === "string"
+              ? data.message
+              : typeof data.purpose === "object" && data.purpose?.[0]
+                ? String(data.purpose[0])
+                : typeof data.email === "object" && data.email?.[0]
+                  ? String(data.email[0])
+                  : "Failed to send verification code.";
+        setMessage(errorMsg);
         setIsSuccess(false);
         return;
       }

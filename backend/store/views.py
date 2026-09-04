@@ -488,7 +488,15 @@ class SendOTPView(APIView):
     def post(self, request):
         serializer = SendOTPSerializer(data=request.data)
         if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            first_err = "Invalid input."
+            for field, errs in serializer.errors.items():
+                if isinstance(errs, list) and len(errs) > 0:
+                    first_err = f"{errs[0]}"
+                    break
+                elif isinstance(errs, str):
+                    first_err = errs
+                    break
+            return Response({"detail": first_err, "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
 
         email = serializer.validated_data["email"].lower().strip()
         purpose = serializer.validated_data.get("purpose", "login")

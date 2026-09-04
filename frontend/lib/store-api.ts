@@ -1,5 +1,3 @@
-"use client";
-
 import { API_URL, clearAuth, type Asset } from "@/lib/api";
 
 export type StoreOrder = {
@@ -215,6 +213,22 @@ export async function downloadAsset(assetId: number): Promise<DownloadResult> {
   return { url: data.download_url };
 }
 
+export async function downloadInvoice(orderId: number): Promise<DownloadResult> {
+  await validAccessToken();
+  let res = await fetch(`${API_URL}/orders/${orderId}/invoice/`, { headers: authHeaders() });
+  if (res.status === 401 && await refreshAccessToken()) {
+    res = await fetch(`${API_URL}/orders/${orderId}/invoice/`, { headers: authHeaders() });
+  }
+  if (!res.ok) throw new Error(await parseError(res, "Could not download invoice."));
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  return {
+    url,
+    filename: filenameFromDisposition(res.headers.get("Content-Disposition")) || `GJS-${orderId}-invoice.pdf`,
+    revoke: () => URL.revokeObjectURL(url)
+  };
+}
+
 export const WISHLIST_CHANGE_EVENT = "gjs_wishlist_change";
 
 export function emitWishlistChange(assetId: number, isWishlisted: boolean) {
@@ -242,13 +256,11 @@ export async function addToWishlist(assetId: number): Promise<WishlistItem> {
     });
   }
   if (!res.ok) throw new Error(await parseError(res, "Could not save this asset."));
-  return res.json();
   const data = await res.json();
   emitWishlistChange(assetId, true);
   return data;
 }
 
-export async function removeFromWishlist(wishlistId: number): Promise<void> {
 export async function removeAssetFromWishlist(assetId: number): Promise<void> {
   await validAccessToken();
   let res = await fetch(`${API_URL}/wishlist/?asset_id=${assetId}`, {
@@ -314,20 +326,4 @@ export async function notifyMe(assetSlug: string): Promise<{ detail: string; cre
   }
   if (!res.ok) throw new Error(await parseError(res, "Could not save notification request."));
   return res.json();
-}
-
-export async function downloadInvoice(orderId: number): Promise<DownloadResult> {
-  await validAccessToken();
-  let res = await fetch(`${API_URL}/orders/${orderId}/invoice/`, { headers: authHeaders() });
-  if (res.status === 401 && await refreshAccessToken()) {
-    res = await fetch(`${API_URL}/orders/${orderId}/invoice/`, { headers: authHeaders() });
-  }
-  if (!res.ok) throw new Error(await parseError(res, "Could not download invoice."));
-  const blob = await res.blob();
-  const url = URL.createObjectURL(blob);
-  return {
-    url,
-    filename: filenameFromDisposition(res.headers.get("Content-Disposition")) || `GJS-${orderId}-invoice.pdf`,
-    revoke: () => URL.revokeObjectURL(url)
-  };
 }
