@@ -159,4 +159,7 @@ EMAIL_HOST_USER = env("EMAIL_HOST_USER", default="")
 EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", default="")
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="MSTS-GJS Store <noreply@msts-gjs.com>")
 EMAIL_TIMEOUT = env.int("EMAIL_TIMEOUT", default=10)
+BREVO_API_KEY = env("BREVO_API_KEY", default="")
+RESEND_API_KEY = env("RESEND_API_KEY", default="")
+
 

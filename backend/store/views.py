@@ -2,6 +2,7 @@ import base64
 from datetime import timedelta
 import json
 import logging
+import os
 import random
 import re
 from pathlib import PurePath
@@ -385,6 +386,23 @@ https://msts-gjs.com
 </body>
 </html>
 """
+    # 1. Try Brevo HTTPS API if key present (bypasses Render SMTP port 587 block)
+    brevo_key = getattr(settings, "BREVO_API_KEY", "") or os.environ.get("BREVO_API_KEY", "")
+    if brevo_key:
+        ok, err = send_otp_via_brevo(email, subject, html_content, text_content, brevo_key)
+        if ok:
+            return True, ""
+        logger.warning("Brevo API failed: %s. Trying fallback...", err)
+
+    # 2. Try Resend HTTPS API if key present
+    resend_key = getattr(settings, "RESEND_API_KEY", "") or os.environ.get("RESEND_API_KEY", "")
+    if resend_key:
+        ok, err = send_otp_via_resend(email, subject, html_content, text_content, resend_key)
+        if ok:
+            return True, ""
+        logger.warning("Resend API failed: %s. Trying fallback...", err)
+
+    # 3. Standard SMTP fallback
     try:
         from_email = getattr(settings, "DEFAULT_FROM_EMAIL", "noreply@msts-gjs.com")
         msg = EmailMultiAlternatives(subject, text_content, from_email, [email])
@@ -392,7 +410,72 @@ https://msts-gjs.com
         msg.send(fail_silently=False)
         return True, ""
     except Exception as exc:
-        logger.exception("Failed to send OTP email to %s: %s", email, exc)
+        logger.warning("RENDER SMTP BLOCKED: Verification code for %s is [%s]", email, otp_code)
+        err_str = str(exc)
+        if "Network is unreachable" in err_str or "101" in err_str:
+            err_str = (
+                "Render free tier blocks SMTP port 587. "
+                "Please add a free BREVO_API_KEY or RESEND_API_KEY in Render Environment Variables to send emails via HTTPS port 443."
+            )
+        return False, err_str
+
+
+def send_otp_via_brevo(email, subject, html_content, text_content, api_key):
+    sender_raw = getattr(settings, "DEFAULT_FROM_EMAIL", "noreply@msts-gjs.com")
+    sender_name = "MSTS-GJS Production Store"
+    sender_email = sender_raw
+    if "<" in sender_raw and ">" in sender_raw:
+        sender_name = sender_raw.split("<")[0].strip() or sender_name
+        sender_email = sender_raw.split("<")[1].replace(">", "").strip()
+
+    try:
+        response = requests.post(
+            "https://api.brevo.com/v3/smtp/email",
+            headers={
+                "accept": "application/json",
+                "api-key": api_key,
+                "content-type": "application/json",
+            },
+            json={
+                "sender": {"name": sender_name, "email": sender_email},
+                "to": [{"email": email}],
+                "subject": subject,
+                "htmlContent": html_content,
+                "textContent": text_content,
+            },
+            timeout=15,
+        )
+        if response.status_code in [200, 201, 202]:
+            return True, ""
+        data = response.json()
+        return False, data.get("message", response.text)
+    except Exception as exc:
+        return False, str(exc)
+
+
+def send_otp_via_resend(email, subject, html_content, text_content, api_key):
+    sender = getattr(settings, "DEFAULT_FROM_EMAIL", "MSTS-GJS Store <onboarding@resend.dev>")
+    try:
+        response = requests.post(
+            "https://api.resend.com/emails",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "from": sender,
+                "to": [email],
+                "subject": subject,
+                "html": html_content,
+                "text": text_content,
+            },
+            timeout=15,
+        )
+        if response.status_code in [200, 201, 202]:
+            return True, ""
+        data = response.json()
+        return False, data.get("message", response.text)
+    except Exception as exc:
         return False, str(exc)
 
 

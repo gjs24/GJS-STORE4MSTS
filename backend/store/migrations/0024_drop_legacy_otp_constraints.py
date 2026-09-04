@@ -37,3 +37,4 @@ class Migration(migrations.Migration):
     operations = [
         migrations.RunPython(drop_legacy_constraints, reverse_code=migrations.RunPython.noop),
     ]
+
