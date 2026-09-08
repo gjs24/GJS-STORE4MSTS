@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Clock, KeyRound, Mail, MessageCircle, RefreshCw, Train, Wrench } from "lucide-react";
+import { Clock, Mail, MessageCircle, RefreshCw, Train, Wrench } from "lucide-react";
 
 type MaintenanceScreenProps = {
   title?: string;
@@ -132,18 +132,7 @@ export function MaintenanceScreen({
           </div>
         )}
       </div>
-
-      {/* Discreet Staff Portal Link */}
-      <div className="mt-8 flex items-center gap-2 text-xs text-slate-500">
-        <KeyRound size={12} />
-        <span>Staff Access:</span>
-        <Link
-          href="/admin-login"
-          className="text-slate-400 underline transition hover:text-white"
-        >
-          Administrator Login
-        </Link>
-      </div>
     </div>
   );
 }
+
