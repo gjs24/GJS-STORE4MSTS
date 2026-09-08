@@ -108,7 +108,7 @@ export const fallbackSiteSettings: SiteSettings = {
   maintenance_message: "We are currently upgrading server systems and performing essential depot maintenance. We'll be back online shortly!",
   maintenance_estimated_end: "Expected to return shortly",
   maintenance_bypass_token: "",
-  desktop_app_download_url: "https://github.com/gjs24/GJS-STORE4MSTS/releases",
+  desktop_app_download_url: "https://github.com/gjs24/GJS-STORE4MSTS/releases/download/v1.0.0/MSTS-GJS.Production.Store.Setup.1.0.0.exe",
   desktop_app_version: "1.0.0"
 };
 
