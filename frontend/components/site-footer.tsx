@@ -15,6 +15,7 @@ const quickLinks = [
   ["Free Assets", "/assets?price=free"],
   ["Deals & Offers", "/assets?deal=true"],
   ["Asset Categories", "/categories"],
+  ["Desktop App (Windows)", "/download-app"],
   ["User Dashboard", "/dashboard"]
 ];
 

@@ -2,7 +2,7 @@
 
 import { type FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
-import { Check, Clock, Copy, CreditCard, Database, ExternalLink, Eye, Image, Megaphone, ShieldCheck, Wrench } from "lucide-react";
+import { Check, Clock, Copy, CreditCard, Database, ExternalLink, Eye, Image, Megaphone, MonitorDown, ShieldCheck, Wrench } from "lucide-react";
 import { AdminLoginNote } from "@/components/admin-login-note";
 import { AdminLayout } from "@/components/admin-table";
 import { adminGet, adminPatch, type AdminSettings } from "@/lib/admin-api";
@@ -439,7 +439,66 @@ export default function AdminSettingsPage() {
             className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-2 text-white outline-none focus:border-rail-red"
           />
         </label>
-        {status ? <p className="text-sm text-rail-amber">{status}</p> : null}
+
+        {/* Desktop App Distribution */}
+        <div className="border-t border-white/10 pt-5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-rail-amber">
+              <MonitorDown size={20} />
+              <h2 className="font-semibold text-white">Desktop App Distribution (Windows)</h2>
+            </div>
+            <Link
+              href="/download-app"
+              target="_blank"
+              className="inline-flex items-center gap-1 text-xs text-slate-300 hover:text-rail-amber transition"
+            >
+              <span>Preview Download Page</span>
+              <ExternalLink size={13} />
+            </Link>
+          </div>
+          <p className="mt-2 text-sm text-slate-400">
+            Configure the direct download link for the Windows desktop installer (e.g. Google Drive direct link, Cloudflare R2, or GitHub Releases) and the release version string.
+          </p>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-3">
+          <label className="block text-sm font-semibold text-slate-200 md:col-span-2">
+            Desktop App Download URL
+            <input
+              value={siteForm.desktop_app_download_url || ""}
+              onChange={(event) => updateSiteForm("desktop_app_download_url", event.target.value)}
+              placeholder="https://github.com/gjs24/GJS-STORE4MSTS/releases"
+              className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-2 text-white outline-none focus:border-rail-red"
+            />
+            <span className="mt-1 block text-xs text-slate-500">
+              Users who click &quot;Download for Windows&quot; on <code className="text-slate-400">/download-app</code> will be directed to this file link.
+            </span>
+          </label>
+
+          <label className="block text-sm font-semibold text-slate-200">
+            Release Version
+            <input
+              value={siteForm.desktop_app_version || ""}
+              onChange={(event) => updateSiteForm("desktop_app_version", event.target.value)}
+              placeholder="1.0.0"
+              className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-2 text-white outline-none focus:border-rail-red"
+            />
+            <span className="mt-1 block text-xs text-slate-500">
+              Shown on the download badge (e.g. 1.0.0).
+            </span>
+          </label>
+        </div>
+
+        <div className="flex items-center justify-between border-t border-white/10 pt-4">
+          <div>{status ? <p className="text-sm text-rail-amber">{status}</p> : null}</div>
+          <button
+            type="submit"
+            disabled={saving}
+            className="rounded bg-rail-red px-5 py-2.5 text-sm font-semibold text-white shadow transition hover:bg-rail-red/90 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {saving ? "Saving..." : "Save all settings"}
+          </button>
+        </div>
       </form>
     </AdminLayout>
   );

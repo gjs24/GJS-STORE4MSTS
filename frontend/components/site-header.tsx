@@ -10,6 +10,7 @@ import {
   LayoutDashboard,
   LayoutGrid,
   Menu,
+  MonitorDown,
   Package,
   Search,
   TrainFront,
@@ -24,6 +25,7 @@ const navItems = [
   { label: "Assets", href: "/assets", icon: Package },
   { label: "Categories", href: "/categories", icon: LayoutGrid },
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { label: "Desktop App", href: "/download-app", icon: MonitorDown },
   { label: "Support", href: "/contact", icon: HelpCircle }
 ];
 
@@ -89,6 +91,16 @@ export function SiteHeader() {
             className="rounded-lg border border-white/10 p-2 text-slate-300 transition-colors hover:border-white/20 hover:bg-white/5 hover:text-white"
           >
             <Heart size={18} />
+          </Link>
+
+          <Link
+            aria-label="Download Desktop App"
+            href="/download-app"
+            title="Download MSTS-GJS Desktop App for Windows"
+            className="hidden sm:inline-flex items-center gap-1.5 rounded-lg border border-rail-amber/30 bg-rail-amber/10 px-2.5 py-1.5 text-xs font-bold text-rail-amber shadow-sm transition-all hover:bg-rail-amber/20 hover:text-white"
+          >
+            <MonitorDown size={15} />
+            <span>Get App</span>
           </Link>
 
           <div className="hidden sm:block">

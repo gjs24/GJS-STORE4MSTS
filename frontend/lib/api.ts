@@ -87,6 +87,8 @@ export type SiteSettings = {
   maintenance_message?: string;
   maintenance_estimated_end?: string;
   maintenance_bypass_token?: string;
+  desktop_app_download_url?: string;
+  desktop_app_version?: string;
   updated_at?: string;
 };
 
@@ -105,7 +107,9 @@ export const fallbackSiteSettings: SiteSettings = {
   maintenance_title: "System Under Scheduled Maintenance",
   maintenance_message: "We are currently upgrading server systems and performing essential depot maintenance. We'll be back online shortly!",
   maintenance_estimated_end: "Expected to return shortly",
-  maintenance_bypass_token: ""
+  maintenance_bypass_token: "",
+  desktop_app_download_url: "https://github.com/gjs24/GJS-STORE4MSTS/releases",
+  desktop_app_version: "1.0.0"
 };
 
 export const AUTH_CHANGE_EVENT = "gjs_auth_change";
