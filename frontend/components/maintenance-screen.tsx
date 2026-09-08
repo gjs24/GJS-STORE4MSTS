@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { Clock, Mail, MessageCircle, RefreshCw, Train, Wrench } from "lucide-react";
 
 type MaintenanceScreenProps = {
@@ -49,12 +48,6 @@ export function MaintenanceScreen({
         <div className="mb-6 flex flex-wrap items-center justify-center gap-3 rounded-full border border-rail-amber/40 bg-rail-amber/10 px-5 py-2 text-xs font-semibold text-rail-amber backdrop-blur-md">
           <span className="flex h-2 w-2 rounded-full bg-rail-amber animate-ping" />
           <span>Testing Area: Maintenance Screen Live Preview</span>
-          <Link
-            href="/admin-dashboard/settings"
-            className="rounded-full bg-rail-amber/20 px-3 py-0.5 text-[11px] font-bold text-white transition hover:bg-rail-amber/40"
-          >
-            ← Return to Settings
-          </Link>
         </div>
       )}
 

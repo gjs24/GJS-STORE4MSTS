@@ -285,6 +285,20 @@ export async function getSiteSettings() {
   }
 }
 
+export async function verifyMaintenanceBypass(token: string): Promise<boolean> {
+  if (!token) return false;
+  try {
+    const res = await fetch(`${API_URL}/verify-maintenance-bypass/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: token.trim() }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 export function hasOffer(asset: Pick<Asset, "is_free" | "original_price" | "price" | "discount_percent">) {
   return !asset.is_free && Number(asset.original_price) > Number(asset.price) && Number(asset.discount_percent || 0) > 0;
 }

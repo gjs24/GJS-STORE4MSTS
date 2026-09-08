@@ -32,6 +32,7 @@ from .views import (
     current_user,
     order_invoice,
     site_settings,
+    verify_maintenance_bypass,
 )
 
 router = DefaultRouter()
@@ -46,6 +47,7 @@ router.register("admin/reviews", AdminReviewViewSet, basename="admin-review")
 urlpatterns = [
     path("assets/<int:pk>/download/", asset_download_by_id, name="asset-download-by-id"),
     path("site-settings/", site_settings, name="site-settings"),
+    path("verify-maintenance-bypass/", verify_maintenance_bypass, name="verify-maintenance-bypass"),
     path("", include(router.urls)),
     path("auth/register/", RegisterView.as_view(), name="register"),
     path("auth/login/", LoginView.as_view(), name="login"),

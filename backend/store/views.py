@@ -1721,7 +1721,21 @@ def admin_stats(request):
 @api_view(["GET"])
 @permission_classes([permissions.AllowAny])
 def site_settings(request):
-    return Response(SiteSettingSerializer(SiteSetting.load()).data)
+    data = SiteSettingSerializer(SiteSetting.load()).data
+    if not (request.user and request.user.is_authenticated and request.user.is_staff):
+        data.pop("maintenance_bypass_token", None)
+    return Response(data)
+
+
+@api_view(["POST"])
+@permission_classes([permissions.AllowAny])
+def verify_maintenance_bypass(request):
+    token = str(request.data.get("token") or "").strip()
+    setting = SiteSetting.load()
+    expected = (setting.maintenance_bypass_token or "").strip()
+    if expected and token == expected:
+        return Response({"valid": True})
+    return Response({"valid": False, "detail": "Invalid or expired bypass key."}, status=status.HTTP_403_FORBIDDEN)
 
 
 @api_view(["GET", "PATCH"])

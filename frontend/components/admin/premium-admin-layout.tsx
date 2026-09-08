@@ -157,14 +157,33 @@ export function PremiumAdminLayout({ title, children }: { title: string; childre
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [user, setUser] = useState<CurrentUser | null>(null);
+  const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
   const [verificationPending, setVerificationPending] = useState(0);
   const [globalSearch, setGlobalSearch] = useState("");
   const router = useRouter();
   const pathname = usePathname();
 
   useEffect(() => {
-    const syncUser = () => setUser(getStoredUser());
-    syncUser();
+    const currentUser = getStoredUser();
+    if (!currentUser || !currentUser.is_staff) {
+      setIsAuthorized(false);
+      router.replace("/admin-login");
+      return;
+    }
+
+    setIsAuthorized(true);
+    setUser(currentUser);
+
+    const syncUser = () => {
+      const u = getStoredUser();
+      if (!u || !u.is_staff) {
+        setIsAuthorized(false);
+        router.replace("/admin-login");
+      } else {
+        setUser(u);
+      }
+    };
+
     window.addEventListener(AUTH_CHANGE_EVENT, syncUser);
     window.addEventListener("storage", syncUser);
 
@@ -176,7 +195,7 @@ export function PremiumAdminLayout({ title, children }: { title: string; childre
       window.removeEventListener(AUTH_CHANGE_EVENT, syncUser);
       window.removeEventListener("storage", syncUser);
     };
-  }, []);
+  }, [router]);
 
   function handleSearchSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -194,6 +213,17 @@ export function PremiumAdminLayout({ title, children }: { title: string; childre
   function handleLogout() {
     clearAuth();
     router.push("/admin-login");
+  }
+
+  if (isAuthorized !== true) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-rail-black text-white">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-rail-red border-t-transparent" />
+          <p className="text-xs uppercase tracking-widest text-slate-400">Verifying administrative access...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
