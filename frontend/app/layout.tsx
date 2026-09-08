@@ -1,10 +1,13 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import "./globals.css";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { WhatsAppSupport } from "@/components/whatsapp-support";
 import { GoogleAuthProvider } from "@/components/google-auth-provider";
 import { EntrancePopup } from "@/components/entrance-popup";
+import { MaintenanceGuard } from "@/components/maintenance-guard";
+import { getSiteSettings } from "@/lib/api";
 
 const businessName = process.env.NEXT_PUBLIC_BUSINESS_NAME || "MSTS-GJS Production Store";
 const legalOwnerName = process.env.NEXT_PUBLIC_LEGAL_OWNER_NAME || "GNANAJEBASEELAN G";
@@ -41,7 +44,8 @@ export const metadata: Metadata = {
   }
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const siteSettings = await getSiteSettings();
   const organizationJsonLd = {
     "@context": "https://schema.org",
     "@type": "OnlineStore",
@@ -73,11 +77,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           }}
         />
         <GoogleAuthProvider>
-          <SiteHeader />
-          <main>{children}</main>
-          <EntrancePopup />
-          <WhatsAppSupport />
-          <SiteFooter />
+          <Suspense fallback={null}>
+            <MaintenanceGuard initialSettings={siteSettings}>
+              <SiteHeader />
+              <main>{children}</main>
+              <EntrancePopup />
+              <WhatsAppSupport />
+              <SiteFooter />
+            </MaintenanceGuard>
+          </Suspense>
         </GoogleAuthProvider>
       </body>
     </html>

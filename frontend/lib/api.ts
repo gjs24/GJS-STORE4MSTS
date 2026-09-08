@@ -82,6 +82,11 @@ export type SiteSettings = {
   popup_button_url: string;
   scroller_enabled: boolean;
   scroller_message: string;
+  maintenance_mode?: boolean;
+  maintenance_title?: string;
+  maintenance_message?: string;
+  maintenance_estimated_end?: string;
+  maintenance_bypass_token?: string;
   updated_at?: string;
 };
 
@@ -95,7 +100,12 @@ export const fallbackSiteSettings: SiteSettings = {
   popup_button_text: "Browse assets",
   popup_button_url: "/assets",
   scroller_enabled: false,
-  scroller_message: ""
+  scroller_message: "",
+  maintenance_mode: false,
+  maintenance_title: "System Under Scheduled Maintenance",
+  maintenance_message: "We are currently upgrading server systems and performing essential depot maintenance. We'll be back online shortly!",
+  maintenance_estimated_end: "Expected to return shortly",
+  maintenance_bypass_token: ""
 };
 
 export const AUTH_CHANGE_EVENT = "gjs_auth_change";

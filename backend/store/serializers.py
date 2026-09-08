@@ -357,6 +357,11 @@ class SiteSettingSerializer(serializers.ModelSerializer):
             "popup_button_url",
             "scroller_enabled",
             "scroller_message",
+            "maintenance_mode",
+            "maintenance_title",
+            "maintenance_message",
+            "maintenance_estimated_end",
+            "maintenance_bypass_token",
             "updated_at",
         ]
         read_only_fields = ["updated_at"]

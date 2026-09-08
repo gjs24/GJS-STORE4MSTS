@@ -1730,13 +1730,16 @@ def admin_settings(request):
     site_setting = SiteSetting.load()
     if request.method == "PATCH":
         before_popup = site_setting.popup_enabled
+        before_maintenance = site_setting.maintenance_mode
         serializer = SiteSettingSerializer(site_setting, data=request.data.get("site", request.data), partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
         site_setting = serializer.instance
-        log_admin_activity(request, "Store settings edited", "SiteSetting", site_setting.id, "Updated homepage, popup, or notification settings")
+        log_admin_activity(request, "Store settings edited", "SiteSetting", site_setting.id, "Updated store or maintenance settings")
         if before_popup != site_setting.popup_enabled:
             log_admin_activity(request, "Popup enabled" if site_setting.popup_enabled else "Popup disabled", "SiteSetting", site_setting.id, "Changed entrance popup status")
+        if before_maintenance != site_setting.maintenance_mode:
+            log_admin_activity(request, "Maintenance mode enabled" if site_setting.maintenance_mode else "Maintenance mode disabled", "SiteSetting", site_setting.id, "Changed maintenance mode status")
     return Response(
         {
             "api_status": "online",

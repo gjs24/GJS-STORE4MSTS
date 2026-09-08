@@ -248,6 +248,11 @@ class SiteSetting(models.Model):
     popup_button_url = models.CharField(max_length=200, default="/assets")
     scroller_enabled = models.BooleanField(default=False)
     scroller_message = models.CharField(max_length=500, blank=True)
+    maintenance_mode = models.BooleanField(default=False)
+    maintenance_title = models.CharField(max_length=200, default="System Under Scheduled Maintenance")
+    maintenance_message = models.TextField(default="We are currently upgrading server systems and performing essential depot maintenance. We'll be back online shortly!")
+    maintenance_estimated_end = models.CharField(max_length=100, blank=True, default="Expected to return shortly")
+    maintenance_bypass_token = models.CharField(max_length=64, blank=True, default="")
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
