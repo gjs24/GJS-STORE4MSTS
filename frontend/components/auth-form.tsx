@@ -3,11 +3,11 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { GoogleLogin } from "@react-oauth/google";
-import { KeyRound, Mail, RefreshCw, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Eye, EyeOff, KeyRound, Mail, RefreshCw, ShieldCheck } from "lucide-react";
 import { API_URL, clearAuth, emitAuthChange, setStoredUser, type CurrentUser } from "@/lib/api";
 
 type AuthFormProps = {
-  mode: "login" | "register";
+  mode: "login" | "register" | "forgot_password";
   portal?: "user" | "admin";
 };
 
@@ -15,12 +15,20 @@ export function AuthForm({ mode, portal = "user" }: AuthFormProps) {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [loginMethod, setLoginMethod] = useState<"password" | "otp">("password");
+  const [isForgotPassword, setIsForgotPassword] = useState(mode === "forgot_password");
 
   // OTP state
   const [otpSent, setOtpSent] = useState(false);
   const [otpEmail, setOtpEmail] = useState("");
   const [otpCode, setOtpCode] = useState("");
   const [timer, setTimer] = useState(0);
+
+  // Forgot password state
+  const [resetEmail, setResetEmail] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // Register form state
   const [regUsername, setRegUsername] = useState("");
@@ -103,7 +111,7 @@ export function AuthForm({ mode, portal = "user" }: AuthFormProps) {
     }
   }
 
-  async function handleSendOtp(purpose: "login" | "signup", targetEmail: string) {
+  async function handleSendOtp(purpose: "login" | "signup" | "reset", targetEmail: string) {
     const emailToUse = targetEmail.trim().toLowerCase();
     if (!emailToUse || !emailToUse.includes("@")) {
       setMessage("Please enter a valid email address.");
@@ -222,6 +230,51 @@ export function AuthForm({ mode, portal = "user" }: AuthFormProps) {
     }
   }
 
+  async function handleVerifyOtpReset(e: React.FormEvent) {
+    e.preventDefault();
+    if (!otpCode || otpCode.trim().length !== 6) {
+      setMessage("Please enter the 6-digit verification code.");
+      return;
+    }
+    if (!newPassword || newPassword.length < 8) {
+      setMessage("Password must be at least 8 characters long.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setMessage("Passwords do not match. Please verify.");
+      return;
+    }
+
+    setLoading(true);
+    setMessage("Verifying code and resetting password...");
+    clearAuth();
+
+    try {
+      const res = await fetch(`${API_URL}/auth/verify-otp/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: resetEmail.trim().toLowerCase(),
+          otp: otpCode.trim(),
+          purpose: "reset",
+          password: newPassword,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        setMessage(data.detail || data.password?.[0] || "Password reset failed. Please check your details.");
+        return;
+      }
+
+      finishLogin(data);
+    } catch {
+      setMessage("Could not connect to backend.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function handlePasswordLogin(formData: FormData) {
     setLoading(true);
     setMessage("Connecting...");
@@ -251,8 +304,166 @@ export function AuthForm({ mode, portal = "user" }: AuthFormProps) {
 
   return (
     <div className="cinematic-panel mx-auto max-w-md space-y-5 rounded-xl border border-white/10 bg-rail-black/90 p-6 shadow-2xl backdrop-blur-xl">
+      {/* FORGOT PASSWORD VIEW */}
+      {isForgotPassword && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between border-b border-white/10 pb-3">
+            <div className="flex items-center gap-2">
+              <KeyRound className="text-rail-amber" size={18} />
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-white">Reset Password</h3>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                if (mode === "forgot_password") {
+                  router.push("/login");
+                } else {
+                  setIsForgotPassword(false);
+                  setOtpSent(false);
+                  setOtpCode("");
+                  setMessage("");
+                }
+              }}
+              className="inline-flex items-center gap-1 text-xs text-slate-400 transition-colors hover:text-white"
+            >
+              <ArrowLeft size={12} />
+              Back to Sign In
+            </button>
+          </div>
+
+          {!otpSent ? (
+            <div className="space-y-3">
+              <p className="text-xs leading-relaxed text-slate-400">
+                Enter your registered email address. We will send you a 6-digit verification code to reset your password.
+              </p>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-400">Account Email</label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-3.5 text-slate-500" size={16} />
+                  <input
+                    type="email"
+                    required
+                    placeholder="your.email@example.com"
+                    value={resetEmail}
+                    onChange={(e) => setResetEmail(e.target.value)}
+                    className="w-full rounded border border-white/10 bg-black/40 py-3 pl-10 pr-3 text-sm text-white placeholder-slate-500 focus:border-rail-red focus:outline-none"
+                  />
+                </div>
+              </div>
+              <button
+                type="button"
+                disabled={loading || !resetEmail}
+                onClick={() => handleSendOtp("reset", resetEmail)}
+                className="w-full rounded bg-rail-red px-4 py-3 text-sm font-semibold text-white shadow-glow transition-colors hover:bg-rail-red/90 disabled:opacity-50"
+              >
+                {loading ? "Sending Reset Code..." : "Send Reset Code"}
+              </button>
+            </div>
+          ) : (
+            <form onSubmit={handleVerifyOtpReset} className="space-y-3">
+              <div className="flex items-center justify-between rounded border border-white/10 bg-white/5 p-3 text-xs text-slate-300">
+                <span>
+                  Code sent to <strong className="text-white">{resetEmail}</strong>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOtpSent(false);
+                    setOtpCode("");
+                  }}
+                  className="font-medium text-rail-amber underline hover:text-rail-amber/80"
+                >
+                  Change
+                </button>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-400">6-Digit Verification Code</label>
+                <input
+                  type="text"
+                  required
+                  maxLength={6}
+                  placeholder="123456"
+                  value={otpCode}
+                  onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))}
+                  className="w-full rounded border border-white/10 bg-black/40 px-3 py-3 text-center text-xl font-bold tracking-widest text-white focus:border-rail-red focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-400">New Password (min. 8 characters)</label>
+                <div className="relative">
+                  <input
+                    type={showNewPassword ? "text" : "password"}
+                    required
+                    minLength={8}
+                    placeholder="Enter new password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="w-full rounded border border-white/10 bg-black/40 py-3 pl-3 pr-10 text-sm text-white placeholder-slate-500 focus:border-rail-red focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword(!showNewPassword)}
+                    className="absolute right-3 top-3.5 text-slate-400 hover:text-white"
+                  >
+                    {showNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-400">Confirm New Password</label>
+                <div className="relative">
+                  <input
+                    type={showConfirmPassword ? "text" : "password"}
+                    required
+                    minLength={8}
+                    placeholder="Confirm new password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="w-full rounded border border-white/10 bg-black/40 py-3 pl-3 pr-10 text-sm text-white placeholder-slate-500 focus:border-rail-red focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute right-3 top-3.5 text-slate-400 hover:text-white"
+                  >
+                    {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+                {confirmPassword && newPassword !== confirmPassword && (
+                  <p className="mt-1 text-xs text-red-400">Passwords do not match.</p>
+                )}
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading || otpCode.length !== 6 || newPassword.length < 8 || newPassword !== confirmPassword}
+                className="flex w-full items-center justify-center gap-2 rounded bg-rail-red px-4 py-3 font-semibold text-white shadow-glow transition-colors hover:bg-rail-red/90 disabled:opacity-50"
+              >
+                <ShieldCheck size={18} />
+                {loading ? "Resetting Password..." : "Reset Password & Log In"}
+              </button>
+
+              <div className="pt-1 text-center">
+                <button
+                  type="button"
+                  disabled={loading || timer > 0}
+                  onClick={() => handleSendOtp("reset", resetEmail)}
+                  className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-white disabled:opacity-50"
+                >
+                  <RefreshCw size={12} className={timer > 0 ? "animate-spin" : ""} />
+                  {timer > 0 ? `Resend reset code in ${timer}s` : "Resend code"}
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+      )}
+
       {/* Login Method Toggle (User Portal) */}
-      {mode === "login" && portal === "user" && (
+      {mode === "login" && !isForgotPassword && portal === "user" && (
         <div className="flex rounded-lg border border-white/10 bg-black/40 p-1">
           <button
             type="button"
@@ -284,7 +495,7 @@ export function AuthForm({ mode, portal = "user" }: AuthFormProps) {
       )}
 
       {/* LOGIN: Email OTP Flow */}
-      {mode === "login" && loginMethod === "otp" && portal === "user" && (
+      {mode === "login" && !isForgotPassword && loginMethod === "otp" && portal === "user" && (
         <div className="space-y-4">
           {!otpSent ? (
             <div className="space-y-3">
@@ -356,21 +567,43 @@ export function AuthForm({ mode, portal = "user" }: AuthFormProps) {
       )}
 
       {/* LOGIN: Standard Password Flow */}
-      {mode === "login" && (loginMethod === "password" || portal === "admin") && (
+      {mode === "login" && !isForgotPassword && (loginMethod === "password" || portal === "admin") && (
         <form action={handlePasswordLogin} className="space-y-4">
-          <input
-            name="username"
-            required
-            placeholder="Username"
-            className="w-full rounded border border-white/10 bg-black/40 px-3 py-3 text-sm text-white placeholder-slate-500 focus:border-rail-red focus:outline-none"
-          />
-          <input
-            name="password"
-            required
-            type="password"
-            placeholder="Password"
-            className="w-full rounded border border-white/10 bg-black/40 px-3 py-3 text-sm text-white placeholder-slate-500 focus:border-rail-red focus:outline-none"
-          />
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-400">Username</label>
+            <input
+              name="username"
+              required
+              placeholder="Username"
+              className="w-full rounded border border-white/10 bg-black/40 px-3 py-3 text-sm text-white placeholder-slate-500 focus:border-rail-red focus:outline-none"
+            />
+          </div>
+          <div>
+            <div className="mb-1 flex items-center justify-between">
+              <label className="text-xs font-medium text-slate-400">Password</label>
+              {portal === "user" && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsForgotPassword(true);
+                    setOtpSent(false);
+                    setOtpCode("");
+                    setMessage("");
+                  }}
+                  className="text-xs font-medium text-rail-amber transition-colors hover:text-rail-amber/80 hover:underline"
+                >
+                  Forgot password?
+                </button>
+              )}
+            </div>
+            <input
+              name="password"
+              required
+              type="password"
+              placeholder="Password"
+              className="w-full rounded border border-white/10 bg-black/40 px-3 py-3 text-sm text-white placeholder-slate-500 focus:border-rail-red focus:outline-none"
+            />
+          </div>
           <button
             disabled={loading}
             className="w-full rounded bg-rail-red px-4 py-3 font-semibold text-white shadow-glow hover:bg-rail-red/90 disabled:opacity-60"
@@ -381,7 +614,7 @@ export function AuthForm({ mode, portal = "user" }: AuthFormProps) {
       )}
 
       {/* REGISTER: Email Verified Registration */}
-      {mode === "register" && (
+      {mode === "register" && !isForgotPassword && (
         <div className="space-y-4">
           {!otpSent ? (
             <div className="space-y-3">
@@ -477,7 +710,7 @@ export function AuthForm({ mode, portal = "user" }: AuthFormProps) {
       )}
 
       {/* Google OAuth Option */}
-      {portal === "user" && googleEnabled ? (
+      {portal === "user" && !isForgotPassword && googleEnabled ? (
         <div className="space-y-3">
           <div className="flex items-center gap-3 text-xs uppercase tracking-[0.2em] text-slate-500">
             <span className="h-px flex-1 bg-white/10" />

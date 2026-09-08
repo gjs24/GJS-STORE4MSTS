@@ -515,6 +515,12 @@ class SendOTPView(APIView):
                         {"detail": "An account with this email address already exists. Please login instead."},
                         status=status.HTTP_400_BAD_REQUEST,
                     )
+            elif purpose == "reset":
+                if not User.objects.filter(email__iexact=email).exists():
+                    return Response(
+                        {"detail": "No account found with this email address."},
+                        status=status.HTTP_404_NOT_FOUND,
+                    )
             elif purpose == "profile_edit":
                 existing = User.objects.filter(email__iexact=email).first()
                 if request.user.is_authenticated:
@@ -669,6 +675,26 @@ class VerifyOTPView(APIView):
             else:
                 user.set_unusable_password()
             user.save()
+        elif purpose == "reset":
+            password = serializer.validated_data.get("password", "").strip()
+            if not password:
+                return Response(
+                    {"detail": "A new password is required."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if len(password) < 8:
+                return Response(
+                    {"detail": "Password must be at least 8 characters long."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            user = User.objects.filter(email__iexact=email).first()
+            if not user:
+                return Response(
+                    {"detail": "No account found with this email address."},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+            user.set_password(password)
+            user.save()
         else:
             return Response({"success": True, "message": "Verification successful."})
 
@@ -678,7 +704,7 @@ class VerifyOTPView(APIView):
                 "access": str(refresh.access_token),
                 "refresh": str(refresh),
                 "user": UserSerializer(user).data,
-                "message": "Login successful.",
+                "message": "Password reset successful." if purpose == "reset" else "Login successful.",
             },
             status=status.HTTP_200_OK,
         )
