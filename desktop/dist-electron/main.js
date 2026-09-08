@@ -5,23 +5,37 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const electron_1 = require("electron");
 const node_path_1 = __importDefault(require("node:path"));
-const isDev = !!process.env.ELECTRON_RENDERER_URL;
+const STORE_URL = process.env.STORE_URL || "https://gjs-store-4-msts.vercel.app";
+const isDev = Boolean(process.env.ELECTRON_RENDERER_URL);
 function createWindow() {
     const win = new electron_1.BrowserWindow({
-        width: 1400,
+        width: 1440,
         height: 900,
+        minWidth: 1024,
+        minHeight: 700,
+        title: "MSTS-GJS Production Store",
+        autoHideMenuBar: true,
+        backgroundColor: "#05070b",
         webPreferences: {
             preload: node_path_1.default.join(__dirname, "preload.js"),
             contextIsolation: true,
             nodeIntegration: false,
         },
     });
-    if (isDev) {
-        win.loadURL(process.env.ELECTRON_RENDERER_URL);
-    }
-    else {
+    win.setMenuBarVisibility(false);
+    const targetUrl = isDev ? process.env.ELECTRON_RENDERER_URL : STORE_URL;
+    win.loadURL(targetUrl).catch((err) => {
+        console.error("Failed to load live store URL, loading local fallback:", err);
         win.loadFile(node_path_1.default.join(__dirname, "../renderer/out/index.html"));
-    }
+    });
+    // Open external links (e.g. WhatsApp support, mailto) in default web browser
+    win.webContents.setWindowOpenHandler(({ url }) => {
+        if (url.startsWith("https://wa.me") || url.startsWith("mailto:") || !url.includes("gjs-store-4-msts.vercel.app")) {
+            electron_1.shell.openExternal(url);
+            return { action: "deny" };
+        }
+        return { action: "allow" };
+    });
 }
 electron_1.app.whenReady().then(createWindow);
 electron_1.app.on("window-all-closed", () => {

@@ -15,8 +15,8 @@
     "dist": "npm run build && electron-builder"
   },
   "build": {
-    "appId": "com.gjsproduction.railforge",
-    "productName": "GJS RailForge Launcher",
+    "appId": "com.gjsproduction.store",
+    "productName": "MSTS-GJS Production Store",
     "directories": {
       "output": "dist"
     },
