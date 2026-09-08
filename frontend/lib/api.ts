@@ -292,6 +292,7 @@ export async function verifyMaintenanceBypass(token: string): Promise<boolean> {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ token: token.trim() }),
+      cache: "no-store",
     });
     return res.ok;
   } catch {

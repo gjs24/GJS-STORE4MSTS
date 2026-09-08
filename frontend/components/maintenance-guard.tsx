@@ -24,6 +24,12 @@ export function MaintenanceGuard({ children, initialSettings }: MaintenanceGuard
   useEffect(() => {
     setMounted(true);
 
+    // Clean up any legacy static boolean flags from previous sessions
+    if (typeof window !== "undefined") {
+      sessionStorage.removeItem("gjs_maint_bypass_valid");
+      sessionStorage.removeItem("gjs_maint_bypass");
+    }
+
     // Check staff status from local storage
     const user = getStoredUser();
     if (user?.is_staff) {
@@ -31,21 +37,30 @@ export function MaintenanceGuard({ children, initialSettings }: MaintenanceGuard
       return;
     }
 
-    // Check bypass token in URL or sessionStorage
+    // Token from URL parameter or stored token from current session
     const urlBypass = searchParams?.get("bypass")?.trim();
-    const storedBypassValid = typeof window !== "undefined" ? sessionStorage.getItem("gjs_maint_bypass_valid") === "true" : false;
+    const storedToken = typeof window !== "undefined" ? sessionStorage.getItem("gjs_maint_bypass_token")?.trim() : null;
 
-    if (storedBypassValid) {
-      setIsBypassed(true);
-    } else if (urlBypass) {
-      verifyMaintenanceBypass(urlBypass).then((isValid) => {
+    // Prioritize URL parameter if provided, otherwise check stored token
+    const tokenToVerify = urlBypass || storedToken;
+
+    if (tokenToVerify) {
+      verifyMaintenanceBypass(tokenToVerify).then((isValid) => {
         if (isValid) {
           if (typeof window !== "undefined") {
-            sessionStorage.setItem("gjs_maint_bypass_valid", "true");
+            sessionStorage.setItem("gjs_maint_bypass_token", tokenToVerify);
           }
           setIsBypassed(true);
+        } else {
+          // Token is revoked, changed by admin, or invalid!
+          if (typeof window !== "undefined") {
+            sessionStorage.removeItem("gjs_maint_bypass_token");
+          }
+          setIsBypassed(false);
         }
       });
+    } else {
+      setIsBypassed(false);
     }
   }, [searchParams]);
 
