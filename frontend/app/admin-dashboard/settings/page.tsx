@@ -467,7 +467,7 @@ export default function AdminSettingsPage() {
             <input
               value={siteForm.desktop_app_download_url || ""}
               onChange={(event) => updateSiteForm("desktop_app_download_url", event.target.value)}
-              placeholder="https://github.com/gjs24/GJS-STORE4MSTS/releases"
+              placeholder="https://github.com/gjs24/msts-gjs-desktop-releases/releases/download/v1.0.0/MSTS-GJS.Production.Store.Setup.1.0.0.exe"
               className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-2 text-white outline-none focus:border-rail-red"
             />
             <span className="mt-1 block text-xs text-slate-500">

@@ -255,7 +255,7 @@ class SiteSetting(models.Model):
     maintenance_bypass_token = models.CharField(max_length=64, blank=True, default="")
     desktop_app_download_url = models.URLField(
         blank=True,
-        default="https://github.com/gjs24/GJS-STORE4MSTS/releases",
+        default="https://github.com/gjs24/msts-gjs-desktop-releases/releases/download/v1.0.0/MSTS-GJS.Production.Store.Setup.1.0.0.exe",
         help_text="Direct link or host URL (e.g. Google Drive, GitHub Releases) for downloading Windows desktop installer"
     )
     desktop_app_version = models.CharField(

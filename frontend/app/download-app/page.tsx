@@ -97,7 +97,7 @@ export default function DownloadAppPage() {
 
   const downloadUrl =
     settings.desktop_app_download_url?.trim() ||
-    "https://github.com/gjs24/GJS-STORE4MSTS/releases/download/v1.0.0/MSTS-GJS.Production.Store.Setup.1.0.0.exe";
+    "https://github.com/gjs24/msts-gjs-desktop-releases/releases/download/v1.0.0/MSTS-GJS.Production.Store.Setup.1.0.0.exe";
   const appVersion = settings.desktop_app_version?.trim() || "1.0.0";
 
   function handleDownloadClick() {
