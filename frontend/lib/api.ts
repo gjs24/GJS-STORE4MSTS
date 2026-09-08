@@ -89,6 +89,7 @@ export type SiteSettings = {
   maintenance_bypass_token?: string;
   desktop_app_download_url?: string;
   desktop_app_version?: string;
+  desktop_app_enabled?: boolean;
   updated_at?: string;
 };
 
@@ -109,7 +110,8 @@ export const fallbackSiteSettings: SiteSettings = {
   maintenance_estimated_end: "Expected to return shortly",
   maintenance_bypass_token: "",
   desktop_app_download_url: "https://github.com/gjs24/msts-gjs-desktop-releases/releases/download/v1.0.0/MSTS-GJS.Production.Store.Setup.1.0.0.exe",
-  desktop_app_version: "1.0.0"
+  desktop_app_version: "1.0.0",
+  desktop_app_enabled: false
 };
 
 export const AUTH_CHANGE_EVENT = "gjs_auth_change";

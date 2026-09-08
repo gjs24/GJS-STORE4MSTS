@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -19,6 +19,7 @@ import {
 import { AuthNav } from "@/components/auth-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { AdminNotification } from "@/components/admin-notification";
+import { getSiteSettings } from "@/lib/api";
 
 const navItems = [
   { label: "Home", href: "/", icon: Home },
@@ -31,7 +32,18 @@ const navItems = [
 
 export function SiteHeader() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [desktopAppEnabled, setDesktopAppEnabled] = useState(false);
   const pathname = usePathname();
+
+  useEffect(() => {
+    getSiteSettings()
+      .then((data) => setDesktopAppEnabled(Boolean(data?.desktop_app_enabled)))
+      .catch(() => setDesktopAppEnabled(false));
+  }, []);
+
+  const visibleNavItems = navItems.filter(
+    (item) => item.href !== "/download-app" || desktopAppEnabled
+  );
 
   return (
     <header className="sticky top-0 z-50 border-b border-white/10 bg-rail-black/85 backdrop-blur-xl transition-colors">
@@ -51,7 +63,7 @@ export function SiteHeader() {
 
         {/* Desktop Navigation */}
         <nav className="hidden items-center gap-1 text-sm md:flex lg:gap-2">
-          {navItems.map((item) => {
+          {visibleNavItems.map((item) => {
             const isActive = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href));
             return (
               <Link
@@ -93,15 +105,17 @@ export function SiteHeader() {
             <Heart size={18} />
           </Link>
 
-          <Link
-            aria-label="Download Desktop App"
-            href="/download-app"
-            title="Download MSTS-GJS Desktop App for Windows"
-            className="hidden sm:inline-flex items-center gap-1.5 rounded-lg border border-rail-amber/30 bg-rail-amber/10 px-2.5 py-1.5 text-xs font-bold text-rail-amber shadow-sm transition-all hover:bg-rail-amber/20 hover:text-white"
-          >
-            <MonitorDown size={15} />
-            <span>Get App</span>
-          </Link>
+          {desktopAppEnabled && (
+            <Link
+              aria-label="Download Desktop App"
+              href="/download-app"
+              title="Download MSTS-GJS Desktop App for Windows"
+              className="hidden sm:inline-flex items-center gap-1.5 rounded-lg border border-rail-amber/30 bg-rail-amber/10 px-2.5 py-1.5 text-xs font-bold text-rail-amber shadow-sm transition-all hover:bg-rail-amber/20 hover:text-white"
+            >
+              <MonitorDown size={15} />
+              <span>Get App</span>
+            </Link>
+          )}
 
           <div className="hidden sm:block">
             <AuthNav />
@@ -122,7 +136,7 @@ export function SiteHeader() {
       {mobileOpen && (
         <div className="animate-in fade-in slide-in-from-top-2 duration-200 border-t border-white/10 bg-rail-black/95 px-4 py-4 backdrop-blur-2xl md:hidden">
           <nav className="flex flex-col gap-1.5 text-sm">
-            {navItems.map((item) => {
+            {visibleNavItems.map((item) => {
               const Icon = item.icon;
               const isActive = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href));
               return (

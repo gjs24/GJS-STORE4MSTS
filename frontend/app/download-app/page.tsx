@@ -105,6 +105,50 @@ export default function DownloadAppPage() {
     setTimeout(() => setDownloadStarted(false), 8000);
   }
 
+  if (!settings.desktop_app_enabled) {
+    return (
+      <div className="min-h-screen bg-rail-black text-slate-100 flex items-center justify-center px-4 py-16">
+        <div className="relative mx-auto max-w-lg text-center rounded-2xl border border-white/10 bg-white/[0.02] p-8 sm:p-10 backdrop-blur-xl">
+          <div className="flex justify-center">
+            <div className="relative flex h-24 w-24 items-center justify-center rounded-full border border-white/20 bg-neutral-950 p-2 shadow-2xl">
+              <Image
+                src="/desktop-app-icon.png"
+                alt="GJS Production Desktop App"
+                width={96}
+                height={96}
+                priority
+                className="rounded-full object-cover"
+              />
+            </div>
+          </div>
+          <div className="mt-5 inline-flex items-center gap-2 rounded-full border border-rail-amber/30 bg-rail-amber/10 px-3 py-1 text-xs font-semibold text-rail-amber">
+            <span>Private Testing • Launching Soon</span>
+          </div>
+          <h1 className="mt-4 text-2xl sm:text-3xl font-black uppercase text-white">
+            Desktop App Coming Soon
+          </h1>
+          <p className="mt-3 text-xs sm:text-sm leading-relaxed text-slate-400">
+            The MSTS-GJS Windows Desktop Launcher is currently undergoing final security optimizations and private testing. Public downloads will be activated soon!
+          </p>
+          <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
+            <Link
+              href="/assets"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-rail-red px-6 py-3 text-sm font-bold text-white shadow hover:bg-rail-red/90 transition"
+            >
+              <span>Explore Web Store</span>
+            </Link>
+            <Link
+              href="/contact"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-6 py-3 text-sm font-semibold text-slate-300 hover:bg-white/10 hover:text-white transition"
+            >
+              <span>Contact Support</span>
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-rail-black text-slate-100">
       {/* Background Accent Gradients */}

@@ -457,8 +457,39 @@ export default function AdminSettingsPage() {
             </Link>
           </div>
           <p className="mt-2 text-sm text-slate-400">
-            Configure the direct download link for the Windows desktop installer (e.g. Google Drive direct link, Cloudflare R2, or GitHub Releases) and the release version string.
+            Control the desktop app feature, public download links, and direct file URL across your entire website.
           </p>
+        </div>
+
+        {/* Master Visibility Switch */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-xl border border-white/10 bg-black/40 p-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-bold text-white">Public Desktop App Feature</span>
+              <span
+                className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
+                  siteForm.desktop_app_enabled
+                    ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                    : "bg-red-500/20 text-red-400 border border-red-500/30"
+                }`}
+              >
+                {siteForm.desktop_app_enabled ? "Visible (Active)" : "Hidden (Disabled)"}
+              </span>
+            </div>
+            <p className="mt-1 text-xs text-slate-400">
+              When disabled, all desktop app buttons in the navbar, header, and footer will be hidden from visitors, and the download page will show a private testing notice.
+            </p>
+          </div>
+
+          <label className="relative inline-flex cursor-pointer items-center">
+            <input
+              type="checkbox"
+              checked={Boolean(siteForm.desktop_app_enabled)}
+              onChange={(e) => updateSiteForm("desktop_app_enabled", e.target.checked)}
+              className="peer sr-only"
+            />
+            <div className="h-6 w-11 rounded-full bg-neutral-800 peer-focus:outline-none peer-checked:bg-rail-red after:absolute after:top-[2px] after:left-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
+          </label>
         </div>
 
         <div className="grid gap-4 md:grid-cols-3">

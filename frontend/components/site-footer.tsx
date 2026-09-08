@@ -1,5 +1,9 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { CheckCircle2, DownloadCloud, Mail, Phone, ShieldCheck, TrainFront } from "lucide-react";
+import { getSiteSettings } from "@/lib/api";
 
 const policyLinks = [
   ["Privacy Policy", "/privacy-policy"],
@@ -9,7 +13,7 @@ const policyLinks = [
   ["Contact Us", "/contact"]
 ];
 
-const quickLinks = [
+const allQuickLinks = [
   ["All Assets", "/assets"],
   ["Upcoming Releases", "/assets?upcoming=true"],
   ["Free Assets", "/assets?price=free"],
@@ -24,6 +28,18 @@ const supportPhone = process.env.NEXT_PUBLIC_SUPPORT_PHONE || "+91-7845727002";
 const legalOwnerName = process.env.NEXT_PUBLIC_LEGAL_OWNER_NAME || "GNANAJEBASEELAN G";
 
 export function SiteFooter() {
+  const [desktopAppEnabled, setDesktopAppEnabled] = useState(false);
+
+  useEffect(() => {
+    getSiteSettings()
+      .then((data) => setDesktopAppEnabled(Boolean(data?.desktop_app_enabled)))
+      .catch(() => setDesktopAppEnabled(false));
+  }, []);
+
+  const quickLinks = allQuickLinks.filter(
+    ([, href]) => href !== "/download-app" || desktopAppEnabled
+  );
+
   return (
     <footer className="border-t border-white/10 bg-rail-black transition-colors">
       <div className="mx-auto grid max-w-7xl gap-8 px-4 py-12 sm:grid-cols-2 lg:grid-cols-[1.4fr_0.9fr_0.9fr_1fr] lg:gap-10">

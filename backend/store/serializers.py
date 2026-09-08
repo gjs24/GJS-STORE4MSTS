@@ -364,6 +364,7 @@ class SiteSettingSerializer(serializers.ModelSerializer):
             "maintenance_bypass_token",
             "desktop_app_download_url",
             "desktop_app_version",
+            "desktop_app_enabled",
             "updated_at",
         ]
         read_only_fields = ["updated_at"]

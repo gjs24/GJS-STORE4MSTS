@@ -264,6 +264,10 @@ class SiteSetting(models.Model):
         default="1.0.0",
         help_text="Current desktop app release version string"
     )
+    desktop_app_enabled = models.BooleanField(
+        default=False,
+        help_text="Toggle public visibility of desktop app download links and page"
+    )
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
