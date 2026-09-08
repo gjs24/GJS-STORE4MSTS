@@ -18,14 +18,24 @@
     "appId": "com.gjsproduction.store",
     "productName": "MSTS-GJS Production Store",
     "directories": {
-      "output": "dist"
+      "output": "dist",
+      "buildResources": "build"
     },
     "files": [
       "dist-electron/**/*",
-      "renderer/out/**/*"
+      "renderer/out/**/*",
+      "build/**/*"
     ],
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "MSTS-GJS Production Store"
     }
   },
   "dependencies": {

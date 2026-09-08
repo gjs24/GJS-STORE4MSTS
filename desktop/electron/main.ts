@@ -1,16 +1,20 @@
 import { app, BrowserWindow, shell } from "electron";
 import path from "node:path";
+import fs from "node:fs";
 
 const STORE_URL = process.env.STORE_URL || "https://gjs-store-4-msts.vercel.app";
 const isDev = Boolean(process.env.ELECTRON_RENDERER_URL);
 
 function createWindow() {
+  const iconPath = path.join(__dirname, "../build/icon.png");
+
   const win = new BrowserWindow({
     width: 1440,
     height: 900,
     minWidth: 1024,
     minHeight: 700,
     title: "MSTS-GJS Production Store",
+    icon: fs.existsSync(iconPath) ? iconPath : undefined,
     autoHideMenuBar: true,
     backgroundColor: "#05070b",
     webPreferences: {
