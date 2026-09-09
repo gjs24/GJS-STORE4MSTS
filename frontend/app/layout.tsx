@@ -7,6 +7,8 @@ import { WhatsAppSupport } from "@/components/whatsapp-support";
 import { GoogleAuthProvider } from "@/components/google-auth-provider";
 import { EntrancePopup } from "@/components/entrance-popup";
 import { MaintenanceGuard } from "@/components/maintenance-guard";
+import { FestivalThemeBanner } from "@/components/festival-theme-banner";
+import { FestivalEffects } from "@/components/festival-effects";
 import { getSiteSettings } from "@/lib/api";
 
 const businessName = process.env.NEXT_PUBLIC_BUSINESS_NAME || "MSTS-GJS Production Store";
@@ -79,8 +81,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <GoogleAuthProvider>
           <Suspense fallback={null}>
             <MaintenanceGuard initialSettings={siteSettings}>
+              <FestivalThemeBanner settings={siteSettings} />
               <SiteHeader />
               <main>{children}</main>
+              <FestivalEffects settings={siteSettings} />
               <EntrancePopup />
               <WhatsAppSupport />
               <SiteFooter />

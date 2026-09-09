@@ -109,6 +109,18 @@ export type SiteSettings = {
   desktop_app_download_url?: string;
   desktop_app_version?: string;
   desktop_app_enabled?: boolean;
+  festival_theme_enabled?: boolean;
+  festival_theme_type?: "ANNIVERSARY" | "DIWALI" | "PONGAL" | "CHRISTMAS" | "NEW_YEAR" | "INDEPENDENCE_DAY" | "CUSTOM";
+  festival_title?: string;
+  festival_subtitle?: string;
+  festival_badge?: string;
+  festival_button_text?: string;
+  festival_button_url?: string;
+  festival_effect?: "confetti" | "sparkles" | "snow" | "fireworks" | "diyas" | "none";
+  festival_banner_image?: string;
+  festival_discount_percent?: number;
+  festival_announcement_bar?: boolean;
+  festival_popup_card?: boolean;
   updated_at?: string;
 };
 
@@ -130,7 +142,19 @@ export const fallbackSiteSettings: SiteSettings = {
   maintenance_bypass_token: "",
   desktop_app_download_url: "https://github.com/gjs24/msts-gjs-desktop-releases/releases/download/v1.0.0/MSTS-GJS.Production.Store.Setup.1.0.0.exe",
   desktop_app_version: "1.0.0",
-  desktop_app_enabled: false
+  desktop_app_enabled: false,
+  festival_theme_enabled: false,
+  festival_theme_type: "ANNIVERSARY",
+  festival_title: "🎉 Celebrating 1 Year of MSTS-GJS Production Store!",
+  festival_subtitle: "Thank you to our Indian Railways simulation community for 1 year of amazing support! Explore exclusive anniversary addons & special offers.",
+  festival_badge: "1st Year Anniversary",
+  festival_button_text: "Explore Anniversary Specials",
+  festival_button_url: "/assets",
+  festival_effect: "confetti",
+  festival_banner_image: "",
+  festival_discount_percent: 0,
+  festival_announcement_bar: true,
+  festival_popup_card: false,
 };
 
 export const AUTH_CHANGE_EVENT = "gjs_auth_change";

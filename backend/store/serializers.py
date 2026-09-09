@@ -497,6 +497,18 @@ class SiteSettingSerializer(serializers.ModelSerializer):
             "desktop_app_download_url",
             "desktop_app_version",
             "desktop_app_enabled",
+            "festival_theme_enabled",
+            "festival_theme_type",
+            "festival_title",
+            "festival_subtitle",
+            "festival_badge",
+            "festival_button_text",
+            "festival_button_url",
+            "festival_effect",
+            "festival_banner_image",
+            "festival_discount_percent",
+            "festival_announcement_bar",
+            "festival_popup_card",
             "updated_at",
         ]
         read_only_fields = ["updated_at"]

@@ -293,6 +293,47 @@ class SiteSetting(models.Model):
         default=False,
         help_text="Toggle public visibility of desktop app download links and page"
     )
+    # Festival & Anniversary Theme Settings
+    festival_theme_enabled = models.BooleanField(default=False)
+    festival_theme_type = models.CharField(
+        max_length=40,
+        default="ANNIVERSARY",
+        choices=[
+            ("ANNIVERSARY", "1st Year Anniversary"),
+            ("DIWALI", "Diwali Festival of Lights"),
+            ("PONGAL", "Pongal / Sankranti Harvest"),
+            ("CHRISTMAS", "Christmas Holiday Season"),
+            ("NEW_YEAR", "New Year Celebration"),
+            ("INDEPENDENCE_DAY", "Independence / Republic Day"),
+            ("CUSTOM", "Custom Celebration"),
+        ],
+    )
+    festival_title = models.CharField(
+        max_length=160,
+        default="🎉 Celebrating 1 Year of MSTS-GJS Production Store!",
+    )
+    festival_subtitle = models.TextField(
+        default="Thank you to our Indian Railways simulation community for 1 year of amazing support! Explore exclusive anniversary addons & special offers.",
+    )
+    festival_badge = models.CharField(max_length=60, default="1st Year Anniversary")
+    festival_button_text = models.CharField(max_length=60, default="Explore Anniversary Specials")
+    festival_button_url = models.CharField(max_length=200, default="/assets")
+    festival_effect = models.CharField(
+        max_length=40,
+        default="confetti",
+        choices=[
+            ("confetti", "Confetti Streamers"),
+            ("sparkles", "Golden Sparkles"),
+            ("snow", "Winter Snowfall"),
+            ("fireworks", "Celebratory Fireworks"),
+            ("diyas", "Glowing Festive Diyas"),
+            ("none", "No Effects (Banner Only)"),
+        ],
+    )
+    festival_banner_image = models.URLField(blank=True, default="")
+    festival_discount_percent = models.PositiveSmallIntegerField(default=0)
+    festival_announcement_bar = models.BooleanField(default=True)
+    festival_popup_card = models.BooleanField(default=False)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:

@@ -74,6 +74,7 @@ function getSections(verificationCount: number): SidebarSection[] {
     {
       title: "SYSTEM",
       items: [
+        { label: "Festival & Themes", href: "/admin-dashboard/festival-themes", icon: Sparkles },
         { label: "Store Settings", href: "/admin-dashboard/settings", icon: Settings },
         { label: "Activity Logs", href: "/admin-dashboard/activity-logs", icon: History }
       ]
