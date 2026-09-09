@@ -152,23 +152,25 @@ export default async function HomePage() {
       {/* Community Statistics Counter Bar */}
       <CommunityStatsBar stats={communityStats} />
 
-      {/* Most Downloaded / Community Favorites Section */}
+      {/* Trending Products Section */}
       {topDownloadedAssets.length > 0 ? (
         <div className="mx-auto max-w-7xl px-4 pt-12 sm:pt-16">
           <div className="mb-6 sm:mb-8 flex flex-wrap items-end justify-between gap-4">
             <div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-rail-amber/30 bg-rail-amber/10 px-3 py-1 text-xs font-bold uppercase tracking-wider text-rail-amber mb-2 shadow-sm">
-                <Flame size={14} className="text-rail-amber" />
-                Community Favorites
+              <div className="inline-flex items-center gap-2 rounded-full border border-rail-amber/40 bg-rail-amber/15 px-3 py-1 text-xs font-black uppercase tracking-wider text-rail-amber mb-2 shadow-sm">
+                <Flame size={14} className="text-rail-amber fill-rail-amber animate-pulse" />
+                Trending Products
               </div>
-              <h2 className="text-2xl sm:text-3xl font-black text-white">Most Downloaded Addons</h2>
+              <h2 className="text-2xl sm:text-3xl font-black text-white flex items-center gap-2">
+                🔥 Trending & Most Popular Addons
+              </h2>
               <p className="mt-1 text-xs sm:text-sm text-slate-400">
-                The most popular locomotives, routes, and sound packs chosen by Indian railway simmers.
+                Top downloaded locomotives, routes, and sound packs chosen by Indian railway simmers right now.
               </p>
             </div>
             <Link
               href="/assets"
-              className="group flex items-center gap-1 text-xs sm:text-sm font-semibold text-rail-amber hover:text-white transition-colors"
+              className="group flex items-center gap-1.5 rounded-lg border border-rail-amber/30 bg-rail-amber/10 px-4 py-2 text-xs sm:text-sm font-bold text-rail-amber hover:bg-rail-amber hover:text-black transition-all"
             >
               <span>Explore full library</span>
               <ArrowRight size={14} className="transition-transform group-hover:translate-x-1" />
@@ -176,8 +178,8 @@ export default async function HomePage() {
           </div>
 
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {topDownloadedAssets.map((asset) => (
-              <AssetCard key={`top-${asset.id}`} asset={asset} />
+            {topDownloadedAssets.map((asset, idx) => (
+              <AssetCard key={`trending-${asset.id}`} asset={asset} isTrending rank={idx + 1} />
             ))}
           </div>
         </div>

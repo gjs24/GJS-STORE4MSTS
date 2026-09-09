@@ -316,6 +316,7 @@ export type CommunityStats = {
   total_downloads: number;
   monthly_downloads: number;
   total_addons: number;
+  review_count?: number;
   community_rating: number;
   satisfaction_rate: number;
 };
@@ -325,13 +326,14 @@ export async function getCommunityStats(): Promise<CommunityStats> {
     return await apiGet<CommunityStats>("/community-stats/");
   } catch {
     return {
-      total_simmers: 1850,
-      monthly_new_simmers: 180,
-      total_downloads: 12450,
-      monthly_downloads: 850,
-      total_addons: 24,
-      community_rating: 4.9,
-      satisfaction_rate: 99.8,
+      total_simmers: 0,
+      monthly_new_simmers: 0,
+      total_downloads: 0,
+      monthly_downloads: 0,
+      total_addons: 0,
+      review_count: 0,
+      community_rating: 5.0,
+      satisfaction_rate: 100,
     };
   }
 }

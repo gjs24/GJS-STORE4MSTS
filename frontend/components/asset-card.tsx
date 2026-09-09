@@ -5,7 +5,15 @@ import { PriceDisplay } from "@/components/price-display";
 import { WishlistButton } from "@/components/wishlist-button";
 import type { Asset } from "@/lib/api";
 
-export function AssetCard({ asset }: { asset: Asset }) {
+export function AssetCard({
+  asset,
+  isTrending,
+  rank
+}: {
+  asset: Asset;
+  isTrending?: boolean;
+  rank?: number;
+}) {
   const showDeal = Boolean(asset.deal_is_open && !asset.is_upcoming);
 
   return (
@@ -13,6 +21,13 @@ export function AssetCard({ asset }: { asset: Asset }) {
       href={`/assets/${asset.slug}`}
       className="card-shine group relative flex flex-col justify-between overflow-hidden rounded-xl border border-white/10 bg-gradient-to-b from-[#0c182b]/80 via-rail-navy/60 to-rail-black/95 p-0 shadow-lg transition-all duration-300 hover:-translate-y-1.5 hover:border-rail-red/40 hover:shadow-[0_16px_36px_rgba(0,0,0,0.5),0_0_24px_rgba(239,59,45,0.16)]"
     >
+      {/* Rank Indicator for Trending Lists */}
+      {rank !== undefined ? (
+        <div className="absolute left-2.5 top-2.5 z-20 flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-tr from-rail-red via-red-600 to-rail-amber text-[10px] font-black text-white shadow-lg ring-2 ring-black/80">
+          #{rank}
+        </div>
+      ) : null}
+
       {/* Media & Badges */}
       <div>
         <div className="relative flex aspect-video items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_center,#17385d,#05070b_80%)]">
@@ -31,7 +46,7 @@ export function AssetCard({ asset }: { asset: Asset }) {
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-black/30" />
 
           {/* Simulator Type Badge */}
-          <span className="absolute left-3 top-3 rounded-full border border-white/15 bg-black/65 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-slate-200 backdrop-blur-md">
+          <span className={`absolute ${rank !== undefined ? "left-10" : "left-3"} top-3 rounded-full border border-white/15 bg-black/65 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-slate-200 backdrop-blur-md transition-all`}>
             {asset.simulator_type.replace("_", " ")}
           </span>
 
@@ -63,7 +78,7 @@ export function AssetCard({ asset }: { asset: Asset }) {
             <WishlistButton assetId={asset.id} variant="icon" />
           </div>
 
-          {/* Special Deal Sub-Badge */}
+          {/* Special Deal / Trending Sub-Badge */}
           {showDeal ? (
             <span className="absolute bottom-2.5 left-3 rounded-md bg-rail-amber px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-black shadow-md">
               {asset.deal_badge || "Limited Time"}
@@ -72,9 +87,13 @@ export function AssetCard({ asset }: { asset: Asset }) {
             <span className="absolute bottom-2.5 left-3 rounded-md bg-gradient-to-r from-purple-600 to-indigo-600 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-white shadow-md">
               {asset.early_access_badge || "VIP Early Access"}
             </span>
-          ) : asset.download_count && asset.download_count >= 5 ? (
+          ) : isTrending ? (
+            <span className="absolute bottom-2.5 left-3 rounded-md bg-gradient-to-r from-red-600 to-amber-600 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-white shadow-md flex items-center gap-1">
+              <span>🔥</span> Trending
+            </span>
+          ) : asset.download_count && asset.download_count > 0 ? (
             <span className="absolute bottom-2.5 left-3 rounded-md bg-black/80 border border-rail-amber/40 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-rail-amber shadow-md flex items-center gap-1 backdrop-blur-md">
-              <span>🔥</span> {asset.download_count} Downloads
+              <span>🔥</span> {asset.download_count} {asset.download_count === 1 ? "Download" : "Downloads"}
             </span>
           ) : null}
         </div>

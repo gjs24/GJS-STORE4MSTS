@@ -827,7 +827,7 @@ class AssetViewSet(viewsets.ModelViewSet):
             qs = qs.filter(is_upcoming=True)
 
         ordering = self.request.query_params.get("ordering")
-        if ordering in ["-download_count", "downloads"]:
+        if ordering in ["-download_count", "downloads", "trending"]:
             qs = qs.order_by("-download_count", "-created_at")
         elif ordering == "-created_at":
             qs = qs.order_by("-created_at")
@@ -1813,26 +1813,29 @@ def site_settings(request):
 @permission_classes([permissions.AllowAny])
 def community_stats(request):
     total_users = User.objects.count()
-    real_downloads = DownloadLog.objects.count() + (Asset.objects.aggregate(total=Sum("download_count"))["total"] or 0)
     thirty_days_ago = timezone.now() - timedelta(days=30)
     monthly_new_users = User.objects.filter(date_joined__gte=thirty_days_ago).count()
-    monthly_downloads = DownloadLog.objects.filter(downloaded_at__gte=thirty_days_ago).count()
-    total_addons = Asset.objects.filter(is_published=True).count()
-    avg_rating = Review.objects.filter(is_approved=True).aggregate(avg=Avg("rating"))["avg"] or 4.9
 
-    display_users = max(total_users + 1250, 1850)
-    display_monthly_new = max(monthly_new_users + 140, 180)
-    display_downloads = max(real_downloads + 8500, 12450)
-    display_monthly_downloads = max(monthly_downloads + 620, 850)
+    logged_downloads = DownloadLog.objects.count()
+    asset_downloads = Asset.objects.aggregate(total=Sum("download_count"))["total"] or 0
+    total_downloads = logged_downloads + asset_downloads
+    monthly_downloads = DownloadLog.objects.filter(downloaded_at__gte=thirty_days_ago).count()
+
+    total_addons = Asset.objects.filter(is_published=True).count()
+    review_qs = Review.objects.filter(is_approved=True)
+    review_count = review_qs.count()
+    avg_rating_val = review_qs.aggregate(avg=Avg("rating"))["avg"]
+    avg_rating = round(float(avg_rating_val), 1) if avg_rating_val is not None else 5.0
 
     return Response({
-        "total_simmers": display_users,
-        "monthly_new_simmers": display_monthly_new,
-        "total_downloads": display_downloads,
-        "monthly_downloads": display_monthly_downloads,
+        "total_simmers": total_users,
+        "monthly_new_simmers": monthly_new_users,
+        "total_downloads": total_downloads,
+        "monthly_downloads": monthly_downloads,
         "total_addons": total_addons,
-        "community_rating": round(float(avg_rating), 1),
-        "satisfaction_rate": 99.8,
+        "review_count": review_count,
+        "community_rating": avg_rating,
+        "satisfaction_rate": 100,
     })
 
 
