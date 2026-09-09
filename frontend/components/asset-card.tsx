@@ -72,6 +72,10 @@ export function AssetCard({ asset }: { asset: Asset }) {
             <span className="absolute bottom-2.5 left-3 rounded-md bg-gradient-to-r from-purple-600 to-indigo-600 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-white shadow-md">
               {asset.early_access_badge || "VIP Early Access"}
             </span>
+          ) : asset.download_count && asset.download_count >= 5 ? (
+            <span className="absolute bottom-2.5 left-3 rounded-md bg-black/80 border border-rail-amber/40 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-rail-amber shadow-md flex items-center gap-1 backdrop-blur-md">
+              <span>🔥</span> {asset.download_count} Downloads
+            </span>
           ) : null}
         </div>
 

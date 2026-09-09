@@ -29,6 +29,7 @@ from .views import (
     admin_stats,
     asset_download_by_id,
     cashfree_webhook,
+    community_stats,
     current_user,
     order_invoice,
     site_settings,
@@ -47,6 +48,7 @@ router.register("admin/reviews", AdminReviewViewSet, basename="admin-review")
 urlpatterns = [
     path("assets/<int:pk>/download/", asset_download_by_id, name="asset-download-by-id"),
     path("site-settings/", site_settings, name="site-settings"),
+    path("community-stats/", community_stats, name="community-stats"),
     path("verify-maintenance-bypass/", verify_maintenance_bypass, name="verify-maintenance-bypass"),
     path("", include(router.urls)),
     path("auth/register/", RegisterView.as_view(), name="register"),

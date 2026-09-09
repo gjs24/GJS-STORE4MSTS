@@ -5,6 +5,7 @@ import type { Metadata } from "next";
 import { CheckCircle2, HardDriveDownload, ShieldCheck, Star, TrainFront } from "lucide-react";
 import { AssetActions } from "@/components/asset-actions";
 import { PriceDisplay } from "@/components/price-display";
+import { ProductGallery } from "@/components/product-gallery";
 import { ReviewSection } from "@/components/review-section";
 import { API_URL, Asset, fallbackAssets } from "@/lib/api";
 
@@ -51,23 +52,7 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ sl
   return (
     <section className="rail-grid min-h-screen px-4 py-10">
       <div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[1.1fr_.9fr]">
-        <div className="cinematic-panel relative flex aspect-video items-center justify-center overflow-hidden rounded-lg">
-          {asset.thumbnail ? (
-            <Image src={asset.thumbnail} alt={asset.title} fill sizes="(min-width: 1024px) 55vw, 100vw" className="object-cover" />
-          ) : (
-            <TrainFront className="h-32 w-32 text-white" />
-          )}
-          <div className="absolute bottom-4 left-4 flex flex-wrap gap-2 text-xs">
-            <span className="rounded bg-black/75 px-3 py-2 text-white">{asset.simulator_type.replace("_", " ")}</span>
-            <span className="rounded bg-black/75 px-3 py-2 text-white">{asset.file_size}</span>
-            {showDeal ? (
-              <span className="rounded bg-rail-amber px-3 py-2 font-black text-black">{asset.deal_badge || "Limited Time"}</span>
-            ) : null}
-            <span className="rounded bg-rail-red px-3 py-2 font-semibold text-white">
-              {asset.is_upcoming ? "Coming soon" : asset.is_free ? "Free release" : asset.discount_percent ? `${asset.discount_percent}% OFF` : `INR ${asset.price}`}
-            </span>
-          </div>
-        </div>
+        <ProductGallery asset={asset} />
         <div>
           <p className="text-sm font-semibold uppercase text-rail-amber">{asset.category?.name} / v{asset.version}</p>
           <h1 className="mt-2 text-4xl font-black">{asset.title}</h1>
@@ -194,18 +179,6 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ sl
           </div>
         </div>
       </div>
-      {galleryImages.length > 1 ? (
-        <div className="mx-auto mt-8 max-w-7xl">
-          <h2 className="mb-4 text-xl font-bold">Product gallery</h2>
-          <div className="grid gap-4 md:grid-cols-3">
-            {galleryImages.map((image) => (
-              <div key={`${image.id}-${image.image}`} className="cinematic-panel relative aspect-video overflow-hidden rounded-lg">
-                <Image src={image.image || ""} alt={image.alt_text || asset.title} fill sizes="(min-width: 768px) 33vw, 100vw" className="object-cover transition hover:scale-105" />
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : null}
       <div className="mx-auto mt-10 grid max-w-7xl gap-5 lg:grid-cols-3">
         {[
           ["Requirements", asset.requirements],

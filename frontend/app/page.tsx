@@ -15,8 +15,11 @@ import {
   Volume2
 } from "lucide-react";
 import { AssetCard } from "@/components/asset-card";
+import { CommunityStatsBar } from "@/components/community-stats-bar";
 import { HomeHeroSlideshow } from "@/components/home-hero-slideshow";
-import { getAssets, getCategories, getSiteSettings } from "@/lib/api";
+import { LiveActivityTicker } from "@/components/live-activity-ticker";
+import { TrustPillars } from "@/components/trust-pillars";
+import { getAssets, getCategories, getCommunityStats, getSiteSettings } from "@/lib/api";
 
 const legalOwnerName = process.env.NEXT_PUBLIC_LEGAL_OWNER_NAME || "GNANAJEBASEELAN G";
 
@@ -42,12 +45,20 @@ function getCategoryIcon(slug: string) {
 }
 
 export default async function HomePage() {
-  const [assets, upcomingAssets, categories, siteSettings] = await Promise.all([
+  const [featuredAssets, allAssets, upcomingAssets, categories, siteSettings, communityStats] = await Promise.all([
     getAssets("/assets/?featured=true"),
+    getAssets("/assets/?ordering=-download_count"),
     getAssets("/assets/?upcoming=true"),
     getCategories(),
-    getSiteSettings()
+    getSiteSettings(),
+    getCommunityStats()
   ]);
+
+  const topDownloadedAssets = (allAssets.length > 0 ? allAssets : featuredAssets)
+    .filter((a) => !a.is_upcoming)
+    .sort((a, b) => Number(b.download_count || 0) - Number(a.download_count || 0))
+    .slice(0, 3);
+
   const heroImages = [
     siteSettings.hero_image_url,
     ...siteSettings.hero_slideshow_urls.split(/\r?\n/).map((url) => url.trim())
@@ -55,6 +66,9 @@ export default async function HomePage() {
 
   return (
     <section className="rail-grid min-h-screen">
+      {/* Live Social Proof Activity Ticker */}
+      <LiveActivityTicker />
+
       {/* Hero Section */}
       <div className="relative overflow-hidden border-b border-white/10">
         <div className="absolute inset-0 bg-[linear-gradient(120deg,rgba(5,7,11,.98),rgba(7,19,33,.75)),radial-gradient(circle_at_80%_20%,rgba(239,59,45,.28),transparent_40%)]" />
@@ -135,6 +149,40 @@ export default async function HomePage() {
         ) : null}
       </div>
 
+      {/* Community Statistics Counter Bar */}
+      <CommunityStatsBar stats={communityStats} />
+
+      {/* Most Downloaded / Community Favorites Section */}
+      {topDownloadedAssets.length > 0 ? (
+        <div className="mx-auto max-w-7xl px-4 pt-12 sm:pt-16">
+          <div className="mb-6 sm:mb-8 flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <div className="inline-flex items-center gap-2 rounded-full border border-rail-amber/30 bg-rail-amber/10 px-3 py-1 text-xs font-bold uppercase tracking-wider text-rail-amber mb-2 shadow-sm">
+                <Flame size={14} className="text-rail-amber" />
+                Community Favorites
+              </div>
+              <h2 className="text-2xl sm:text-3xl font-black text-white">Most Downloaded Addons</h2>
+              <p className="mt-1 text-xs sm:text-sm text-slate-400">
+                The most popular locomotives, routes, and sound packs chosen by Indian railway simmers.
+              </p>
+            </div>
+            <Link
+              href="/assets"
+              className="group flex items-center gap-1 text-xs sm:text-sm font-semibold text-rail-amber hover:text-white transition-colors"
+            >
+              <span>Explore full library</span>
+              <ArrowRight size={14} className="transition-transform group-hover:translate-x-1" />
+            </Link>
+          </div>
+
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {topDownloadedAssets.map((asset) => (
+              <AssetCard key={`top-${asset.id}`} asset={asset} />
+            ))}
+          </div>
+        </div>
+      ) : null}
+
       {/* Featured Releases Section */}
       <div className="mx-auto max-w-7xl px-4 py-12 sm:py-16">
         <div className="mb-6 sm:mb-8 flex flex-wrap items-end justify-between gap-4">
@@ -152,8 +200,8 @@ export default async function HomePage() {
         </div>
 
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {assets.map((asset) => (
-            <AssetCard key={asset.id} asset={asset} />
+          {featuredAssets.map((asset) => (
+            <AssetCard key={`featured-${asset.id}`} asset={asset} />
           ))}
         </div>
       </div>
@@ -177,7 +225,7 @@ export default async function HomePage() {
         {upcomingAssets.length ? (
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {upcomingAssets.slice(0, 3).map((asset) => (
-              <AssetCard key={asset.id} asset={asset} />
+              <AssetCard key={`upcoming-${asset.id}`} asset={asset} />
             ))}
           </div>
         ) : (
@@ -186,6 +234,9 @@ export default async function HomePage() {
           </div>
         )}
       </div>
+
+      {/* Why Indian Simmers Choose GJS Store (Trust Pillars) */}
+      <TrustPillars />
 
       {/* Category Directory Cards */}
       <div className="mx-auto max-w-7xl px-4 pb-16 sm:pb-24">
