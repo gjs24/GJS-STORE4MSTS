@@ -322,10 +322,11 @@ class SiteSetting(models.Model):
         max_length=40,
         default="confetti",
         choices=[
+            ("skyshots", "Sky Shots & Crackers"),
+            ("fireworks", "Celebratory Fireworks & Crackers"),
             ("confetti", "Confetti Streamers"),
             ("sparkles", "Golden Sparkles"),
             ("snow", "Winter Snowfall"),
-            ("fireworks", "Celebratory Fireworks"),
             ("diyas", "Glowing Festive Diyas"),
             ("none", "No Effects (Banner Only)"),
         ],

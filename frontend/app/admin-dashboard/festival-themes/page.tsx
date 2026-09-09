@@ -33,7 +33,7 @@ type FestivalPreset = {
   subtitle: string;
   buttonText: string;
   buttonUrl: string;
-  effect: "confetti" | "sparkles" | "snow" | "fireworks" | "diyas" | "none";
+  effect: "confetti" | "sparkles" | "snow" | "fireworks" | "diyas" | "skyshots" | "none";
   discountPercent: number;
   description: string;
 };
@@ -433,11 +433,12 @@ export default function FestivalThemesAdminPage() {
                     onChange={(e) => updateField("festival_effect", e.target.value as any)}
                     className="w-full rounded-lg border border-white/10 bg-black/60 px-3.5 py-2.5 text-xs font-medium text-white outline-none focus:border-amber-400"
                   >
+                    <option value="skyshots">🚀 Sky Shots & Firecrackers (Aerial Crackers)</option>
+                    <option value="fireworks">🎆 Celebratory Fireworks & Crackers</option>
                     <option value="confetti">🎉 Confetti Streamers (Anniversary & Celebration)</option>
                     <option value="diyas">🪔 Glowing Festive Diyas (Diwali / Deepavali)</option>
                     <option value="sparkles">✨ Golden Sparkles (Pongal & Sankranti)</option>
                     <option value="snow">❄️ Winter Snowfall (Christmas & Winter)</option>
-                    <option value="fireworks">🎆 Celebratory Fireworks (New Year)</option>
                     <option value="none">🚫 No Particle Effects (Top Banner Only)</option>
                   </select>
                 </div>

@@ -116,7 +116,7 @@ export type SiteSettings = {
   festival_badge?: string;
   festival_button_text?: string;
   festival_button_url?: string;
-  festival_effect?: "confetti" | "sparkles" | "snow" | "fireworks" | "diyas" | "none";
+  festival_effect?: "confetti" | "sparkles" | "snow" | "fireworks" | "diyas" | "skyshots" | "none";
   festival_banner_image?: string;
   festival_discount_percent?: number;
   festival_announcement_bar?: boolean;
