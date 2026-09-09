@@ -63,8 +63,14 @@ export default function CreateAssetPage() {
       formData.set("early_access_discount_percent", String(earlyAccessDiscountPercent || 0));
       formData.set("early_access_price", earlyAccessPrice || "0.00");
       formData.set("early_access_badge", earlyAccessBadge);
-      formData.set("early_access_message", earlyAccessMessage);
-      formData.set("early_access_required_assets", JSON.stringify(earlyAccessRequiredAssets));
+      formData.delete("early_access_required_assets");
+      if (earlyAccessRequiredAssets.length > 0) {
+        earlyAccessRequiredAssets.forEach((id) => {
+          formData.append("early_access_required_assets", String(id));
+        });
+      } else {
+        formData.set("early_access_required_assets", "[]");
+      }
       if (!formData.get("deal_ends_at")) {
         formData.delete("deal_ends_at");
       }

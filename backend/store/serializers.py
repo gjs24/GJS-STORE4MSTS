@@ -285,10 +285,25 @@ class AssetWriteSerializer(serializers.ModelSerializer):
             raw_list = data.getlist("early_access_required_assets")
             cleaned = []
             for item in raw_list:
-                if isinstance(item, str) and "," in item:
-                    cleaned.extend([p.strip() for p in item.split(",") if p.strip().isdigit()])
-                elif isinstance(item, (int, str)) and str(item).strip().isdigit():
-                    cleaned.append(str(item).strip())
+                if isinstance(item, str):
+                    val_str = item.strip()
+                    if val_str.startswith("[") and val_str.endswith("]"):
+                        import json
+                        try:
+                            parsed = json.loads(val_str)
+                            if isinstance(parsed, list):
+                                for x in parsed:
+                                    if isinstance(x, (int, str)) and str(x).strip().isdigit():
+                                        cleaned.append(str(x).strip())
+                                continue
+                        except Exception:
+                            pass
+                    if "," in val_str:
+                        cleaned.extend([p.strip().strip("[]'\"") for p in val_str.split(",") if p.strip().strip("[]'\"").isdigit()])
+                    elif val_str.strip("[]'\"").isdigit():
+                        cleaned.append(val_str.strip("[]'\""))
+                elif isinstance(item, int):
+                    cleaned.append(str(item))
             if cleaned or "early_access_required_assets" in data:
                 data = data.copy()
                 data.setlist("early_access_required_assets", cleaned)
@@ -300,7 +315,11 @@ class AssetWriteSerializer(serializers.ModelSerializer):
                 if val_str.startswith("[") and val_str.endswith("]"):
                     import json
                     try:
-                        data["early_access_required_assets"] = json.loads(val_str)
+                        parsed = json.loads(val_str)
+                        if isinstance(parsed, list):
+                            data["early_access_required_assets"] = [int(p) for p in parsed if str(p).strip().isdigit()]
+                        else:
+                            data["early_access_required_assets"] = []
                     except Exception:
                         data["early_access_required_assets"] = []
                 else:

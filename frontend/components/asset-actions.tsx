@@ -217,13 +217,13 @@ export function AssetActions({ asset }: { asset: Asset }) {
             </div>
           </div>
         ) : isUpcoming ? (
-          <div className="rounded-lg border border-white/10 bg-white/[0.04] p-3 text-xs text-slate-300">
-            <p className="text-slate-400 leading-relaxed">
+          <div className="rounded-lg border border-purple-500/20 bg-purple-950/20 p-3 text-xs text-slate-300">
+            <p className="text-slate-300 leading-relaxed">
               ℹ️ Early access for this upcoming product is currently reserved for owners of:{" "}
-              <span className="font-semibold text-slate-200">
+              <span className="font-bold text-amber-300">
                 {activeAsset.early_access_required_asset_titles && activeAsset.early_access_required_asset_titles.length > 0
                   ? activeAsset.early_access_required_asset_titles.join(", ")
-                  : "qualifying products"}
+                  : "any previously purchased store product"}
               </span>
               . Click &quot;Notify Me&quot; below to be alerted upon general release.
             </p>

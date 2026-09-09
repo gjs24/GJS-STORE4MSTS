@@ -148,7 +148,7 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ sl
                   `Special perks unlocked for customers who purchased ${
                     asset.early_access_required_asset_titles && asset.early_access_required_asset_titles.length > 0
                       ? asset.early_access_required_asset_titles.join(", ")
-                      : "qualifying products"
+                      : "any previously purchased store product"
                   }.`}
               </p>
               {asset.early_access_required_asset_titles && asset.early_access_required_asset_titles.length > 0 ? (
