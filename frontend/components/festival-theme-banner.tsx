@@ -72,14 +72,13 @@ export function FestivalThemeBanner({ settings }: { settings?: SiteSettings | nu
 
   useEffect(() => {
     try {
-      const stored = sessionStorage.getItem("gjs_festival_dismissed");
-      if (stored === "true") setDismissed(true);
+      sessionStorage.removeItem("gjs_festival_dismissed");
     } catch {
       // ignore
     }
   }, []);
 
-  if (!settings || !settings.festival_theme_enabled || !settings.festival_announcement_bar || dismissed) {
+  if (!settings || !settings.festival_theme_enabled || !settings.festival_announcement_bar) {
     return null;
   }
 
@@ -90,14 +89,23 @@ export function FestivalThemeBanner({ settings }: { settings?: SiteSettings | nu
   const buttonUrl = settings.festival_button_url || "/assets";
   const discount = settings.festival_discount_percent ? Number(settings.festival_discount_percent) : 0;
 
-  const handleDismiss = () => {
-    setDismissed(true);
-    try {
-      sessionStorage.setItem("gjs_festival_dismissed", "true");
-    } catch {
-      // ignore
-    }
-  };
+  // When collapsed, show a subtle compact ribbon so users can easily click to re-open
+  // And whenever the page is refreshed, the full banner is automatically shown again
+  if (dismissed) {
+    return (
+      <div className="relative z-40 border-b border-amber-500/20 bg-black/60 px-4 py-1 text-center backdrop-blur-md">
+        <button
+          type="button"
+          onClick={() => setDismissed(false)}
+          className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/30 bg-amber-400/10 px-3 py-0.5 text-[11px] font-semibold text-amber-300 transition hover:bg-amber-400/20 hover:text-white"
+        >
+          <span>{themeStyle.defaultEmoji}</span>
+          <span>{badge}</span>
+          <span className="text-slate-400">• Click to show celebration announcement</span>
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -138,8 +146,9 @@ export function FestivalThemeBanner({ settings }: { settings?: SiteSettings | nu
 
           <button
             type="button"
-            onClick={handleDismiss}
-            aria-label="Dismiss celebration announcement"
+            onClick={() => setDismissed(true)}
+            aria-label="Collapse celebration announcement"
+            title="Collapse banner (you can re-open it or refresh the page anytime)"
             className="rounded p-1 text-slate-400 hover:bg-white/10 hover:text-white transition"
           >
             <X size={15} />
