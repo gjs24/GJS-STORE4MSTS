@@ -246,20 +246,31 @@ export async function adminPatchForm<T>(path: string, body: FormData): Promise<T
   return res.json();
 }
 
-export async function adminDelete(path: string): Promise<void> {
+export async function adminDelete<T = void>(path: string, body?: unknown): Promise<T> {
   if (!hasAdminToken()) throw new Error("Admin login required.");
   await validAccessToken();
+  const headers: Record<string, string> = { ...adminHeaders() };
+  if (body) {
+    headers["Content-Type"] = "application/json";
+  }
   let res = await fetch(`${API_URL}${path}`, {
     method: "DELETE",
-    headers: adminHeaders()
+    headers,
+    body: body ? JSON.stringify(body) : undefined
   });
   if (res.status === 401 && await refreshAccessToken()) {
     res = await fetch(`${API_URL}${path}`, {
       method: "DELETE",
-      headers: adminHeaders()
+      headers: { ...adminHeaders(), ...(body ? { "Content-Type": "application/json" } : {}) },
+      body: body ? JSON.stringify(body) : undefined
     });
   }
   if (!res.ok) throw new Error(await parseAdminError(res, "Delete failed"));
+  const contentType = res.headers.get("content-type");
+  if (contentType && contentType.includes("application/json")) {
+    return res.json();
+  }
+  return undefined as T;
 }
 
 export async function downloadAdminInvoice(orderId: number): Promise<{ url: string; filename: string; revoke: () => void }> {

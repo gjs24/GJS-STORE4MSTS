@@ -1497,6 +1497,17 @@ class AdminActivityLogView(generics.ListAPIView):
 
     def get_queryset(self):
         qs = AdminActivityLog.objects.select_related("actor")
+
+        # Default to 30 days of data to save bandwidth and memory unless overridden
+        days = self.request.query_params.get("days", "30")
+        if days and str(days).strip().lower() != "all":
+            try:
+                days_int = int(days)
+                cutoff = timezone.now() - timedelta(days=days_int)
+                qs = qs.filter(created_at__gte=cutoff)
+            except (ValueError, TypeError):
+                pass
+
         action = self.request.query_params.get("action")
         if action:
             qs = qs.filter(action__icontains=action)
@@ -1516,6 +1527,57 @@ class AdminActivityLogView(generics.ListAPIView):
         else:
             qs = qs.order_by("-created_at")
         return qs
+
+    def delete(self, request, *args, **kwargs):
+        older_than_days = request.query_params.get("older_than_days") or (request.data.get("older_than_days") if isinstance(request.data, dict) else None)
+        purge_all = request.query_params.get("all") == "true" or (isinstance(request.data, dict) and request.data.get("all") is True)
+        ids = None
+        if isinstance(request.data, dict) and "ids" in request.data:
+            ids = request.data.get("ids")
+        elif "ids" in request.query_params:
+            ids = request.query_params.getlist("ids")
+
+        if older_than_days:
+            try:
+                cutoff_days = int(older_than_days)
+                cutoff = timezone.now() - timedelta(days=cutoff_days)
+                deleted_count, _ = AdminActivityLog.objects.filter(created_at__lt=cutoff).delete()
+                return Response(
+                    {
+                        "detail": f"Purged {deleted_count} activity log(s) older than {cutoff_days} days.",
+                        "deleted_count": deleted_count,
+                    },
+                    status=status.HTTP_200_OK,
+                )
+            except (ValueError, TypeError):
+                return Response({"detail": "Invalid older_than_days parameter."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if ids is not None:
+            if not isinstance(ids, list) or len(ids) == 0:
+                return Response({"detail": "No log IDs provided for deletion."}, status=status.HTTP_400_BAD_REQUEST)
+            deleted_count, _ = AdminActivityLog.objects.filter(id__in=ids).delete()
+            return Response(
+                {
+                    "detail": f"Successfully deleted {deleted_count} activity log(s).",
+                    "deleted_count": deleted_count,
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        if purge_all:
+            deleted_count, _ = AdminActivityLog.objects.all().delete()
+            return Response(
+                {
+                    "detail": f"Successfully purged all {deleted_count} activity log(s).",
+                    "deleted_count": deleted_count,
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        return Response(
+            {"detail": "Please specify 'older_than_days', 'ids', or 'all=true' to delete activity logs."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
 
 
 def create_download_response(request, asset):
