@@ -124,6 +124,45 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ sl
               </p>
             </div>
           ) : null}
+          {asset.early_access_enabled ? (
+            <div className="mt-6 rounded-lg border border-purple-500/40 bg-purple-950/20 p-5">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded bg-purple-500/20 border border-purple-400/40 px-2.5 py-1 text-xs font-black uppercase tracking-wide text-purple-300">
+                  {asset.early_access_badge || "VIP Early Access"}
+                </span>
+                {asset.early_access_has_discount && asset.early_access_discount_percent ? (
+                  <span className="rounded bg-emerald-500/20 border border-emerald-400/40 px-2.5 py-1 text-xs font-bold text-emerald-300">
+                    {asset.early_access_discount_percent}% Loyalty Discount
+                  </span>
+                ) : null}
+              </div>
+              <h3 className="mt-2.5 text-xl font-bold text-white">
+                {asset.early_access_has_access && asset.early_access_has_discount
+                  ? "Early Access & Exclusive Discount Available"
+                  : asset.early_access_has_access
+                  ? "Early Access Available Before Release"
+                  : "Exclusive Customer Loyalty Discount Available"}
+              </h3>
+              <p className="mt-2 text-sm text-slate-300 leading-relaxed">
+                {asset.early_access_message ||
+                  `Special perks unlocked for customers who purchased ${
+                    asset.early_access_required_asset_titles && asset.early_access_required_asset_titles.length > 0
+                      ? asset.early_access_required_asset_titles.join(", ")
+                      : "qualifying products"
+                  }.`}
+              </p>
+              {asset.early_access_required_asset_titles && asset.early_access_required_asset_titles.length > 0 ? (
+                <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-purple-300">
+                  <span className="font-semibold text-slate-400">Qualifying products:</span>
+                  {asset.early_access_required_asset_titles.map((title) => (
+                    <span key={title} className="rounded bg-purple-900/40 border border-purple-500/30 px-2 py-0.5 font-medium text-purple-200">
+                      {title}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
           <AssetActions asset={asset} />
           <div className="mt-6 grid gap-3 text-sm text-slate-300 sm:grid-cols-2">
             <span className="rounded border border-white/10 bg-white/[0.03] p-3"><ShieldCheck className="mr-2 inline text-rail-amber" size={16} /> Account protected access</span>

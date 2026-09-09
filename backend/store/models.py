@@ -57,6 +57,28 @@ class Asset(models.Model):
     coming_soon_button_text = models.CharField(max_length=60, default="Notify Me")
     coming_soon_badge = models.CharField(max_length=40, default="COMING SOON")
     coming_soon_status_text = models.CharField(max_length=120, default="Release Date: To Be Announced")
+    early_access_enabled = models.BooleanField(default=False)
+    early_access_has_access = models.BooleanField(default=False)
+    early_access_has_discount = models.BooleanField(default=False)
+    early_access_discount_percent = models.PositiveIntegerField(
+        default=0,
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+    )
+    early_access_price = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        blank=True,
+        null=True,
+    )
+    early_access_required_assets = models.ManyToManyField(
+        "self",
+        blank=True,
+        symmetrical=False,
+        related_name="early_access_unlocked_assets",
+    )
+    early_access_badge = models.CharField(max_length=60, default="VIP Early Access", blank=True)
+    early_access_message = models.TextField(blank=True)
     thumbnail = models.ImageField(upload_to="assets/thumbnails/", blank=True, null=True)
     thumbnail_url = models.URLField(blank=True)
     gallery_image_urls = models.TextField(blank=True)

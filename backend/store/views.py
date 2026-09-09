@@ -1,5 +1,6 @@
 import base64
 from datetime import timedelta
+from decimal import Decimal
 import json
 import logging
 import os
@@ -29,6 +30,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 
 from .throttles import DownloadRateThrottle
 
+from .early_access import get_cached_early_access_status
 from .models import AdminActivityLog, Asset, Category, DownloadLog, EmailOTP, NotifyRequest, Order, Payment, Review, SiteSetting, Wishlist
 from .permissions import IsAdminOrReadOnly
 from .serializers import (
@@ -854,8 +856,10 @@ class OrderCreateView(generics.CreateAPIView):
 
     def create(self, request, *args, **kwargs):
         asset = get_object_or_404(Asset, id=request.data.get("asset_id"), is_published=True)
-        if asset.is_upcoming:
+        ea_status = get_cached_early_access_status(asset, request)
+        if asset.is_upcoming and not ea_status["can_access_early"]:
             return Response({"detail": "This asset is marked as upcoming and is not available for purchase yet."}, status=status.HTTP_400_BAD_REQUEST)
+        target_amount = ea_status["effective_price"]
         existing_order = Order.objects.filter(
             user=request.user,
             asset=asset,
@@ -863,11 +867,11 @@ class OrderCreateView(generics.CreateAPIView):
         ).order_by("-id").first()
 
         # A pending order is an unpaid checkout quote, not a price lock.  Do
-        # not reuse it after an administrator changes the product price.
+        # not reuse it after an administrator changes the product price or discount.
         if (
             existing_order
             and existing_order.status == Order.Status.PENDING
-            and existing_order.amount != asset.price
+            and existing_order.amount != target_amount
         ):
             existing_order.status = Order.Status.EXPIRED
             existing_order.download_enabled = False
@@ -902,13 +906,16 @@ class OrderCreateView(generics.CreateAPIView):
 
     def perform_create(self, serializer):
         asset = serializer.validated_data["asset"]
-        status_value = Order.Status.APPROVED if asset.is_free else Order.Status.PENDING
+        ea_status = get_cached_early_access_status(asset, self.request)
+        final_amount = ea_status["effective_price"]
+        is_free_purchase = asset.is_free or final_amount <= Decimal("0.00")
+        status_value = Order.Status.APPROVED if is_free_purchase else Order.Status.PENDING
         order = serializer.save(
             user=self.request.user,
-            amount=asset.price,
+            amount=final_amount,
             currency="INR",
             status=status_value,
-            download_enabled=asset.is_free,
+            download_enabled=is_free_purchase,
         )
         order.provider_order_id = f"GJS-{order.id:06d}"
         order.save(update_fields=["provider_order_id"])
@@ -1502,7 +1509,9 @@ class AdminActivityLogView(generics.ListAPIView):
 
 def create_download_response(request, asset):
     if asset.is_upcoming:
-        return Response({"detail": "This asset is marked as upcoming and is not available for download yet."}, status=status.HTTP_403_FORBIDDEN)
+        ea_status = get_cached_early_access_status(asset, request)
+        if not ea_status["can_access_early"]:
+            return Response({"detail": "This asset is marked as upcoming and is not available for download yet."}, status=status.HTTP_403_FORBIDDEN)
     allowed = asset.is_free or Order.objects.filter(user=request.user, asset=asset, status__in=DOWNLOAD_READY_STATUSES).exists()
     if not allowed:
         return Response({"detail": "Purchase required before downloading this asset."}, status=status.HTTP_403_FORBIDDEN)

@@ -6,7 +6,7 @@ import { CheckCircle2, Loader2, Save } from "lucide-react";
 import { AdminLoginNote } from "@/components/admin-login-note";
 import { AdminLayout } from "@/components/admin-table";
 import { adminGet, adminPostForm } from "@/lib/admin-api";
-import { fallbackCategories, type Category } from "@/lib/api";
+import { fallbackCategories, type Asset, type Category } from "@/lib/api";
 
 type CreatedAsset = {
   id: number;
@@ -19,14 +19,24 @@ type CreatedAsset = {
 
 export default function CreateAssetPage() {
   const [categories, setCategories] = useState<Category[]>(fallbackCategories);
+  const [availableAssets, setAvailableAssets] = useState<Asset[]>([]);
   const [isFree, setIsFree] = useState(false);
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
   const [thumbnailInfo, setThumbnailInfo] = useState("");
   const [packageInfo, setPackageInfo] = useState("");
+  const [earlyAccessEnabled, setEarlyAccessEnabled] = useState(false);
+  const [earlyAccessHasAccess, setEarlyAccessHasAccess] = useState(false);
+  const [earlyAccessHasDiscount, setEarlyAccessHasDiscount] = useState(false);
+  const [earlyAccessDiscountPercent, setEarlyAccessDiscountPercent] = useState<number>(0);
+  const [earlyAccessPrice, setEarlyAccessPrice] = useState<string>("");
+  const [earlyAccessRequiredAssets, setEarlyAccessRequiredAssets] = useState<number[]>([]);
+  const [earlyAccessBadge, setEarlyAccessBadge] = useState("VIP Early Access");
+  const [earlyAccessMessage, setEarlyAccessMessage] = useState("");
 
   useEffect(() => {
     adminGet<Category[]>("/admin/categories/", fallbackCategories).then(setCategories);
+    adminGet<Asset[]>("/admin/assets/", []).then(setAvailableAssets);
   }, []);
 
   async function createAsset(formData: FormData) {
@@ -47,6 +57,14 @@ export default function CreateAssetPage() {
       formData.set("is_featured", String(formData.get("is_featured") === "on"));
       formData.set("is_upcoming", String(formData.get("is_upcoming") === "on"));
       formData.set("deal_is_open", String(formData.get("deal_is_open") === "on"));
+      formData.set("early_access_enabled", String(earlyAccessEnabled));
+      formData.set("early_access_has_access", String(earlyAccessHasAccess));
+      formData.set("early_access_has_discount", String(earlyAccessHasDiscount));
+      formData.set("early_access_discount_percent", String(earlyAccessDiscountPercent || 0));
+      formData.set("early_access_price", earlyAccessPrice || "0.00");
+      formData.set("early_access_badge", earlyAccessBadge);
+      formData.set("early_access_message", earlyAccessMessage);
+      formData.set("early_access_required_assets", JSON.stringify(earlyAccessRequiredAssets));
       if (!formData.get("deal_ends_at")) {
         formData.delete("deal_ends_at");
       }
@@ -230,6 +248,197 @@ export default function CreateAssetPage() {
             </label>
           </div>
         </div>
+
+        {/* Early Access & Customer Loyalty Perks Section */}
+        <div className="space-y-4 rounded border border-purple-500/30 bg-purple-500/5 p-5 md:col-span-2">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-purple-500/20 pb-3">
+            <div>
+              <h2 className="text-lg font-bold text-purple-300 flex items-center gap-2">
+                <span>⭐ Early Access & Customer Loyalty Perks</span>
+              </h2>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Reward previous customers (who bought specific products) with early access to upcoming releases and/or exclusive discounts.
+              </p>
+            </div>
+            <label className="flex items-center gap-2 rounded bg-purple-950/60 border border-purple-500/40 px-3 py-1.5 cursor-pointer hover:bg-purple-900/60">
+              <input
+                type="checkbox"
+                checked={earlyAccessEnabled}
+                onChange={(e) => setEarlyAccessEnabled(e.target.checked)}
+                className="rounded accent-purple-500"
+              />
+              <span className="text-xs font-semibold text-purple-200">
+                {earlyAccessEnabled ? "Feature ENABLED" : "Feature DISABLED"}
+              </span>
+            </label>
+          </div>
+
+          {earlyAccessEnabled ? (
+            <div className="space-y-4 pt-1">
+              {/* Prerequisite Products Selection */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-semibold text-slate-200">
+                    Selected Qualifying Product(s)
+                  </span>
+                  <span className="text-xs text-purple-300">
+                    {earlyAccessRequiredAssets.length === 0
+                      ? "None selected (Any prior purchase qualifies)"
+                      : `${earlyAccessRequiredAssets.length} product(s) selected`}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400 mb-2">
+                  Check the product(s) that the customer must have previously purchased to unlock these perks:
+                </p>
+                <div className="max-h-48 overflow-y-auto rounded border border-white/10 bg-black/40 p-2 space-y-1">
+                  {availableAssets.map((item) => {
+                    const checked = earlyAccessRequiredAssets.includes(item.id);
+                    return (
+                      <label
+                        key={item.id}
+                        className={`flex items-center justify-between p-2 rounded cursor-pointer text-xs transition ${
+                          checked ? "bg-purple-900/40 border border-purple-500/40" : "hover:bg-white/5"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setEarlyAccessRequiredAssets([...earlyAccessRequiredAssets, item.id]);
+                              } else {
+                                setEarlyAccessRequiredAssets(earlyAccessRequiredAssets.filter((id) => id !== item.id));
+                              }
+                            }}
+                            className="rounded accent-purple-500"
+                          />
+                          <span className="font-medium text-white">{item.title}</span>
+                          <span className="text-slate-400">({item.category?.name || "Category"})</span>
+                        </div>
+                        <span className="text-slate-300 font-mono">
+                          {item.is_free ? "Free" : `₹${item.price}`}
+                        </span>
+                      </label>
+                    );
+                  })}
+                  {availableAssets.length === 0 && (
+                    <p className="text-xs text-slate-500 p-2">No other products found.</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Perks Options (The 4 combinations requested by user) */}
+              <div className="grid gap-3 md:grid-cols-2 pt-2 border-t border-purple-500/20">
+                <label className="flex items-start gap-3 rounded border border-white/10 bg-black/30 p-3 cursor-pointer hover:bg-black/40">
+                  <input
+                    type="checkbox"
+                    checked={earlyAccessHasAccess}
+                    onChange={(e) => setEarlyAccessHasAccess(e.target.checked)}
+                    className="mt-1 rounded accent-purple-500"
+                  />
+                  <div>
+                    <span className="block text-sm font-semibold text-white">1. Grant Early Access</span>
+                    <span className="block text-xs text-slate-400 mt-0.5">
+                      Eligible buyers can purchase & download this product before official release while it is marked as Upcoming.
+                    </span>
+                  </div>
+                </label>
+
+                <label className="flex items-start gap-3 rounded border border-white/10 bg-black/30 p-3 cursor-pointer hover:bg-black/40">
+                  <input
+                    type="checkbox"
+                    checked={earlyAccessHasDiscount}
+                    onChange={(e) => setEarlyAccessHasDiscount(e.target.checked)}
+                    className="mt-1 rounded accent-purple-500"
+                  />
+                  <div>
+                    <span className="block text-sm font-semibold text-white">2. Grant Exclusive Discount</span>
+                    <span className="block text-xs text-slate-400 mt-0.5">
+                      Eligible buyers receive a special loyalty/early-access discount on this product.
+                    </span>
+                  </div>
+                </label>
+              </div>
+
+              {/* Mode Summary Indicator */}
+              <div className="rounded bg-black/30 p-2.5 text-xs">
+                {earlyAccessHasAccess && earlyAccessHasDiscount ? (
+                  <p className="text-emerald-400 font-medium">
+                    🌟 Active Mode: <strong>BOTH Early Access AND Discount</strong> will be granted to eligible buyers.
+                  </p>
+                ) : earlyAccessHasAccess ? (
+                  <p className="text-amber-400 font-medium">
+                    🚀 Active Mode: <strong>ONLY Early Access</strong> is granted (eligible buyers can buy early at regular price).
+                  </p>
+                ) : earlyAccessHasDiscount ? (
+                  <p className="text-cyan-400 font-medium">
+                    🏷️ Active Mode: <strong>ONLY Discount</strong> is granted (eligible buyers get discount, but cannot buy early while upcoming).
+                  </p>
+                ) : (
+                  <p className="text-red-400 font-medium">
+                    ⚠️ Active Mode: <strong>NEITHER perk selected</strong>. Enable at least one perk above or turn off the feature.
+                  </p>
+                )}
+              </div>
+
+              {/* Discount inputs if discount is enabled */}
+              {earlyAccessHasDiscount ? (
+                <div className="grid gap-4 md:grid-cols-2 rounded border border-purple-500/20 bg-purple-950/20 p-3">
+                  <label className="block">
+                    <span className="text-xs text-slate-300">Discount Percentage (%)</span>
+                    <input
+                      type="number"
+                      min="1"
+                      max="99"
+                      value={earlyAccessDiscountPercent || ""}
+                      onChange={(e) => setEarlyAccessDiscountPercent(Number(e.target.value))}
+                      placeholder="e.g. 20 for 20% off"
+                      className="mt-1 w-full rounded border border-white/10 bg-black/40 px-3 py-2 text-sm"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="text-xs text-slate-300">Or Explicit Price in INR (Optional Override)</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={earlyAccessPrice}
+                      onChange={(e) => setEarlyAccessPrice(e.target.value)}
+                      placeholder="e.g. 199.00"
+                      className="mt-1 w-full rounded border border-white/10 bg-black/40 px-3 py-2 text-sm"
+                    />
+                  </label>
+                </div>
+              ) : null}
+
+              {/* Badge & Custom note */}
+              <div className="grid gap-4 md:grid-cols-2">
+                <label className="block">
+                  <span className="text-xs text-slate-300">Early Access Badge</span>
+                  <input
+                    type="text"
+                    value={earlyAccessBadge}
+                    onChange={(e) => setEarlyAccessBadge(e.target.value)}
+                    placeholder="VIP Early Access"
+                    className="mt-1 w-full rounded border border-white/10 bg-black/40 px-3 py-2 text-sm"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-xs text-slate-300">Custom Message for Customers (Optional)</span>
+                  <input
+                    type="text"
+                    value={earlyAccessMessage}
+                    onChange={(e) => setEarlyAccessMessage(e.target.value)}
+                    placeholder="Exclusive early access & loyalty discount for existing customers."
+                    className="mt-1 w-full rounded border border-white/10 bg-black/40 px-3 py-2 text-sm"
+                  />
+                </label>
+              </div>
+            </div>
+          ) : null}
+        </div>
+
         <textarea name="requirements" placeholder="Requirements" rows={4} className="rounded border border-white/10 bg-black/40 px-3 py-3" />
         <textarea name="installation_steps" placeholder="Installation steps" rows={4} className="rounded border border-white/10 bg-black/40 px-3 py-3" />
         <textarea name="changelog" placeholder="Changelog" rows={4} className="rounded border border-white/10 bg-black/40 px-3 py-3 md:col-span-2" />

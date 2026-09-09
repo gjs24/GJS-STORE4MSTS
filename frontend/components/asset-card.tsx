@@ -68,6 +68,10 @@ export function AssetCard({ asset }: { asset: Asset }) {
             <span className="absolute bottom-2.5 left-3 rounded-md bg-rail-amber px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-black shadow-md">
               {asset.deal_badge || "Limited Time"}
             </span>
+          ) : asset.early_access_enabled ? (
+            <span className="absolute bottom-2.5 left-3 rounded-md bg-gradient-to-r from-purple-600 to-indigo-600 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-white shadow-md">
+              {asset.early_access_badge || "VIP Early Access"}
+            </span>
           ) : null}
         </div>
 

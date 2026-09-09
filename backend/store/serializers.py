@@ -4,6 +4,7 @@ from django.db.models import Avg, Q
 from urllib.parse import quote
 from rest_framework import serializers
 
+from .early_access import get_cached_early_access_status
 from .models import AdminActivityLog, Asset, AssetImage, Category, DownloadLog, EmailOTP, NotifyRequest, Order, Payment, Review, SiteSetting, UpdateLog, Wishlist
 
 
@@ -98,6 +99,13 @@ class AssetListSerializer(serializers.ModelSerializer):
     savings_amount = serializers.SerializerMethodField()
     thumbnail = serializers.SerializerMethodField()
     review_count = serializers.SerializerMethodField()
+    early_access_required_assets = serializers.SerializerMethodField()
+    early_access_required_asset_titles = serializers.SerializerMethodField()
+    user_is_eligible = serializers.SerializerMethodField()
+    user_can_access_early = serializers.SerializerMethodField()
+    user_has_early_discount = serializers.SerializerMethodField()
+    user_effective_price = serializers.SerializerMethodField()
+    user_discount_percent = serializers.SerializerMethodField()
 
     class Meta:
         model = Asset
@@ -128,6 +136,20 @@ class AssetListSerializer(serializers.ModelSerializer):
             "coming_soon_button_text",
             "coming_soon_badge",
             "coming_soon_status_text",
+            "early_access_enabled",
+            "early_access_has_access",
+            "early_access_has_discount",
+            "early_access_discount_percent",
+            "early_access_price",
+            "early_access_badge",
+            "early_access_message",
+            "early_access_required_assets",
+            "early_access_required_asset_titles",
+            "user_is_eligible",
+            "user_can_access_early",
+            "user_has_early_discount",
+            "user_effective_price",
+            "user_discount_percent",
             "thumbnail",
             "thumbnail_url",
             "gallery_image_urls",
@@ -177,6 +199,38 @@ class AssetListSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         return request.build_absolute_uri(url) if request else url
 
+    def get_early_access_required_assets(self, obj):
+        try:
+            return list(obj.early_access_required_assets.values_list("id", flat=True))
+        except Exception:
+            return []
+
+    def get_early_access_required_asset_titles(self, obj):
+        try:
+            return list(obj.early_access_required_assets.values_list("title", flat=True))
+        except Exception:
+            return []
+
+    def get_user_is_eligible(self, obj):
+        ea = get_cached_early_access_status(obj, self.context.get("request"))
+        return ea["is_eligible"]
+
+    def get_user_can_access_early(self, obj):
+        ea = get_cached_early_access_status(obj, self.context.get("request"))
+        return ea["can_access_early"]
+
+    def get_user_has_early_discount(self, obj):
+        ea = get_cached_early_access_status(obj, self.context.get("request"))
+        return ea["has_early_discount"]
+
+    def get_user_effective_price(self, obj):
+        ea = get_cached_early_access_status(obj, self.context.get("request"))
+        return f"{ea['effective_price']:.2f}"
+
+    def get_user_discount_percent(self, obj):
+        ea = get_cached_early_access_status(obj, self.context.get("request"))
+        return ea["discount_percent"]
+
 
 class AssetDetailSerializer(AssetListSerializer):
     images = AssetImageSerializer(many=True, read_only=True)
@@ -206,18 +260,52 @@ class AssetDetailSerializer(AssetListSerializer):
         return ReviewSerializer(approved, many=True, context=self.context).data
 
     def get_can_download(self, obj):
-        user = self.context["request"].user
-        if not user.is_authenticated:
+        request = self.context.get("request")
+        user = getattr(request, "user", None) if request else None
+        if not user or not user.is_authenticated:
             return False
         if obj.is_free:
             return True
-        return Order.objects.filter(user=user, asset=obj, status=Order.Status.PAID).exists()
+        return Order.objects.filter(user=user, asset=obj, status__in=[Order.Status.PAID, Order.Status.APPROVED]).exists()
 
 
 class AssetWriteSerializer(serializers.ModelSerializer):
+    early_access_required_assets = serializers.PrimaryKeyRelatedField(
+        many=True,
+        queryset=Asset.objects.all(),
+        required=False,
+    )
+
     class Meta:
         model = Asset
         fields = "__all__"
+
+    def to_internal_value(self, data):
+        if hasattr(data, "getlist"):
+            raw_list = data.getlist("early_access_required_assets")
+            cleaned = []
+            for item in raw_list:
+                if isinstance(item, str) and "," in item:
+                    cleaned.extend([p.strip() for p in item.split(",") if p.strip().isdigit()])
+                elif isinstance(item, (int, str)) and str(item).strip().isdigit():
+                    cleaned.append(str(item).strip())
+            if cleaned or "early_access_required_assets" in data:
+                data = data.copy()
+                data.setlist("early_access_required_assets", cleaned)
+        elif isinstance(data, dict) and "early_access_required_assets" in data:
+            val = data["early_access_required_assets"]
+            if isinstance(val, str):
+                data = data.copy()
+                val_str = val.strip()
+                if val_str.startswith("[") and val_str.endswith("]"):
+                    import json
+                    try:
+                        data["early_access_required_assets"] = json.loads(val_str)
+                    except Exception:
+                        data["early_access_required_assets"] = []
+                else:
+                    data["early_access_required_assets"] = [int(p.strip()) for p in val_str.split(",") if p.strip().isdigit()]
+        return super().to_internal_value(data)
 
 
 class OrderSerializer(serializers.ModelSerializer):

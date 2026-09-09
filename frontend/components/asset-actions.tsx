@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { load } from "@cashfreepayments/cashfree-js";
-import { CheckCircle2, Download, Lock, ShoppingCart } from "lucide-react";
+import { CheckCircle2, Download, Lock, ShoppingCart, Sparkles } from "lucide-react";
 import { priceLabel, type Asset } from "@/lib/api";
 import { WishlistButton } from "@/components/wishlist-button";
-import { createOrder, downloadAsset, isLoggedIn, notifyMe, verifyPayment, type StoreOrder } from "@/lib/store-api";
+import { createOrder, downloadAsset, isLoggedIn, notifyMe, userGet, verifyPayment, type StoreOrder } from "@/lib/store-api";
 
 function qrCodeUrl(value: string) {
   return `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(value)}`;
@@ -15,11 +15,29 @@ function qrCodeUrl(value: string) {
 const cashfreeMode = process.env.NEXT_PUBLIC_CASHFREE_MODE === "production" ? "production" : "sandbox";
 
 export function AssetActions({ asset }: { asset: Asset }) {
+  const [currentAsset, setCurrentAsset] = useState<Asset>(asset);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [order, setOrder] = useState<StoreOrder | null>(null);
   const [utr, setUtr] = useState("");
   const [payerName, setPayerName] = useState("");
+
+  useEffect(() => {
+    setCurrentAsset(asset);
+    if (isLoggedIn()) {
+      userGet<Asset>(`/assets/${asset.slug}/`)
+        .then((fresh) => {
+          setCurrentAsset(fresh);
+        })
+        .catch(() => {});
+    }
+  }, [asset.slug, asset]);
+
+  const activeAsset = currentAsset;
+  const isUpcoming = Boolean(activeAsset.is_upcoming);
+  const canEarlyAccess = Boolean(isUpcoming && activeAsset.user_can_access_early);
+  const isUpcomingBlocked = Boolean(isUpcoming && !canEarlyAccess);
+  const effectivePrice = activeAsset.user_effective_price ? activeAsset.user_effective_price : activeAsset.price;
 
   async function requireLogin() {
     if (!isLoggedIn()) {
@@ -46,11 +64,11 @@ export function AssetActions({ asset }: { asset: Asset }) {
   }
 
   async function startDownload() {
-    const download = await downloadAsset(asset.id);
+    const download = await downloadAsset(activeAsset.id);
     setMessage("Download ready. Starting package download...");
     const link = document.createElement("a");
     link.href = download.url;
-    link.download = download.filename || `${asset.slug}.zip`;
+    link.download = download.filename || `${activeAsset.slug}.zip`;
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -58,12 +76,12 @@ export function AssetActions({ asset }: { asset: Asset }) {
   }
 
   async function handlePrimaryAction() {
-    if (asset.is_upcoming) {
+    if (isUpcomingBlocked) {
       if (!(await requireLogin())) return;
       setBusy(true);
       setMessage("Saving your Notify Me request...");
       try {
-        const result = await notifyMe(asset.slug);
+        const result = await notifyMe(activeAsset.slug);
         setMessage(result.detail);
       } catch (error) {
         setMessage(error instanceof Error ? error.message : "Could not save notification request.");
@@ -74,10 +92,10 @@ export function AssetActions({ asset }: { asset: Asset }) {
     }
     if (!(await requireLogin())) return;
     setBusy(true);
-    setMessage(asset.is_free ? "Preparing secure download..." : "Creating your order...");
+    setMessage(activeAsset.is_free ? "Preparing secure download..." : "Creating your order...");
     try {
-      if (!asset.is_free && !asset.can_download) {
-        const nextOrder = await createOrder(asset.id);
+      if (!activeAsset.is_free && !activeAsset.can_download) {
+        const nextOrder = await createOrder(activeAsset.id);
         setOrder(nextOrder);
         if (nextOrder.status === "PENDING" && nextOrder.payment_session_id) {
           await startCashfreeCheckout(nextOrder);
@@ -131,15 +149,107 @@ export function AssetActions({ asset }: { asset: Asset }) {
     }
   }
 
+  function getButtonLabel() {
+    if (isUpcomingBlocked) {
+      return activeAsset.coming_soon_button_text || "Notify Me";
+    }
+    if (activeAsset.is_free || activeAsset.can_download) {
+      return isUpcoming ? "Early Access Download" : "Download package";
+    }
+    if (isUpcoming) {
+      return `VIP Early Access: Buy for INR ${effectivePrice}`;
+    }
+    if (activeAsset.user_has_early_discount && activeAsset.user_discount_percent) {
+      return `Buy for INR ${effectivePrice} (${activeAsset.user_discount_percent}% Loyalty Discount)`;
+    }
+    return `Buy for ${priceLabel(activeAsset)}`;
+  }
+
   return (
     <div className="mt-8 space-y-4">
+      {/* Early Access & Loyalty Perks Status Banner */}
+      {activeAsset.early_access_enabled ? (
+        canEarlyAccess ? (
+          <div className="rounded-lg border border-emerald-400/40 bg-emerald-400/10 p-3.5 text-xs text-emerald-300 flex items-start gap-2.5 shadow-sm">
+            <Sparkles className="mt-0.5 shrink-0 text-emerald-400" size={17} />
+            <div>
+              <p className="font-bold text-emerald-100 text-sm">
+                ⭐ VIP Early Access Active
+              </p>
+              <p className="text-emerald-300 mt-0.5 leading-relaxed">
+                Because you purchased qualifying products, you have unlocked exclusive early purchase and download access before official release!
+              </p>
+              {activeAsset.user_has_early_discount && activeAsset.user_discount_percent ? (
+                <p className="text-emerald-200 font-semibold mt-1">
+                  Exclusive loyalty discount applied: Pay INR {effectivePrice} ({activeAsset.user_discount_percent}% OFF).
+                </p>
+              ) : null}
+            </div>
+          </div>
+        ) : activeAsset.user_has_early_discount ? (
+          <div className="rounded-lg border border-emerald-400/40 bg-emerald-400/10 p-3.5 text-xs text-emerald-300 flex items-start gap-2.5 shadow-sm">
+            <CheckCircle2 className="mt-0.5 shrink-0 text-emerald-400" size={17} />
+            <div>
+              <p className="font-bold text-emerald-100 text-sm">
+                🏷️ Loyalty Discount Unlocked
+              </p>
+              <p className="text-emerald-300 mt-0.5 leading-relaxed">
+                As a valued customer, you qualify for an exclusive {activeAsset.user_discount_percent}% discount!
+              </p>
+              <p className="text-emerald-200 font-semibold mt-1">
+                Your exclusive price: INR {effectivePrice} (Regular price: INR {activeAsset.price}).
+              </p>
+            </div>
+          </div>
+        ) : !isLoggedIn() ? (
+          <div className="rounded-lg border border-purple-500/30 bg-purple-950/25 p-3.5 text-xs text-purple-200 flex items-start gap-2.5">
+            <Lock className="mt-0.5 shrink-0 text-purple-400" size={17} />
+            <div>
+              <p className="font-bold text-white text-sm">
+                Own previously released products?
+              </p>
+              <p className="text-purple-300 mt-0.5 leading-relaxed">
+                <Link href="/login" className="underline font-bold text-white hover:text-purple-200">
+                  Log in to your account
+                </Link>{" "}
+                to check if you qualify for VIP early access or exclusive loyalty discounts!
+              </p>
+            </div>
+          </div>
+        ) : isUpcoming ? (
+          <div className="rounded-lg border border-white/10 bg-white/[0.04] p-3 text-xs text-slate-300">
+            <p className="text-slate-400 leading-relaxed">
+              ℹ️ Early access for this upcoming product is currently reserved for owners of:{" "}
+              <span className="font-semibold text-slate-200">
+                {activeAsset.early_access_required_asset_titles && activeAsset.early_access_required_asset_titles.length > 0
+                  ? activeAsset.early_access_required_asset_titles.join(", ")
+                  : "qualifying products"}
+              </span>
+              . Click &quot;Notify Me&quot; below to be alerted upon general release.
+            </p>
+          </div>
+        ) : null
+      ) : null}
+
       <div className="flex flex-wrap gap-3">
-        <button onClick={handlePrimaryAction} disabled={busy} className="rounded bg-rail-red px-5 py-3 font-semibold text-white disabled:opacity-60">
-          {asset.is_free || asset.can_download ? <Download className="mr-2 inline" size={18} /> : <ShoppingCart className="mr-2 inline" size={18} />}
-          {asset.is_upcoming ? asset.coming_soon_button_text || "Notify Me" : asset.is_free || asset.can_download ? "Download package" : `Buy for ${priceLabel(asset)}`}
+        <button
+          onClick={handlePrimaryAction}
+          disabled={busy}
+          className={`rounded px-5 py-3 font-semibold text-white transition disabled:opacity-60 ${
+            canEarlyAccess
+              ? "bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 shadow-md shadow-purple-900/30"
+              : "bg-rail-red hover:bg-rail-red/90"
+          }`}
+        >
+          {activeAsset.is_free || activeAsset.can_download ? (
+            <Download className="mr-2 inline" size={18} />
+          ) : isUpcomingBlocked ? null : (
+            <ShoppingCart className="mr-2 inline" size={18} />
+          )}
+          {getButtonLabel()}
         </button>
         <WishlistButton
-          assetId={asset.id}
+          assetId={activeAsset.id}
           variant="button"
           onWishlistChange={(inWishlist) => {
             setMessage(inWishlist ? "Saved to your wishlist." : "Removed from your wishlist.");
