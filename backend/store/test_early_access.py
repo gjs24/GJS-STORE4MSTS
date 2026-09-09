@@ -9,6 +9,7 @@ from rest_framework import status
 from store.models import Asset, Category, Order
 from store.serializers import AssetListSerializer, AssetDetailSerializer, AssetWriteSerializer
 from store.views import OrderCreateView, create_download_response
+from store.early_access import calculate_early_access_status
 
 
 @override_settings(MANUAL_UPI_ID="admin@upi", CASHFREE_CLIENT_ID="", CASHFREE_CLIENT_SECRET="")
@@ -203,3 +204,40 @@ class EarlyAccessTests(TestCase):
         resp_eligible_paid = create_download_response(req_eligible_paid, self.product2)
         self.assertEqual(resp_eligible_paid.status_code, status.HTTP_200_OK)
         self.assertEqual(resp_eligible_paid.data["download_url"], "https://example.com/download.zip")
+
+    def test_early_access_scheduled_future(self):
+        import datetime
+        from django.utils import timezone
+
+        # Set VIP early access start time to future
+        self.product2.early_access_starts_at = timezone.now() + datetime.timedelta(days=2)
+        self.product2.save()
+
+        status_result = calculate_early_access_status(self.product2, self.user_eligible)
+        self.assertTrue(status_result["is_eligible"])
+        self.assertFalse(status_result["can_access_early"])
+        self.assertTrue(status_result["is_early_access_pending"])
+        self.assertFalse(status_result["is_early_access_active"])
+
+        # Attempt to create order should be blocked
+        view = OrderCreateView.as_view()
+        req = self.factory.post("/api/orders/create/", {"asset_id": self.product2.id}, format="json")
+        force_authenticate(req, user=self.user_eligible)
+        response = view(req)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_early_access_scheduled_active(self):
+        import datetime
+        from django.utils import timezone
+
+        # Set VIP early access start time to past (active)
+        self.product2.early_access_starts_at = timezone.now() - datetime.timedelta(hours=2)
+        self.product2.early_access_ends_at = timezone.now() + datetime.timedelta(days=5)
+        self.product2.save()
+
+        status_result = calculate_early_access_status(self.product2, self.user_eligible)
+        self.assertTrue(status_result["is_eligible"])
+        self.assertTrue(status_result["can_access_early"])
+        self.assertFalse(status_result["is_early_access_pending"])
+        self.assertTrue(status_result["is_early_access_active"])
+

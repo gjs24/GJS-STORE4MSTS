@@ -109,9 +109,22 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ sl
               <p className="mt-3 whitespace-pre-line text-sm leading-6 text-slate-200">
                 {asset.coming_soon_message || asset.short_description}
               </p>
-              <p className="mt-4 inline-flex rounded bg-black/40 px-3 py-2 text-sm font-semibold text-rail-amber">
-                {asset.coming_soon_status_text || "Release Date: To Be Announced"}
-              </p>
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <p className="inline-flex rounded bg-black/40 px-3 py-2 text-sm font-semibold text-rail-amber">
+                  {asset.coming_soon_status_text || "Release Date: To Be Announced"}
+                </p>
+                {asset.release_date ? (
+                  <p className="inline-flex items-center gap-1.5 rounded bg-black/40 border border-rail-amber/30 px-3 py-2 text-sm font-medium text-white">
+                    <span>🚀 Official Release:</span>
+                    <strong className="text-rail-amber">
+                      {new Date(asset.release_date).toLocaleString("en-IN", {
+                        dateStyle: "medium",
+                        timeStyle: "short",
+                      })}
+                    </strong>
+                  </p>
+                ) : null}
+              </div>
             </div>
           ) : null}
           {showDeal ? (
@@ -134,6 +147,17 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ sl
                   <span className="rounded bg-emerald-500/20 border border-emerald-400/40 px-2.5 py-1 text-xs font-bold text-emerald-300">
                     {asset.early_access_discount_percent}% Loyalty Discount
                   </span>
+                ) : null}
+                {asset.early_access_starts_at ? (
+                  new Date(asset.early_access_starts_at) > new Date() ? (
+                    <span className="rounded bg-amber-500/20 border border-amber-400/40 px-2.5 py-1 text-xs font-semibold text-amber-300">
+                      ⏰ VIP Access Opens: {new Date(asset.early_access_starts_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}
+                    </span>
+                  ) : (
+                    <span className="rounded bg-emerald-500/20 border border-emerald-400/40 px-2.5 py-1 text-xs font-semibold text-emerald-300">
+                      🟢 VIP Access Active Now
+                    </span>
+                  )
                 ) : null}
               </div>
               <h3 className="mt-2.5 text-xl font-bold text-white">

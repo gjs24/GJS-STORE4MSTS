@@ -37,7 +37,11 @@ export type Asset = {
   coming_soon_button_text?: string;
   coming_soon_badge?: string;
   coming_soon_status_text?: string;
+  release_date?: string | null;
   early_access_enabled?: boolean;
+  early_access_starts_at?: string | null;
+  early_access_ends_at?: string | null;
+  is_early_access_active?: boolean;
   early_access_has_access?: boolean;
   early_access_has_discount?: boolean;
   early_access_discount_percent?: number;
@@ -48,6 +52,7 @@ export type Asset = {
   early_access_required_asset_titles?: string[];
   user_is_eligible?: boolean;
   user_can_access_early?: boolean;
+  user_early_access_pending?: boolean;
   user_has_early_discount?: boolean;
   user_effective_price?: string;
   user_discount_percent?: number;

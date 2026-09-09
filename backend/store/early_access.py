@@ -1,10 +1,12 @@
 from decimal import Decimal
+from django.utils import timezone
 from .models import Order
 
 
 def calculate_early_access_status(asset, user):
     """
-    Computes early access eligibility and dynamic pricing for a given asset and user.
+    Computes early access eligibility and dynamic pricing for a given asset and user,
+    factoring in VIP early access start/end schedules.
     """
     try:
         required_assets = list(asset.early_access_required_assets.all())
@@ -13,10 +15,28 @@ def calculate_early_access_status(asset, user):
     required_ids = [a.id for a in required_assets]
     required_titles = [a.title for a in required_assets]
 
+    now = timezone.now()
+    starts_at = getattr(asset, "early_access_starts_at", None)
+    ends_at = getattr(asset, "early_access_ends_at", None)
+
+    is_early_access_active = True
+    is_early_access_pending = False
+
+    if getattr(asset, "early_access_enabled", False):
+        if starts_at and now < starts_at:
+            is_early_access_active = False
+            is_early_access_pending = True
+        if ends_at and now > ends_at:
+            is_early_access_active = False
+    else:
+        is_early_access_active = False
+
     default_result = {
         "is_eligible": False,
         "can_access_early": False,
         "has_early_discount": False,
+        "is_early_access_active": is_early_access_active,
+        "is_early_access_pending": is_early_access_pending,
         "effective_price": asset.price,
         "discount_percent": 0,
         "savings_amount": "0.00",
@@ -49,8 +69,8 @@ def calculate_early_access_status(asset, user):
         return default_result
 
     # User is eligible!
-    can_access_early = bool(getattr(asset, "early_access_has_access", False))
-    has_early_discount = bool(getattr(asset, "early_access_has_discount", False))
+    can_access_early = bool(getattr(asset, "early_access_has_access", False)) and is_early_access_active
+    has_early_discount = bool(getattr(asset, "early_access_has_discount", False)) and is_early_access_active
 
     effective_price = asset.price
     discount_percent = 0
@@ -76,6 +96,8 @@ def calculate_early_access_status(asset, user):
         "is_eligible": True,
         "can_access_early": can_access_early,
         "has_early_discount": has_early_discount,
+        "is_early_access_active": is_early_access_active,
+        "is_early_access_pending": is_early_access_pending,
         "effective_price": effective_price,
         "discount_percent": discount_percent,
         "savings_amount": f"{savings:.2f}",

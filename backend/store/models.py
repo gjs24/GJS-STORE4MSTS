@@ -57,7 +57,10 @@ class Asset(models.Model):
     coming_soon_button_text = models.CharField(max_length=60, default="Notify Me")
     coming_soon_badge = models.CharField(max_length=40, default="COMING SOON")
     coming_soon_status_text = models.CharField(max_length=120, default="Release Date: To Be Announced")
+    release_date = models.DateTimeField(blank=True, null=True)
     early_access_enabled = models.BooleanField(default=False)
+    early_access_starts_at = models.DateTimeField(blank=True, null=True)
+    early_access_ends_at = models.DateTimeField(blank=True, null=True)
     early_access_has_access = models.BooleanField(default=False)
     early_access_has_discount = models.BooleanField(default=False)
     early_access_discount_percent = models.PositiveIntegerField(

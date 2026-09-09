@@ -106,6 +106,8 @@ class AssetListSerializer(serializers.ModelSerializer):
     user_has_early_discount = serializers.SerializerMethodField()
     user_effective_price = serializers.SerializerMethodField()
     user_discount_percent = serializers.SerializerMethodField()
+    is_early_access_active = serializers.SerializerMethodField()
+    user_early_access_pending = serializers.SerializerMethodField()
 
     class Meta:
         model = Asset
@@ -136,7 +138,11 @@ class AssetListSerializer(serializers.ModelSerializer):
             "coming_soon_button_text",
             "coming_soon_badge",
             "coming_soon_status_text",
+            "release_date",
             "early_access_enabled",
+            "early_access_starts_at",
+            "early_access_ends_at",
+            "is_early_access_active",
             "early_access_has_access",
             "early_access_has_discount",
             "early_access_discount_percent",
@@ -147,6 +153,7 @@ class AssetListSerializer(serializers.ModelSerializer):
             "early_access_required_asset_titles",
             "user_is_eligible",
             "user_can_access_early",
+            "user_early_access_pending",
             "user_has_early_discount",
             "user_effective_price",
             "user_discount_percent",
@@ -230,6 +237,14 @@ class AssetListSerializer(serializers.ModelSerializer):
     def get_user_discount_percent(self, obj):
         ea = get_cached_early_access_status(obj, self.context.get("request"))
         return ea["discount_percent"]
+
+    def get_is_early_access_active(self, obj):
+        ea = get_cached_early_access_status(obj, self.context.get("request"))
+        return ea["is_early_access_active"]
+
+    def get_user_early_access_pending(self, obj):
+        ea = get_cached_early_access_status(obj, self.context.get("request"))
+        return ea["is_early_access_pending"]
 
 
 class AssetDetailSerializer(AssetListSerializer):
@@ -324,6 +339,16 @@ class AssetWriteSerializer(serializers.ModelSerializer):
                         data["early_access_required_assets"] = []
                 else:
                     data["early_access_required_assets"] = [int(p.strip()) for p in val_str.split(",") if p.strip().isdigit()]
+
+        # Convert empty strings for datetime fields to None
+        for dt_field in ("release_date", "early_access_starts_at", "early_access_ends_at", "deal_ends_at"):
+            if dt_field in data:
+                val = data.get(dt_field) if hasattr(data, "get") else data[dt_field]
+                if not val or val == "" or str(val).lower() == "null":
+                    if hasattr(data, "copy"):
+                        data = data.copy()
+                    data[dt_field] = None
+
         return super().to_internal_value(data)
 
 

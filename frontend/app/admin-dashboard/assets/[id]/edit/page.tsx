@@ -37,6 +37,8 @@ export default function EditAssetPage({ params }: { params: Promise<{ id: string
   const [earlyAccessRequiredAssets, setEarlyAccessRequiredAssets] = useState<number[]>([]);
   const [earlyAccessBadge, setEarlyAccessBadge] = useState("VIP Early Access");
   const [earlyAccessMessage, setEarlyAccessMessage] = useState("");
+  const [earlyAccessStartsAt, setEarlyAccessStartsAt] = useState<string>("");
+  const [earlyAccessEndsAt, setEarlyAccessEndsAt] = useState<string>("");
 
   useEffect(() => {
     params.then(({ id }) => {
@@ -55,6 +57,8 @@ export default function EditAssetPage({ params }: { params: Promise<{ id: string
           setEarlyAccessRequiredAssets(data.early_access_required_assets || []);
           setEarlyAccessBadge(data.early_access_badge || "VIP Early Access");
           setEarlyAccessMessage(data.early_access_message || "");
+          setEarlyAccessStartsAt(data.early_access_starts_at ? formatDateTimeLocal(data.early_access_starts_at) : "");
+          setEarlyAccessEndsAt(data.early_access_ends_at ? formatDateTimeLocal(data.early_access_ends_at) : "");
           setMessage("");
         })
         .catch((error) => {
@@ -88,6 +92,8 @@ export default function EditAssetPage({ params }: { params: Promise<{ id: string
     formData.set("early_access_discount_percent", String(earlyAccessDiscountPercent || 0));
     formData.set("early_access_price", earlyAccessPrice || "0.00");
     formData.set("early_access_badge", earlyAccessBadge);
+    formData.set("early_access_starts_at", earlyAccessStartsAt || "");
+    formData.set("early_access_ends_at", earlyAccessEndsAt || "");
     formData.delete("early_access_required_assets");
     if (earlyAccessRequiredAssets.length > 0) {
       earlyAccessRequiredAssets.forEach((id) => {
@@ -98,6 +104,9 @@ export default function EditAssetPage({ params }: { params: Promise<{ id: string
     }
     if (!formData.get("deal_ends_at")) {
       formData.delete("deal_ends_at");
+    }
+    if (!formData.get("release_date")) {
+      formData.delete("release_date");
     }
 
     if (file instanceof File && file.size === 0) {
@@ -277,7 +286,7 @@ export default function EditAssetPage({ params }: { params: Promise<{ id: string
               className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-3"
             />
           </label>
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-2">
             <label className="block">
               <span className="text-sm text-slate-300">Button Text</span>
               <input name="coming_soon_button_text" defaultValue={asset.coming_soon_button_text || "Notify Me"} className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-3" />
@@ -286,9 +295,26 @@ export default function EditAssetPage({ params }: { params: Promise<{ id: string
               <span className="text-sm text-slate-300">Homepage Badge</span>
               <input name="coming_soon_badge" defaultValue={asset.coming_soon_badge || "COMING SOON"} className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-3" />
             </label>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <label className="block">
+              <span className="text-sm text-slate-300">Official General Release Date & Time</span>
+              <input
+                name="release_date"
+                type="datetime-local"
+                defaultValue={formatDateTimeLocal(asset.release_date)}
+                className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-3"
+              />
+              <span className="mt-1 block text-xs text-slate-500">
+                When this product officially launches for all public customers.
+              </span>
+            </label>
             <label className="block">
               <span className="text-sm text-slate-300">Product Status Text</span>
               <input name="coming_soon_status_text" defaultValue={asset.coming_soon_status_text || "Release Date: To Be Announced"} className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-3" />
+              <span className="mt-1 block text-xs text-slate-500">
+                Shown to customers (e.g. &quot;Release Date: To Be Announced&quot;).
+              </span>
             </label>
           </div>
         </div>
@@ -477,6 +503,38 @@ export default function EditAssetPage({ params }: { params: Promise<{ id: string
                   </div>
                 </div>
               ) : null}
+
+              {/* VIP Early Access Date & Time Scheduling */}
+              <div className="grid gap-4 md:grid-cols-2 rounded border border-purple-500/20 bg-purple-950/20 p-3.5">
+                <label className="block">
+                  <span className="text-xs font-semibold text-purple-200">
+                    VIP Early Access Starts At
+                  </span>
+                  <input
+                    type="datetime-local"
+                    value={earlyAccessStartsAt}
+                    onChange={(e) => setEarlyAccessStartsAt(e.target.value)}
+                    className="mt-1.5 w-full rounded border border-white/10 bg-black/40 px-3 py-2 text-sm"
+                  />
+                  <span className="mt-1 block text-xs text-slate-400">
+                    When eligible VIPs can begin purchasing/downloading before official release.
+                  </span>
+                </label>
+                <label className="block">
+                  <span className="text-xs font-semibold text-purple-200">
+                    VIP Early Access Ends At (Optional)
+                  </span>
+                  <input
+                    type="datetime-local"
+                    value={earlyAccessEndsAt}
+                    onChange={(e) => setEarlyAccessEndsAt(e.target.value)}
+                    className="mt-1.5 w-full rounded border border-white/10 bg-black/40 px-3 py-2 text-sm"
+                  />
+                  <span className="mt-1 block text-xs text-slate-400">
+                    Leave empty to keep early access open until general release.
+                  </span>
+                </label>
+              </div>
 
               {/* Badge & Custom note */}
               <div className="grid gap-4 md:grid-cols-2">

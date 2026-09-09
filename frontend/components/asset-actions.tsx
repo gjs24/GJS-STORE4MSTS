@@ -76,6 +76,19 @@ export function AssetActions({ asset }: { asset: Asset }) {
   }
 
   async function handlePrimaryAction() {
+    if (activeAsset.user_early_access_pending) {
+      if (activeAsset.early_access_starts_at) {
+        setMessage(
+          `VIP Early Access will open for you on ${new Date(activeAsset.early_access_starts_at).toLocaleString("en-IN", {
+            dateStyle: "medium",
+            timeStyle: "short",
+          })}. Stay tuned!`
+        );
+      } else {
+        setMessage("VIP Early Access is scheduled to open soon.");
+      }
+      return;
+    }
     if (isUpcomingBlocked) {
       if (!(await requireLogin())) return;
       setBusy(true);
@@ -150,6 +163,11 @@ export function AssetActions({ asset }: { asset: Asset }) {
   }
 
   function getButtonLabel() {
+    if (activeAsset.user_early_access_pending) {
+      return activeAsset.early_access_starts_at
+        ? `VIP Access Opens ${new Date(activeAsset.early_access_starts_at).toLocaleDateString("en-IN")}`
+        : "VIP Access Opening Soon";
+    }
     if (isUpcomingBlocked) {
       return activeAsset.coming_soon_button_text || "Notify Me";
     }
@@ -186,6 +204,27 @@ export function AssetActions({ asset }: { asset: Asset }) {
               ) : null}
             </div>
           </div>
+        ) : activeAsset.user_early_access_pending ? (
+          <div className="rounded-lg border border-amber-400/40 bg-amber-400/10 p-3.5 text-xs text-amber-200 flex items-start gap-2.5 shadow-sm">
+            <Sparkles className="mt-0.5 shrink-0 text-amber-400" size={17} />
+            <div>
+              <p className="font-bold text-amber-100 text-sm">
+                🌟 You Qualify for VIP Early Access!
+              </p>
+              <p className="text-amber-200 mt-0.5 leading-relaxed">
+                As a loyal customer, VIP early access will open for you on:{" "}
+                <strong className="text-white">
+                  {activeAsset.early_access_starts_at
+                    ? new Date(activeAsset.early_access_starts_at).toLocaleString("en-IN", {
+                        dateStyle: "medium",
+                        timeStyle: "short",
+                      })
+                    : "Scheduled VIP Date"}
+                </strong>
+                .
+              </p>
+            </div>
+          </div>
         ) : activeAsset.user_has_early_discount ? (
           <div className="rounded-lg border border-emerald-400/40 bg-emerald-400/10 p-3.5 text-xs text-emerald-300 flex items-start gap-2.5 shadow-sm">
             <CheckCircle2 className="mt-0.5 shrink-0 text-emerald-400" size={17} />
@@ -217,7 +256,7 @@ export function AssetActions({ asset }: { asset: Asset }) {
             </div>
           </div>
         ) : isUpcoming ? (
-          <div className="rounded-lg border border-purple-500/20 bg-purple-950/20 p-3 text-xs text-slate-300">
+          <div className="rounded-lg border border-purple-500/20 bg-purple-950/20 p-3 text-xs text-slate-300 space-y-1.5">
             <p className="text-slate-300 leading-relaxed">
               ℹ️ Early access for this upcoming product is currently reserved for owners of:{" "}
               <span className="font-bold text-amber-300">
@@ -227,6 +266,17 @@ export function AssetActions({ asset }: { asset: Asset }) {
               </span>
               . Click &quot;Notify Me&quot; below to be alerted upon general release.
             </p>
+            {activeAsset.release_date ? (
+              <p className="text-xs text-slate-400">
+                🚀 General release scheduled for:{" "}
+                <span className="font-semibold text-white">
+                  {new Date(activeAsset.release_date).toLocaleString("en-IN", {
+                    dateStyle: "medium",
+                    timeStyle: "short",
+                  })}
+                </span>
+              </p>
+            ) : null}
           </div>
         ) : null
       ) : null}
