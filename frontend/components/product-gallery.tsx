@@ -135,9 +135,9 @@ export function ProductGallery({ asset }: { asset: Asset }) {
   const isYouTube = isVideo && (activeItem.url.includes("youtube.com") || activeItem.url.includes("youtu.be"));
 
   return (
-    <div className="space-y-3.5">
+    <div className="w-full min-w-0 max-w-full space-y-3">
       {/* Main Showcase Stage */}
-      <div className="group relative aspect-video overflow-hidden rounded-2xl border border-white/10 bg-black/80 shadow-2xl transition-all duration-300">
+      <div className="group relative aspect-video max-h-[420px] w-full overflow-hidden rounded-xl border border-white/10 bg-black/90 shadow-xl transition-all duration-300">
         {isVideo ? (
           <div className="relative h-full w-full bg-black">
             {isYouTube ? (
@@ -162,15 +162,26 @@ export function ProductGallery({ asset }: { asset: Asset }) {
         ) : (
           <div
             onClick={() => setLightboxOpen(true)}
-            className="relative h-full w-full cursor-zoom-in"
+            className="relative h-full w-full cursor-zoom-in overflow-hidden"
           >
+            {/* Subtle blurred ambient backdrop to fill frame cleanly */}
+            <Image
+              src={activeItem.url}
+              alt=""
+              aria-hidden="true"
+              fill
+              sizes="150px"
+              className="object-cover blur-xl opacity-35 pointer-events-none scale-110"
+            />
+
+            {/* Crisp foreground image */}
             <Image
               src={activeItem.url}
               alt={activeItem.title}
               fill
               priority
-              sizes="(min-width: 1024px) 55vw, 100vw"
-              className="object-cover transition-transform duration-500 ease-out group-hover:scale-105"
+              sizes="(min-width: 1024px) 50vw, 100vw"
+              className="object-contain transition-transform duration-300 group-hover:scale-[1.01]"
             />
 
             {/* Gradient Overlays for Badges */}
@@ -183,10 +194,10 @@ export function ProductGallery({ asset }: { asset: Asset }) {
                 e.stopPropagation();
                 setLightboxOpen(true);
               }}
-              className="absolute right-3.5 top-3.5 flex items-center gap-1.5 rounded-lg border border-white/20 bg-black/70 px-3 py-1.5 text-xs font-bold text-white backdrop-blur-md transition-all duration-200 hover:bg-rail-amber hover:text-black hover:scale-105 shadow-md"
+              className="absolute right-3 top-3 flex items-center gap-1.5 rounded-md border border-white/20 bg-black/75 px-2.5 py-1 text-xs font-semibold text-white backdrop-blur-md transition-all duration-200 hover:bg-rail-amber hover:text-black hover:border-rail-amber shadow"
             >
-              <Expand size={14} />
-              <span>Fullscreen</span>
+              <Expand size={13} />
+              <span>Expand</span>
             </button>
           </div>
         )}
@@ -200,10 +211,10 @@ export function ProductGallery({ asset }: { asset: Asset }) {
                 e.stopPropagation();
                 handlePrev();
               }}
-              className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full border border-white/15 bg-black/60 p-2 text-white/80 opacity-0 backdrop-blur-md transition-all duration-200 group-hover:opacity-100 hover:bg-white hover:text-black hover:scale-110"
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 rounded-full border border-white/15 bg-black/70 p-2 text-white/80 opacity-0 backdrop-blur-md transition-all duration-200 group-hover:opacity-100 hover:bg-white hover:text-black hover:scale-105 shadow-md"
               aria-label="Previous screenshot"
             >
-              <ChevronLeft size={20} />
+              <ChevronLeft size={18} />
             </button>
             <button
               type="button"
@@ -211,71 +222,73 @@ export function ProductGallery({ asset }: { asset: Asset }) {
                 e.stopPropagation();
                 handleNext();
               }}
-              className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full border border-white/15 bg-black/60 p-2 text-white/80 opacity-0 backdrop-blur-md transition-all duration-200 group-hover:opacity-100 hover:bg-white hover:text-black hover:scale-110"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-full border border-white/15 bg-black/70 p-2 text-white/80 opacity-0 backdrop-blur-md transition-all duration-200 group-hover:opacity-100 hover:bg-white hover:text-black hover:scale-105 shadow-md"
               aria-label="Next screenshot"
             >
-              <ChevronRight size={20} />
+              <ChevronRight size={18} />
             </button>
           </>
         ) : null}
 
         {/* Simulator & Status Badges */}
-        <div className="pointer-events-none absolute bottom-3.5 left-3.5 flex flex-wrap items-center gap-2 text-xs">
-          <span className="rounded-md border border-white/15 bg-black/80 px-2.5 py-1 font-semibold uppercase tracking-wider text-slate-200 backdrop-blur-md shadow-md">
+        <div className="pointer-events-none absolute bottom-3 left-3 flex flex-wrap items-center gap-1.5 text-xs">
+          <span className="rounded border border-white/15 bg-black/80 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-slate-200 backdrop-blur-md shadow-md">
             {asset.simulator_type.replace("_", " ")}
           </span>
-          <span className="rounded-md border border-white/15 bg-black/80 px-2.5 py-1 font-semibold text-slate-300 backdrop-blur-md shadow-md">
+          <span className="rounded border border-white/15 bg-black/80 px-2 py-0.5 text-[11px] font-semibold text-slate-300 backdrop-blur-md shadow-md">
             {asset.file_size}
           </span>
-          <span className="rounded-md bg-rail-red px-2.5 py-1 font-extrabold text-white shadow-md">
+          <span className="rounded bg-rail-red px-2 py-0.5 text-[11px] font-extrabold text-white shadow-md">
             {asset.is_upcoming ? "Coming soon" : asset.is_free ? "Free Download" : `INR ${asset.price}`}
           </span>
         </div>
 
         {/* Media counter indicator */}
-        <div className="pointer-events-none absolute bottom-3.5 right-3.5 rounded-md bg-black/75 border border-white/10 px-2.5 py-1 text-[11px] font-mono font-medium text-slate-300 backdrop-blur-md">
+        <div className="pointer-events-none absolute bottom-3 right-3 rounded bg-black/75 border border-white/10 px-2 py-0.5 text-[10px] font-mono font-medium text-slate-300 backdrop-blur-md">
           {activeIndex + 1} / {items.length}
         </div>
       </div>
 
       {/* Thumbnail Carousel Strip */}
       {items.length > 1 ? (
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 pt-0.5 scrollbar-thin scrollbar-thumb-white/10">
-          {items.map((item, idx) => {
-            const isSelected = idx === activeIndex;
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => setActiveIndex(idx)}
-                className={`group relative flex-shrink-0 aspect-video w-24 sm:w-28 overflow-hidden rounded-lg border transition-all duration-200 ${
-                  isSelected
-                    ? "border-rail-amber ring-2 ring-rail-amber/60 scale-105 shadow-md shadow-rail-amber/20"
-                    : "border-white/10 opacity-70 hover:opacity-100 hover:border-white/30"
-                }`}
-              >
-                {item.type === "video" ? (
-                  <div className="flex h-full w-full items-center justify-center bg-purple-950/80 text-purple-300">
-                    <Play size={20} className="fill-purple-300" />
-                    <span className="absolute bottom-1 right-1 rounded bg-black/80 px-1 text-[9px] font-bold text-white uppercase">
-                      Video
-                    </span>
-                  </div>
-                ) : (
-                  <Image
-                    src={item.url}
-                    alt={item.title}
-                    fill
-                    sizes="120px"
-                    className="object-cover"
-                  />
-                )}
-                {isSelected ? (
-                  <div className="absolute inset-0 bg-rail-amber/10 pointer-events-none" />
-                ) : null}
-              </button>
-            );
-          })}
+        <div className="relative w-full min-w-0 max-w-full">
+          <div className="flex w-full min-w-0 max-w-full items-center gap-2 overflow-x-auto pb-1.5 pt-0.5 scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-white/5">
+            {items.map((item, idx) => {
+              const isSelected = idx === activeIndex;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setActiveIndex(idx)}
+                  className={`group relative flex-shrink-0 aspect-video w-16 sm:w-20 overflow-hidden rounded-lg border transition-all duration-150 ${
+                    isSelected
+                      ? "border-rail-amber ring-2 ring-rail-amber/70 scale-105 shadow-md shadow-rail-amber/20 opacity-100"
+                      : "border-white/10 opacity-60 hover:opacity-100 hover:border-white/30"
+                  }`}
+                >
+                  {item.type === "video" ? (
+                    <div className="flex h-full w-full items-center justify-center bg-purple-950/80 text-purple-300">
+                      <Play size={14} className="fill-purple-300" />
+                      <span className="absolute bottom-0.5 right-0.5 rounded bg-black/80 px-1 text-[8px] font-bold text-white uppercase">
+                        Vid
+                      </span>
+                    </div>
+                  ) : (
+                    <Image
+                      src={item.url}
+                      alt={item.title}
+                      fill
+                      sizes="80px"
+                      className="object-cover"
+                    />
+                  )}
+                  {isSelected ? (
+                    <div className="absolute inset-0 bg-rail-amber/10 pointer-events-none" />
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
         </div>
       ) : null}
 

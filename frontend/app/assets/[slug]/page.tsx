@@ -51,9 +51,11 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ sl
 
   return (
     <section className="rail-grid min-h-screen px-4 py-10">
-      <div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[1.1fr_.9fr]">
-        <ProductGallery asset={asset} />
-        <div>
+      <div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:items-start">
+        <div className="w-full min-w-0">
+          <ProductGallery asset={asset} />
+        </div>
+        <div className="w-full min-w-0">
           <p className="text-sm font-semibold uppercase text-rail-amber">{asset.category?.name} / v{asset.version}</p>
           <h1 className="mt-2 text-4xl font-black">{asset.title}</h1>
           <div className="mt-4 text-xl">
