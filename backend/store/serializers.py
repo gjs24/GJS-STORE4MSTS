@@ -5,16 +5,68 @@ from urllib.parse import quote
 from rest_framework import serializers
 
 from .early_access import get_cached_early_access_status
-from .models import AdminActivityLog, Asset, AssetImage, Category, DownloadLog, EmailOTP, NotifyRequest, Order, Payment, Review, SiteSetting, UpdateLog, Wishlist
+from .models import AdminActivityLog, Asset, AssetImage, Category, DownloadLog, EmailOTP, NotifyRequest, Order, Payment, Review, SiteSetting, UpdateLog, UserSpecialAccess, Wishlist
+from .special_access import user_has_special_access
+
+
+class UserSpecialAccessSerializer(serializers.ModelSerializer):
+    granted_asset_titles = serializers.SerializerMethodField()
+
+    class Meta:
+        model = UserSpecialAccess
+        fields = [
+            "id",
+            "is_all_access_free",
+            "admin_note",
+            "expires_at",
+            "granted_assets",
+            "granted_asset_titles",
+            "created_at",
+            "updated_at",
+        ]
+
+    def get_granted_asset_titles(self, obj):
+        try:
+            return list(obj.granted_assets.values_list("title", flat=True))
+        except Exception:
+            return []
 
 
 class UserSerializer(serializers.ModelSerializer):
     date_joined = serializers.DateTimeField(read_only=True)
     paid_orders_count = serializers.IntegerField(read_only=True, default=0)
+    special_access = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ["id", "username", "email", "first_name", "last_name", "is_staff", "is_active", "date_joined", "paid_orders_count"]
+        fields = [
+            "id",
+            "username",
+            "email",
+            "first_name",
+            "last_name",
+            "is_staff",
+            "is_active",
+            "date_joined",
+            "paid_orders_count",
+            "special_access",
+        ]
+
+    def get_special_access(self, obj):
+        # Only staff administrators or the user themselves gets special_access in serialized output
+        request = self.context.get("request")
+        user = getattr(request, "user", None) if request else None
+        if not user or not user.is_authenticated:
+            return None
+        if not user.is_staff and user.id != obj.id:
+            return None
+        try:
+            access = getattr(obj, "special_access", None)
+            if access:
+                return UserSpecialAccessSerializer(access, context=self.context).data
+        except Exception:
+            pass
+        return None
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -280,6 +332,8 @@ class AssetDetailSerializer(AssetListSerializer):
         if not user or not user.is_authenticated:
             return False
         if obj.is_free:
+            return True
+        if user_has_special_access(user, obj):
             return True
         return Order.objects.filter(user=user, asset=obj, status__in=[Order.Status.PAID, Order.Status.APPROVED]).exists()
 

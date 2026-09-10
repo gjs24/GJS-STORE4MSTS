@@ -31,7 +31,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 from .throttles import DownloadRateThrottle
 
 from .early_access import get_cached_early_access_status
-from .models import AdminActivityLog, Asset, Category, DownloadLog, EmailOTP, NotifyRequest, Order, Payment, Review, SiteSetting, Wishlist
+from .models import AdminActivityLog, Asset, Category, DownloadLog, EmailOTP, NotifyRequest, Order, Payment, Review, SiteSetting, UserSpecialAccess, Wishlist
 from .permissions import IsAdminOrReadOnly
 from .serializers import (
     AssetDetailSerializer,
@@ -48,9 +48,11 @@ from .serializers import (
     SendOTPSerializer,
     SiteSettingSerializer,
     UserSerializer,
+    UserSpecialAccessSerializer,
     VerifyOTPSerializer,
     WishlistSerializer,
 )
+from .special_access import user_has_special_access
 
 logger = logging.getLogger(__name__)
 DOWNLOAD_READY_STATUSES = [Order.Status.PAID]
@@ -900,17 +902,21 @@ class OrderCreateView(generics.CreateAPIView):
                 if existing_order.status == Order.Status.FAILED:
                     existing_order = None
         if existing_order:
-            cashfree_ready, cashfree_error = ensure_cashfree_payment(existing_order, request)
-            if not asset.is_free and not order_has_download_access(existing_order) and not cashfree_ready:
-                return Response({"detail": cashfree_error or "Cashfree checkout is not available."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            if not order_has_download_access(existing_order) and not user_has_special_access(request.user, asset):
+                cashfree_ready, cashfree_error = ensure_cashfree_payment(existing_order, request)
+                if not cashfree_ready:
+                    return Response({"detail": cashfree_error or "Cashfree checkout is not available."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
             return Response(OrderSerializer(existing_order, context={"request": request}).data, status=status.HTTP_200_OK)
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
         order = serializer.instance
-        cashfree_ready, cashfree_error = ensure_cashfree_payment(order, request)
-        if not asset.is_free and not cashfree_ready:
-            return Response({"detail": cashfree_error or "Cashfree checkout is not available."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        ea_status = get_cached_early_access_status(asset, request)
+        is_free_purchase = asset.is_free or ea_status["effective_price"] <= Decimal("0.00") or user_has_special_access(request.user, asset)
+        if not is_free_purchase:
+            cashfree_ready, cashfree_error = ensure_cashfree_payment(order, request)
+            if not cashfree_ready:
+                return Response({"detail": cashfree_error or "Cashfree checkout is not available."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         data = OrderSerializer(order, context={"request": request}).data
         headers = self.get_success_headers(data)
         return Response(data, status=status.HTTP_201_CREATED, headers=headers)
@@ -919,7 +925,10 @@ class OrderCreateView(generics.CreateAPIView):
         asset = serializer.validated_data["asset"]
         ea_status = get_cached_early_access_status(asset, self.request)
         final_amount = ea_status["effective_price"]
-        is_free_purchase = asset.is_free or final_amount <= Decimal("0.00")
+        has_special = user_has_special_access(self.request.user, asset)
+        if has_special:
+            final_amount = Decimal("0.00")
+        is_free_purchase = asset.is_free or final_amount <= Decimal("0.00") or has_special
         status_value = Order.Status.APPROVED if is_free_purchase else Order.Status.PENDING
         order = serializer.save(
             user=self.request.user,
@@ -1387,6 +1396,39 @@ class AdminUserViewSet(viewsets.ModelViewSet):
                 f"{'Granted' if updated_user.is_staff else 'Revoked'} staff status for {updated_user.username}"
             )
 
+    @action(detail=True, methods=["get", "patch"], url_path="special-access")
+    def special_access(self, request, pk=None):
+        user = self.get_object()
+        special_access, _ = UserSpecialAccess.objects.get_or_create(user=user)
+
+        if request.method == "PATCH":
+            is_all_access_free = request.data.get("is_all_access_free")
+            admin_note = request.data.get("admin_note")
+            expires_at = request.data.get("expires_at")
+            granted_asset_ids = request.data.get("granted_asset_ids")
+
+            if is_all_access_free is not None:
+                special_access.is_all_access_free = bool(is_all_access_free)
+            if admin_note is not None:
+                special_access.admin_note = str(admin_note).strip()
+            if "expires_at" in request.data:
+                special_access.expires_at = expires_at or None
+            if granted_asset_ids is not None and isinstance(granted_asset_ids, list):
+                special_access.granted_assets.set(Asset.objects.filter(id__in=granted_asset_ids))
+
+            special_access.save()
+
+            log_admin_activity(
+                request,
+                "Special access updated",
+                "User",
+                user.id,
+                f"Updated special access for user {user.username} (All-Access: {special_access.is_all_access_free})"
+            )
+
+        serializer = UserSpecialAccessSerializer(special_access, context={"request": request})
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
 
 class AdminReviewViewSet(viewsets.ModelViewSet):
     queryset = Review.objects.select_related("user", "asset")
@@ -1585,7 +1627,11 @@ def create_download_response(request, asset):
         ea_status = get_cached_early_access_status(asset, request)
         if not ea_status["can_access_early"]:
             return Response({"detail": "This asset is marked as upcoming and is not available for download yet."}, status=status.HTTP_403_FORBIDDEN)
-    allowed = asset.is_free or Order.objects.filter(user=request.user, asset=asset, status__in=DOWNLOAD_READY_STATUSES).exists()
+    allowed = (
+        asset.is_free
+        or user_has_special_access(request.user, asset)
+        or Order.objects.filter(user=request.user, asset=asset, status__in=DOWNLOAD_READY_STATUSES).exists()
+    )
     if not allowed:
         return Response({"detail": "Purchase required before downloading this asset."}, status=status.HTTP_403_FORBIDDEN)
     if asset.private_download_key:

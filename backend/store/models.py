@@ -378,3 +378,50 @@ class EmailOTP(models.Model):
         from django.utils import timezone
         return not self.is_used and self.attempts < 5 and timezone.now() <= self.expires_at
 
+
+class UserSpecialAccess(models.Model):
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        related_name="special_access",
+        on_delete=models.CASCADE,
+    )
+    is_all_access_free = models.BooleanField(
+        default=False,
+        help_text="When true, this user can download any product for free like normal."
+    )
+    granted_assets = models.ManyToManyField(
+        Asset,
+        blank=True,
+        related_name="special_access_users",
+        help_text="Specific assets granted for free if all-access is false."
+    )
+    admin_note = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="Internal reason or friendship note (visible to admins only)."
+    )
+    expires_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        help_text="Optional expiration date. Null means permanent."
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "User special access"
+        verbose_name_plural = "User special accesses"
+
+    def __str__(self):
+        return f"Special Access for {self.user.username} (All-Access: {self.is_all_access_free})"
+
+    def is_active(self):
+        if not self.is_all_access_free and not self.granted_assets.exists():
+            return False
+        if self.expires_at:
+            from django.utils import timezone
+            if timezone.now() > self.expires_at:
+                return False
+        return True
+

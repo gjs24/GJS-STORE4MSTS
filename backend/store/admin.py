@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import AdminActivityLog, Asset, AssetFile, AssetImage, Category, DownloadLog, NotifyRequest, Order, Payment, Review, SiteSetting, UpdateLog, Wishlist
+from .models import AdminActivityLog, Asset, AssetFile, AssetImage, Category, DownloadLog, NotifyRequest, Order, Payment, Review, SiteSetting, UpdateLog, UserSpecialAccess, Wishlist
 
 
 class AssetImageInline(admin.TabularInline):
@@ -49,3 +49,4 @@ admin.site.register(UpdateLog)
 admin.site.register(SiteSetting)
 admin.site.register(NotifyRequest)
 admin.site.register(AdminActivityLog)
+admin.site.register(UserSpecialAccess)

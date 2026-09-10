@@ -1,6 +1,7 @@
 from decimal import Decimal
 from django.utils import timezone
 from .models import Order
+from .special_access import user_has_special_access
 
 
 def calculate_early_access_status(asset, user):
@@ -44,10 +45,24 @@ def calculate_early_access_status(asset, user):
         "required_asset_titles": required_titles,
     }
 
-    if not getattr(asset, "early_access_enabled", False):
+    if not user or not getattr(user, "is_authenticated", False):
         return default_result
 
-    if not user or not getattr(user, "is_authenticated", False):
+    if user_has_special_access(user, asset):
+        return {
+            "is_eligible": True,
+            "can_access_early": True,
+            "has_early_discount": False,
+            "is_early_access_active": True,
+            "is_early_access_pending": False,
+            "effective_price": Decimal("0.00"),
+            "discount_percent": 100,
+            "savings_amount": f"{asset.price:.2f}",
+            "required_asset_ids": required_ids,
+            "required_asset_titles": required_titles,
+        }
+
+    if not getattr(asset, "early_access_enabled", False):
         return default_result
 
     # Check eligibility:

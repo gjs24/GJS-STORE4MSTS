@@ -17,6 +17,17 @@ export type AdminStats = {
   monthly_sales?: { month: string; sales: number; revenue: number }[];
 };
 
+export type SpecialAccess = {
+  id?: number;
+  is_all_access_free: boolean;
+  admin_note?: string;
+  expires_at?: string | null;
+  granted_assets?: number[];
+  granted_asset_titles?: string[];
+  created_at?: string;
+  updated_at?: string;
+};
+
 export type AdminUser = {
   id: number;
   username: string;
@@ -27,6 +38,7 @@ export type AdminUser = {
   is_active: boolean;
   date_joined: string;
   paid_orders_count?: number;
+  special_access?: SpecialAccess | null;
 };
 
 export type AdminOrder = {
@@ -288,6 +300,22 @@ export async function downloadAdminInvoice(orderId: number): Promise<{ url: stri
     filename: `GJS-${orderId}-invoice.pdf`,
     revoke: () => URL.revokeObjectURL(url)
   };
+}
+
+export async function adminGetSpecialAccess(userId: number): Promise<SpecialAccess> {
+  return adminGet<SpecialAccess>(`/admin/users/${userId}/special-access/`, { is_all_access_free: false });
+}
+
+export async function adminUpdateSpecialAccess(
+  userId: number,
+  payload: {
+    is_all_access_free?: boolean;
+    admin_note?: string;
+    expires_at?: string | null;
+    granted_asset_ids?: number[];
+  }
+): Promise<SpecialAccess> {
+  return adminPatch<SpecialAccess>(`/admin/users/${userId}/special-access/`, payload);
 }
 
 export const fallbackStats: AdminStats = {
