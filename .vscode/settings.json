@@ -1,0 +1,15 @@
+{
+  "files.watcherExclude": {
+    "**/.git/**": true,
+    "**/.git/objects/**": true,
+    "**/.git/subtree-cache/**": true,
+    "**/node_modules/**": true,
+    "**/.next/**": true,
+    "**/__pycache__/**": true,
+    "**/.venv/**": true,
+    "**/backend/.venv/**": true,
+    "**/desktop/dist/**": true
+  },
+  "git.autorefresh": true,
+  "git.autofetch": false
+}
