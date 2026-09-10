@@ -35,9 +35,21 @@ export function AssetActions({ asset }: { asset: Asset }) {
 
   const activeAsset = currentAsset;
   const isUpcoming = Boolean(activeAsset.is_upcoming);
+  const isPrebooking = Boolean(activeAsset.prebooking_enabled && isUpcoming);
+  const hasPrebooked = Boolean(activeAsset.user_has_prebooked);
+  const downloadsReady = Boolean(activeAsset.can_download || activeAsset.prebooking_downloads_ready);
   const canEarlyAccess = Boolean(isUpcoming && activeAsset.user_can_access_early);
-  const isUpcomingBlocked = Boolean(isUpcoming && !canEarlyAccess);
-  const effectivePrice = activeAsset.user_effective_price ? activeAsset.user_effective_price : activeAsset.price;
+  const isUpcomingBlocked = Boolean(isUpcoming && !canEarlyAccess && !isPrebooking && !hasPrebooked);
+  const isPrebookingSoldOut = Boolean(
+    isPrebooking &&
+    !hasPrebooked &&
+    activeAsset.prebooking_slots &&
+    activeAsset.prebooking_slots > 0 &&
+    (activeAsset.prebooking_count || 0) >= activeAsset.prebooking_slots
+  );
+  const effectivePrice = activeAsset.user_effective_price
+    ? activeAsset.user_effective_price
+    : (isPrebooking && activeAsset.prebooking_price ? activeAsset.prebooking_price : activeAsset.price);
 
   async function requireLogin() {
     if (!isLoggedIn()) {
@@ -89,6 +101,30 @@ export function AssetActions({ asset }: { asset: Asset }) {
       }
       return;
     }
+    if (hasPrebooked) {
+      if (downloadsReady) {
+        setBusy(true);
+        try {
+          await startDownload();
+        } catch (error) {
+          setMessage(error instanceof Error ? error.message : "Could not start download.");
+        } finally {
+          setBusy(false);
+        }
+      } else {
+        const unlockMsg = activeAsset.prebooking_download_unlock_at
+          ? `✅ Pre-booking confirmed! Your package download unlocks on ${new Date(activeAsset.prebooking_download_unlock_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}.`
+          : activeAsset.release_date
+          ? `✅ Pre-booking confirmed! Download unlocks on release date (${new Date(activeAsset.release_date).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}).`
+          : "✅ Pre-booking confirmed! Download access will be unlocked shortly.";
+        setMessage(unlockMsg);
+      }
+      return;
+    }
+    if (isPrebookingSoldOut) {
+      setMessage("Pre-booking limit has been reached for this asset.");
+      return;
+    }
     if (isUpcomingBlocked) {
       if (!(await requireLogin())) return;
       setBusy(true);
@@ -105,14 +141,20 @@ export function AssetActions({ asset }: { asset: Asset }) {
     }
     if (!(await requireLogin())) return;
     setBusy(true);
-    setMessage(activeAsset.is_free ? "Preparing secure download..." : "Creating your order...");
+    setMessage(
+      activeAsset.is_free
+        ? "Preparing secure download..."
+        : isPrebooking
+        ? "Setting up your pre-order..."
+        : "Creating your order..."
+    );
     try {
       if (!activeAsset.is_free && !activeAsset.can_download) {
         const nextOrder = await createOrder(activeAsset.id);
         setOrder(nextOrder);
         if (nextOrder.status === "PENDING" && nextOrder.payment_session_id) {
           await startCashfreeCheckout(nextOrder);
-          setMessage("Complete the Cashfree payment to unlock this download.");
+          setMessage("Complete the Cashfree payment to confirm your order.");
           return;
         } else if (nextOrder.status === "PENDING" && nextOrder.manual_payment) {
           setMessage("Scan the UPI QR code below and submit your UTR / Transaction ID for admin verification.");
@@ -129,7 +171,12 @@ export function AssetActions({ asset }: { asset: Asset }) {
           setMessage("This payment was rejected. Contact support if you believe this is a mistake.");
           return;
         } else if (nextOrder.download_enabled) {
-          setMessage("Purchase confirmed. Preparing secure download...");
+          if (downloadsReady) {
+            setMessage("Purchase confirmed. Preparing secure download...");
+          } else {
+            setMessage("Pre-booking confirmed! Your download package will unlock on the scheduled date.");
+            return;
+          }
         } else {
           setMessage("Purchase required before downloading this asset. Complete payment or wait for admin verification.");
           return;
@@ -168,6 +215,21 @@ export function AssetActions({ asset }: { asset: Asset }) {
         ? `VIP Access Opens ${new Date(activeAsset.early_access_starts_at).toLocaleDateString("en-IN")}`
         : "VIP Access Opening Soon";
     }
+    if (hasPrebooked) {
+      if (downloadsReady) {
+        return "🚀 Download Package (Early Access Unlocked)";
+      }
+      return "✅ Pre-Booked (Order Confirmed)";
+    }
+    if (isPrebookingSoldOut) {
+      return "Pre-Booking Sold Out";
+    }
+    if (isPrebooking) {
+      if (activeAsset.user_has_early_discount && activeAsset.user_discount_percent) {
+        return `🚀 Pre-Book for INR ${effectivePrice} (${activeAsset.user_discount_percent}% VIP Loyalty Discount)`;
+      }
+      return `🚀 Pre-Book Now for INR ${effectivePrice}`;
+    }
     if (isUpcomingBlocked) {
       return activeAsset.coming_soon_button_text || "Notify Me";
     }
@@ -185,8 +247,96 @@ export function AssetActions({ asset }: { asset: Asset }) {
 
   return (
     <div className="mt-8 space-y-4">
+      {/* Pre-Booking Confirmed Status */}
+      {hasPrebooked ? (
+        <div className="rounded-lg border border-emerald-400/40 bg-emerald-950/30 p-4 text-xs text-emerald-200 flex items-start gap-3 shadow-sm">
+          <CheckCircle2 className="mt-0.5 shrink-0 text-emerald-400" size={20} />
+          <div className="space-y-1">
+            <p className="font-bold text-emerald-100 text-sm flex items-center gap-2">
+              <span>✅ Pre-Booking Confirmed</span>
+              <span className="rounded bg-emerald-500/20 px-2 py-0.5 text-[11px] font-semibold text-emerald-300">
+                Order Verified
+              </span>
+            </p>
+            {downloadsReady ? (
+              <p className="text-emerald-300 font-medium leading-relaxed">
+                🎉 Early access download is now unlocked! Click the download button below to get your package immediately.
+              </p>
+            ) : (
+              <div className="text-slate-300 space-y-1 leading-relaxed">
+                <p>
+                  Your pre-order has been secured. Your download package will automatically unlock on:
+                </p>
+                <p className="text-sm font-bold text-white bg-black/40 border border-emerald-500/20 rounded px-2.5 py-1 inline-block">
+                  ⏰{" "}
+                  {activeAsset.prebooking_download_unlock_at
+                    ? new Date(activeAsset.prebooking_download_unlock_at).toLocaleString("en-IN", {
+                        dateStyle: "medium",
+                        timeStyle: "short",
+                      })
+                    : activeAsset.release_date
+                    ? new Date(activeAsset.release_date).toLocaleString("en-IN", {
+                        dateStyle: "medium",
+                        timeStyle: "short",
+                      })
+                    : "Scheduled Release Date"}
+                </p>
+                <p className="text-xs text-slate-400">
+                  You will be able to download your asset from this page as soon as the unlock time arrives.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : null}
+
+      {/* Pre-Booking Promotional Banner */}
+      {isPrebooking && !hasPrebooked ? (
+        <div className="rounded-lg border border-cyan-500/40 bg-cyan-950/30 p-4 text-xs text-cyan-200 flex items-start gap-3 shadow-sm">
+          <Sparkles className="mt-0.5 shrink-0 text-cyan-400" size={20} />
+          <div className="space-y-1.5 flex-1">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="font-bold text-white text-sm flex items-center gap-2">
+                <span>🚀 {activeAsset.prebooking_badge || "PRE-BOOKING OPEN"}</span>
+                {isPrebookingSoldOut ? (
+                  <span className="rounded bg-red-500/20 text-red-300 px-2 py-0.5 text-xs font-semibold">
+                    SOLD OUT
+                  </span>
+                ) : null}
+              </p>
+              {activeAsset.prebooking_slots && activeAsset.prebooking_slots > 0 ? (
+                <span className="rounded bg-cyan-500/20 border border-cyan-400/40 px-2 py-0.5 text-[11px] font-semibold text-cyan-300">
+                  {Math.max(0, activeAsset.prebooking_slots - (activeAsset.prebooking_count || 0))} slots remaining
+                </span>
+              ) : null}
+            </div>
+            <p className="text-slate-200 leading-relaxed">
+              {activeAsset.prebooking_message ||
+                "Pre-book your copy now to lock in exclusive launch pricing and guarantee day-one access!"}
+            </p>
+            {activeAsset.user_has_early_discount && activeAsset.user_discount_percent ? (
+              <p className="text-emerald-300 font-semibold">
+                🌟 VIP Loyalty Discount Applied: You get an additional {activeAsset.user_discount_percent}% off the pre-booking price!
+              </p>
+            ) : null}
+            {activeAsset.prebooking_download_unlock_at ? (
+              <p className="text-cyan-300 text-xs">
+                ⏰ Early Download Schedule: Pre-booked customers unlock downloads on{" "}
+                <strong className="text-white">
+                  {new Date(activeAsset.prebooking_download_unlock_at).toLocaleString("en-IN", {
+                    dateStyle: "medium",
+                    timeStyle: "short",
+                  })}
+                </strong>
+                .
+              </p>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
       {/* Early Access & Loyalty Perks Status Banner */}
-      {activeAsset.early_access_enabled ? (
+      {activeAsset.early_access_enabled && !hasPrebooked ? (
         canEarlyAccess ? (
           <div className="rounded-lg border border-emerald-400/40 bg-emerald-400/10 p-3.5 text-xs text-emerald-300 flex items-start gap-2.5 shadow-sm">
             <Sparkles className="mt-0.5 shrink-0 text-emerald-400" size={17} />
@@ -225,7 +375,7 @@ export function AssetActions({ asset }: { asset: Asset }) {
               </p>
             </div>
           </div>
-        ) : activeAsset.user_has_early_discount ? (
+        ) : activeAsset.user_has_early_discount && !isPrebooking ? (
           <div className="rounded-lg border border-emerald-400/40 bg-emerald-400/10 p-3.5 text-xs text-emerald-300 flex items-start gap-2.5 shadow-sm">
             <CheckCircle2 className="mt-0.5 shrink-0 text-emerald-400" size={17} />
             <div>
@@ -255,7 +405,7 @@ export function AssetActions({ asset }: { asset: Asset }) {
               </p>
             </div>
           </div>
-        ) : isUpcoming ? (
+        ) : isUpcoming && !isPrebooking ? (
           <div className="rounded-lg border border-purple-500/20 bg-purple-950/20 p-3 text-xs text-slate-300 space-y-1.5">
             <p className="text-slate-300 leading-relaxed">
               ℹ️ Early access for this upcoming product is currently reserved for owners of:{" "}
@@ -284,14 +434,26 @@ export function AssetActions({ asset }: { asset: Asset }) {
       <div className="flex flex-wrap gap-3">
         <button
           onClick={handlePrimaryAction}
-          disabled={busy}
+          disabled={busy || isPrebookingSoldOut}
           className={`rounded px-5 py-3 font-semibold text-white transition disabled:opacity-60 ${
-            canEarlyAccess
+            hasPrebooked
+              ? downloadsReady
+                ? "bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 shadow-md shadow-emerald-900/30"
+                : "bg-slate-700/90 hover:bg-slate-700 text-cyan-200 border border-cyan-500/40"
+              : isPrebooking
+              ? "bg-gradient-to-r from-cyan-600 via-teal-600 to-emerald-600 hover:from-cyan-500 hover:to-emerald-500 shadow-md shadow-cyan-900/30"
+              : canEarlyAccess
               ? "bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 shadow-md shadow-purple-900/30"
               : "bg-rail-red hover:bg-rail-red/90"
           }`}
         >
-          {activeAsset.is_free || activeAsset.can_download ? (
+          {hasPrebooked ? (
+            downloadsReady ? (
+              <Download className="mr-2 inline" size={18} />
+            ) : (
+              <CheckCircle2 className="mr-2 inline text-cyan-300" size={18} />
+            )
+          ) : activeAsset.is_free || activeAsset.can_download ? (
             <Download className="mr-2 inline" size={18} />
           ) : isUpcomingBlocked ? null : (
             <ShoppingCart className="mr-2 inline" size={18} />

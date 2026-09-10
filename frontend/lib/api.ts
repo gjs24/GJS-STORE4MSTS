@@ -56,6 +56,16 @@ export type Asset = {
   user_has_early_discount?: boolean;
   user_effective_price?: string;
   user_discount_percent?: number;
+  prebooking_enabled?: boolean;
+  prebooking_price?: string | null;
+  prebooking_badge?: string;
+  prebooking_message?: string;
+  prebooking_download_unlock_at?: string | null;
+  prebooking_downloads_unlocked?: boolean;
+  prebooking_slots?: number;
+  prebooking_count?: number;
+  user_has_prebooked?: boolean;
+  prebooking_downloads_ready?: boolean;
   thumbnail?: string;
   thumbnail_url?: string;
   gallery_image_urls?: string;

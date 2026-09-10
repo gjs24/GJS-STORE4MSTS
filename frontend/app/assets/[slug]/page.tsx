@@ -86,33 +86,100 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ sl
             <span className="rounded border border-white/10 px-3 py-2"><HardDriveDownload className="inline text-rail-amber" size={16} /> {asset.download_count} downloads</span>
           </div>
           {asset.is_upcoming ? (
-            <div className="mt-6 rounded-lg border border-rail-amber/30 bg-rail-amber/10 p-5">
-              <p className="text-sm font-black uppercase tracking-wide text-rail-amber">
-                {asset.coming_soon_badge || "COMING SOON"}
-              </p>
-              <h2 className="mt-2 text-2xl font-black text-white">
-                {asset.coming_soon_banner_title || asset.title}
-              </h2>
-              <p className="mt-3 whitespace-pre-line text-sm leading-6 text-slate-200">
-                {asset.coming_soon_message || asset.short_description}
-              </p>
-              <div className="mt-4 flex flex-wrap items-center gap-2">
-                <p className="inline-flex rounded bg-black/40 px-3 py-2 text-sm font-semibold text-rail-amber">
-                  {asset.coming_soon_status_text || "Release Date: To Be Announced"}
+            asset.prebooking_enabled ? (
+              <div className="mt-6 rounded-lg border border-cyan-500/40 bg-gradient-to-br from-cyan-950/40 via-cyan-950/20 to-black/40 p-5 shadow-lg">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="rounded bg-cyan-500/20 border border-cyan-400/40 px-2.5 py-1 text-xs font-black uppercase tracking-wide text-cyan-300 flex items-center gap-1.5">
+                    <span>🚀</span> {asset.prebooking_badge || "PRE-BOOKING OPEN"}
+                  </span>
+                  {asset.prebooking_slots && asset.prebooking_slots > 0 ? (
+                    <span className="rounded bg-cyan-500/20 border border-cyan-400/30 px-2.5 py-1 text-xs font-semibold text-cyan-200">
+                      {Math.max(0, asset.prebooking_slots - (asset.prebooking_count || 0))} Slots Remaining
+                    </span>
+                  ) : null}
+                </div>
+                <h2 className="mt-3 text-2xl font-black text-white">
+                  {asset.coming_soon_banner_title || asset.title}
+                </h2>
+                <p className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-200">
+                  {asset.prebooking_message ||
+                    asset.coming_soon_message ||
+                    "Pre-book your copy now to lock in exclusive launch pricing and guarantee day-one access!"}
                 </p>
-                {asset.release_date ? (
-                  <p className="inline-flex items-center gap-1.5 rounded bg-black/40 border border-rail-amber/30 px-3 py-2 text-sm font-medium text-white">
-                    <span>🚀 Official Release:</span>
-                    <strong className="text-rail-amber">
-                      {new Date(asset.release_date).toLocaleString("en-IN", {
-                        dateStyle: "medium",
-                        timeStyle: "short",
-                      })}
-                    </strong>
-                  </p>
-                ) : null}
+
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  {asset.prebooking_price ? (
+                    <div className="rounded border border-cyan-500/20 bg-black/40 p-3">
+                      <p className="text-xs text-slate-400">Pre-Booking Offer Price</p>
+                      <p className="text-lg font-black text-cyan-300">
+                        INR {asset.prebooking_price}{" "}
+                        <span className="text-xs font-normal text-slate-400 line-through">
+                          INR {asset.price}
+                        </span>
+                      </p>
+                      <p className="text-[11px] text-emerald-300 mt-0.5">
+                        🌟 VIP loyalty discounts automatically stack on top!
+                      </p>
+                    </div>
+                  ) : null}
+
+                  {asset.prebooking_download_unlock_at ? (
+                    <div className="rounded border border-cyan-500/20 bg-black/40 p-3">
+                      <p className="text-xs text-slate-400">Pre-Bookers Early Download Unlock</p>
+                      <p className="text-sm font-bold text-white mt-0.5">
+                        ⏰{" "}
+                        {new Date(asset.prebooking_download_unlock_at).toLocaleString("en-IN", {
+                          dateStyle: "medium",
+                          timeStyle: "short",
+                        })}
+                      </p>
+                      <p className="text-[11px] text-cyan-400 mt-0.5">
+                        Early download access before general public!
+                      </p>
+                    </div>
+                  ) : asset.release_date ? (
+                    <div className="rounded border border-cyan-500/20 bg-black/40 p-3">
+                      <p className="text-xs text-slate-400">General Public Release</p>
+                      <p className="text-sm font-bold text-white mt-0.5">
+                        🚀{" "}
+                        {new Date(asset.release_date).toLocaleString("en-IN", {
+                          dateStyle: "medium",
+                          timeStyle: "short",
+                        })}
+                      </p>
+                    </div>
+                  ) : null}
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="mt-6 rounded-lg border border-rail-amber/30 bg-rail-amber/10 p-5">
+                <p className="text-sm font-black uppercase tracking-wide text-rail-amber">
+                  {asset.coming_soon_badge || "COMING SOON"}
+                </p>
+                <h2 className="mt-2 text-2xl font-black text-white">
+                  {asset.coming_soon_banner_title || asset.title}
+                </h2>
+                <p className="mt-3 whitespace-pre-line text-sm leading-6 text-slate-200">
+                  {asset.coming_soon_message || asset.short_description}
+                </p>
+                <div className="mt-4 flex flex-wrap items-center gap-2">
+                  <p className="inline-flex rounded bg-black/40 px-3 py-2 text-sm font-semibold text-rail-amber">
+                    {asset.coming_soon_status_text || "Release Date: To Be Announced"}
+                  </p>
+                  {asset.release_date ? (
+                    <p className="inline-flex items-center gap-1.5 rounded bg-black/40 border border-rail-amber/30 px-3 py-2 text-sm font-medium text-white">
+                      <span>🚀 Official Release:</span>
+                      <strong className="text-rail-amber">
+                        {new Date(asset.release_date).toLocaleString("en-IN", {
+                          dateStyle: "medium",
+                          timeStyle: "short",
+                        })}
+                      </strong>
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+            )
           ) : null}
           {showDeal ? (
             <div className="mt-6 rounded-lg border border-emerald-400/30 bg-emerald-400/10 p-5">

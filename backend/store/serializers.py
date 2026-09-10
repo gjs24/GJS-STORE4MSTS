@@ -1,6 +1,7 @@
 from django.contrib.auth.models import User
 from django.conf import settings
 from django.db.models import Avg, Q
+from django.utils import timezone
 from urllib.parse import quote
 from rest_framework import serializers
 
@@ -160,6 +161,9 @@ class AssetListSerializer(serializers.ModelSerializer):
     user_discount_percent = serializers.SerializerMethodField()
     is_early_access_active = serializers.SerializerMethodField()
     user_early_access_pending = serializers.SerializerMethodField()
+    prebooking_count = serializers.SerializerMethodField()
+    user_has_prebooked = serializers.SerializerMethodField()
+    prebooking_downloads_ready = serializers.SerializerMethodField()
 
     class Meta:
         model = Asset
@@ -203,6 +207,16 @@ class AssetListSerializer(serializers.ModelSerializer):
             "early_access_message",
             "early_access_required_assets",
             "early_access_required_asset_titles",
+            "prebooking_enabled",
+            "prebooking_price",
+            "prebooking_badge",
+            "prebooking_message",
+            "prebooking_download_unlock_at",
+            "prebooking_downloads_unlocked",
+            "prebooking_slots",
+            "prebooking_count",
+            "user_has_prebooked",
+            "prebooking_downloads_ready",
             "user_is_eligible",
             "user_can_access_early",
             "user_early_access_pending",
@@ -298,6 +312,40 @@ class AssetListSerializer(serializers.ModelSerializer):
         ea = get_cached_early_access_status(obj, self.context.get("request"))
         return ea["is_early_access_pending"]
 
+    def get_prebooking_count(self, obj):
+        if not getattr(obj, "prebooking_enabled", False):
+            return 0
+        return Order.objects.filter(
+            asset=obj,
+            status__in=[Order.Status.PAID, Order.Status.APPROVED],
+        ).count()
+
+    def get_user_has_prebooked(self, obj):
+        request = self.context.get("request")
+        user = getattr(request, "user", None) if request else None
+        if not user or not user.is_authenticated:
+            return False
+        return Order.objects.filter(
+            user=user,
+            asset=obj,
+            status__in=[Order.Status.PAID, Order.Status.APPROVED],
+            download_enabled=True,
+        ).exists()
+
+    def get_prebooking_downloads_ready(self, obj):
+        if not getattr(obj, "is_upcoming", False):
+            return True
+        if getattr(obj, "prebooking_downloads_unlocked", False):
+            return True
+        now = timezone.now()
+        unlock_at = getattr(obj, "prebooking_download_unlock_at", None)
+        if unlock_at and now >= unlock_at:
+            return True
+        rel_date = getattr(obj, "release_date", None)
+        if rel_date and now >= rel_date:
+            return True
+        return False
+
 
 class AssetDetailSerializer(AssetListSerializer):
     images = AssetImageSerializer(many=True, read_only=True)
@@ -338,12 +386,30 @@ class AssetDetailSerializer(AssetListSerializer):
             return True
         if user_has_special_access(user, obj):
             return True
-        return Order.objects.filter(
+
+        has_paid_order = Order.objects.filter(
             user=user,
             asset=obj,
             status__in=[Order.Status.PAID, Order.Status.APPROVED],
             download_enabled=True,
         ).exists()
+
+        if not has_paid_order:
+            return False
+
+        if obj.is_upcoming:
+            now = timezone.now()
+            downloads_ready = (
+                obj.prebooking_downloads_unlocked
+                or (obj.prebooking_download_unlock_at and now >= obj.prebooking_download_unlock_at)
+                or (obj.release_date and now >= obj.release_date)
+            )
+            ea_status = get_cached_early_access_status(obj, request)
+            if ea_status["can_access_early"]:
+                downloads_ready = True
+            return downloads_ready
+
+        return True
 
 
 class AssetWriteSerializer(serializers.ModelSerializer):
@@ -403,13 +469,30 @@ class AssetWriteSerializer(serializers.ModelSerializer):
                     data["early_access_required_assets"] = [int(p.strip()) for p in val_str.split(",") if p.strip().isdigit()]
 
         # Convert empty strings for datetime fields to None
-        for dt_field in ("release_date", "early_access_starts_at", "early_access_ends_at", "deal_ends_at"):
+        for dt_field in ("release_date", "early_access_starts_at", "early_access_ends_at", "deal_ends_at", "prebooking_download_unlock_at"):
             if dt_field in data:
                 val = data.get(dt_field) if hasattr(data, "get") else data[dt_field]
                 if not val or val == "" or str(val).lower() == "null":
                     if hasattr(data, "copy"):
                         data = data.copy()
                     data[dt_field] = None
+
+        # Convert empty strings for optional decimal/numeric fields to None or 0
+        for num_field in ("prebooking_price", "early_access_price"):
+            if num_field in data:
+                val = data.get(num_field) if hasattr(data, "get") else data[num_field]
+                if val == "" or val is None or str(val).lower() == "null":
+                    if hasattr(data, "copy"):
+                        data = data.copy()
+                    data[num_field] = None
+
+        if "prebooking_slots" in data:
+            val = data.get("prebooking_slots") if hasattr(data, "get") else data["prebooking_slots"]
+            if val == "" or val is None:
+                if hasattr(data, "copy"):
+                    data = data.copy()
+                data["prebooking_slots"] = 0
+
 
         return super().to_internal_value(data)
 

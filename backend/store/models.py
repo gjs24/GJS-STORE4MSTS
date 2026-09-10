@@ -82,6 +82,22 @@ class Asset(models.Model):
     )
     early_access_badge = models.CharField(max_length=60, default="VIP Early Access", blank=True)
     early_access_message = models.TextField(blank=True)
+    prebooking_enabled = models.BooleanField(default=False)
+    prebooking_price = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        default=None,
+    )
+    prebooking_badge = models.CharField(max_length=60, default="PRE-BOOKING OPEN", blank=True)
+    prebooking_message = models.TextField(
+        blank=True,
+        default="Pre-book your copy now to lock in exclusive launch pricing and guarantee day-one access!",
+    )
+    prebooking_download_unlock_at = models.DateTimeField(blank=True, null=True)
+    prebooking_downloads_unlocked = models.BooleanField(default=False)
+    prebooking_slots = models.PositiveIntegerField(default=0, blank=True)
     thumbnail = models.ImageField(upload_to="assets/thumbnails/", blank=True, null=True)
     thumbnail_url = models.URLField(blank=True)
     gallery_image_urls = models.TextField(blank=True)

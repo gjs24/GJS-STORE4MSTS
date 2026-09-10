@@ -241,3 +241,131 @@ class EarlyAccessTests(TestCase):
         self.assertFalse(status_result["is_early_access_pending"])
         self.assertTrue(status_result["is_early_access_active"])
 
+    def test_prebooking_checkout_and_vip_discount_stacking(self):
+        import datetime
+        from django.utils import timezone
+
+        # Create upcoming asset with prebooking enabled
+        prebook_asset = Asset.objects.create(
+            title="Vande Bharat Express Special",
+            slug="vande-bharat-special",
+            category=self.category,
+            short_description="Special upcoming train",
+            description="High speed train pack",
+            price=Decimal("800.00"),
+            original_price=Decimal("800.00"),
+            is_upcoming=True,
+            is_published=True,
+            prebooking_enabled=True,
+            prebooking_price=Decimal("600.00"),  # Pre-booking launch offer
+            prebooking_badge="PRE-BOOKING OPEN",
+            prebooking_download_unlock_at=timezone.now() + datetime.timedelta(days=2),
+            early_access_enabled=True,
+            early_access_has_discount=True,
+            early_access_discount_percent=25,  # 25% VIP discount stacks on 600.00 -> 450.00
+        )
+        prebook_asset.early_access_required_assets.add(self.product1)
+
+        # Ineligible user pre-books at pre-booking price (600.00)
+        view = OrderCreateView.as_view()
+        req_ineligible = self.factory.post("/api/orders/create/", {"asset_id": prebook_asset.id}, format="json")
+        force_authenticate(req_ineligible, user=self.user_ineligible)
+        resp_ineligible = view(req_ineligible)
+        self.assertEqual(resp_ineligible.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(resp_ineligible.data["amount"], "600.00")
+
+        # Eligible VIP user pre-books with VIP discount stacking on pre-booking price (600 - 25% = 450.00)
+        req_eligible = self.factory.post("/api/orders/create/", {"asset_id": prebook_asset.id}, format="json")
+        force_authenticate(req_eligible, user=self.user_eligible)
+        resp_eligible = view(req_eligible)
+        self.assertEqual(resp_eligible.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(resp_eligible.data["amount"], "450.00")
+
+    def test_prebooking_download_restrictions_and_unlock_schedule(self):
+        import datetime
+        from django.utils import timezone
+
+        # Create upcoming asset with prebooking download unlock scheduled for future
+        unlock_time = timezone.now() + datetime.timedelta(days=3)
+        prebook_asset = Asset.objects.create(
+            title="WAP-7 Electric Loco Pack",
+            slug="wap7-pack",
+            category=self.category,
+            short_description="High speed electric locomotive",
+            price=Decimal("500.00"),
+            is_upcoming=True,
+            is_published=True,
+            prebooking_enabled=True,
+            prebooking_price=Decimal("400.00"),
+            prebooking_download_unlock_at=unlock_time,
+            external_download_url="https://example.com/wap7.zip",
+        )
+
+        # Create paid pre-booking order for ineligible user (who has no early access)
+        Order.objects.create(
+            user=self.user_ineligible,
+            asset=prebook_asset,
+            amount=Decimal("400.00"),
+            currency="INR",
+            status=Order.Status.PAID,
+            download_enabled=True,
+        )
+
+        # Request download BEFORE unlock time -> should be blocked (403)
+        req = self.factory.get(f"/api/assets/{prebook_asset.slug}/download/")
+        force_authenticate(req, user=self.user_ineligible)
+        req.user = self.user_ineligible
+        resp_before = create_download_response(req, prebook_asset)
+        self.assertEqual(resp_before.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertIn("unlock automatically on", resp_before.data["detail"])
+
+        # Check AssetDetailSerializer reflects user_has_prebooked=True and can_download=False
+        drf_req = Request(req)
+        serializer = AssetDetailSerializer(prebook_asset, context={"request": drf_req})
+        self.assertTrue(serializer.data["user_has_prebooked"])
+        self.assertFalse(serializer.data["can_download"])
+
+        # Advance prebooking_download_unlock_at to past (unlocked!)
+        prebook_asset.prebooking_download_unlock_at = timezone.now() - datetime.timedelta(hours=1)
+        prebook_asset.save()
+
+        # Request download AFTER unlock time -> should succeed (200)
+        resp_after = create_download_response(req, prebook_asset)
+        self.assertEqual(resp_after.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp_after.data["download_url"], "https://example.com/wap7.zip")
+
+    def test_prebooking_immediate_admin_unlock(self):
+        import datetime
+        from django.utils import timezone
+
+        # Prebooking scheduled for next week, but admin turns on prebooking_downloads_unlocked
+        prebook_asset = Asset.objects.create(
+            title="Tejas Express Coach Pack",
+            slug="tejas-coaches",
+            category=self.category,
+            short_description="Modern Tejas rake",
+            price=Decimal("350.00"),
+            is_upcoming=True,
+            is_published=True,
+            prebooking_enabled=True,
+            prebooking_price=Decimal("300.00"),
+            prebooking_download_unlock_at=timezone.now() + datetime.timedelta(days=7),
+            prebooking_downloads_unlocked=True,  # 1-click admin instant unlock
+            external_download_url="https://example.com/tejas.zip",
+        )
+
+        Order.objects.create(
+            user=self.user_ineligible,
+            asset=prebook_asset,
+            amount=Decimal("300.00"),
+            currency="INR",
+            status=Order.Status.PAID,
+            download_enabled=True,
+        )
+
+        req = self.factory.get(f"/api/assets/{prebook_asset.slug}/download/")
+        req.user = self.user_ineligible
+        resp = create_download_response(req, prebook_asset)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["download_url"], "https://example.com/tejas.zip")
+

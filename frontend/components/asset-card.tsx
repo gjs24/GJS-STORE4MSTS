@@ -54,7 +54,9 @@ export function AssetCard({
           <div className="absolute right-3 top-3 z-10 flex items-center gap-1.5">
             <span
               className={`rounded-full px-2.5 py-1 text-xs font-bold tracking-wide shadow-md backdrop-blur-md ${
-                asset.is_upcoming
+                asset.prebooking_enabled && asset.is_upcoming
+                  ? "bg-gradient-to-r from-cyan-500 to-teal-500 text-white font-black animate-pulse"
+                  : asset.is_upcoming
                   ? "bg-gradient-to-r from-amber-400 to-amber-500 text-black font-black"
                   : showDeal
                   ? "animate-deal-pulse bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-extrabold"
@@ -65,7 +67,9 @@ export function AssetCard({
                   : "border border-white/20 bg-rail-red text-white"
               }`}
             >
-              {asset.is_upcoming
+              {asset.prebooking_enabled && asset.is_upcoming
+                ? asset.prebooking_badge || "PRE-BOOKING"
+                : asset.is_upcoming
                 ? asset.coming_soon_badge || "COMING SOON"
                 : showDeal
                 ? asset.deal_title || "DEAL OPEN"
@@ -79,7 +83,11 @@ export function AssetCard({
           </div>
 
           {/* Special Deal / Trending Sub-Badge */}
-          {showDeal ? (
+          {asset.prebooking_enabled && asset.is_upcoming ? (
+            <span className="absolute bottom-2.5 left-3 rounded-md bg-gradient-to-r from-cyan-600 to-blue-600 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-white shadow-md flex items-center gap-1">
+              <span>🚀</span> Pre-Booking Open
+            </span>
+          ) : showDeal ? (
             <span className="absolute bottom-2.5 left-3 rounded-md bg-rail-amber px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-black shadow-md">
               {asset.deal_badge || "Limited Time"}
             </span>

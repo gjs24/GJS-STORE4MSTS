@@ -882,8 +882,13 @@ class OrderCreateView(generics.CreateAPIView):
     def create(self, request, *args, **kwargs):
         asset = get_object_or_404(Asset, id=request.data.get("asset_id"), is_published=True)
         ea_status = get_cached_early_access_status(asset, request)
-        if asset.is_upcoming and not ea_status["can_access_early"]:
-            return Response({"detail": "This asset is marked as upcoming and is not available for purchase yet."}, status=status.HTTP_400_BAD_REQUEST)
+        can_purchase = (
+            not asset.is_upcoming
+            or ea_status["can_access_early"]
+            or getattr(asset, "prebooking_enabled", False)
+        )
+        if not can_purchase:
+            return Response({"detail": "This asset is marked as upcoming and is not available for purchase or pre-booking yet."}, status=status.HTTP_400_BAD_REQUEST)
         target_amount = ea_status["effective_price"]
         existing_order = Order.objects.filter(
             user=request.user,
@@ -1712,8 +1717,26 @@ class AdminActivityLogView(generics.ListAPIView):
 def create_download_response(request, asset):
     if asset.is_upcoming:
         ea_status = get_cached_early_access_status(asset, request)
-        if not ea_status["can_access_early"]:
-            return Response({"detail": "This asset is marked as upcoming and is not available for download yet."}, status=status.HTTP_403_FORBIDDEN)
+        now = timezone.now()
+        downloads_ready = (
+            getattr(asset, "prebooking_downloads_unlocked", False)
+            or (getattr(asset, "prebooking_download_unlock_at", None) and now >= asset.prebooking_download_unlock_at)
+            or (asset.release_date and now >= asset.release_date)
+            or ea_status["can_access_early"]
+        )
+        if not downloads_ready:
+            unlock_time_str = ""
+            if getattr(asset, "prebooking_download_unlock_at", None):
+                unlock_time_str = f" on {asset.prebooking_download_unlock_at.strftime('%b %d, %Y at %I:%M %p')}"
+            elif asset.release_date:
+                unlock_time_str = f" on {asset.release_date.strftime('%b %d, %Y at %I:%M %p')}"
+
+            return Response(
+                {
+                    "detail": f"This asset is currently in pre-release/pre-booking. Package download will unlock automatically{unlock_time_str}."
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
     # Check if user has an explicit BLOCKED order for this asset
     blocked_order = Order.objects.filter(user=request.user, asset=asset, status=Order.Status.BLOCKED).first()

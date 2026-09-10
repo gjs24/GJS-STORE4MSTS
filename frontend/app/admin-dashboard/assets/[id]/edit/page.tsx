@@ -39,6 +39,13 @@ export default function EditAssetPage({ params }: { params: Promise<{ id: string
   const [earlyAccessMessage, setEarlyAccessMessage] = useState("");
   const [earlyAccessStartsAt, setEarlyAccessStartsAt] = useState<string>("");
   const [earlyAccessEndsAt, setEarlyAccessEndsAt] = useState<string>("");
+  const [prebookingEnabled, setPrebookingEnabled] = useState(false);
+  const [prebookingPrice, setPrebookingPrice] = useState<string>("");
+  const [prebookingBadge, setPrebookingBadge] = useState("PRE-BOOKING OPEN");
+  const [prebookingMessage, setPrebookingMessage] = useState("Pre-book your copy now to lock in exclusive launch pricing and guarantee day-one access!");
+  const [prebookingDownloadUnlockAt, setPrebookingDownloadUnlockAt] = useState<string>("");
+  const [prebookingDownloadsUnlocked, setPrebookingDownloadsUnlocked] = useState(false);
+  const [prebookingSlots, setPrebookingSlots] = useState<number | "">("");
 
   useEffect(() => {
     params.then(({ id }) => {
@@ -59,6 +66,13 @@ export default function EditAssetPage({ params }: { params: Promise<{ id: string
           setEarlyAccessMessage(data.early_access_message || "");
           setEarlyAccessStartsAt(data.early_access_starts_at ? formatDateTimeLocal(data.early_access_starts_at) : "");
           setEarlyAccessEndsAt(data.early_access_ends_at ? formatDateTimeLocal(data.early_access_ends_at) : "");
+          setPrebookingEnabled(Boolean(data.prebooking_enabled));
+          setPrebookingPrice(data.prebooking_price && data.prebooking_price !== "0.00" ? data.prebooking_price : "");
+          setPrebookingBadge(data.prebooking_badge || "PRE-BOOKING OPEN");
+          setPrebookingMessage(data.prebooking_message || "Pre-book your copy now to lock in exclusive launch pricing and guarantee day-one access!");
+          setPrebookingDownloadUnlockAt(data.prebooking_download_unlock_at ? formatDateTimeLocal(data.prebooking_download_unlock_at) : "");
+          setPrebookingDownloadsUnlocked(Boolean(data.prebooking_downloads_unlocked));
+          setPrebookingSlots(data.prebooking_slots || 0);
           setMessage("");
         })
         .catch((error) => {
@@ -94,6 +108,17 @@ export default function EditAssetPage({ params }: { params: Promise<{ id: string
     formData.set("early_access_badge", earlyAccessBadge);
     formData.set("early_access_starts_at", earlyAccessStartsAt || "");
     formData.set("early_access_ends_at", earlyAccessEndsAt || "");
+    formData.set("prebooking_enabled", String(prebookingEnabled));
+    if (prebookingPrice && prebookingPrice.trim() !== "") {
+      formData.set("prebooking_price", prebookingPrice.trim());
+    } else {
+      formData.set("prebooking_price", "");
+    }
+    formData.set("prebooking_badge", prebookingBadge);
+    formData.set("prebooking_message", prebookingMessage);
+    formData.set("prebooking_download_unlock_at", prebookingDownloadUnlockAt || "");
+    formData.set("prebooking_downloads_unlocked", String(prebookingDownloadsUnlocked));
+    formData.set("prebooking_slots", String(prebookingSlots || 0));
     formData.delete("early_access_required_assets");
     if (earlyAccessRequiredAssets.length > 0) {
       earlyAccessRequiredAssets.forEach((id) => {
@@ -558,6 +583,136 @@ export default function EditAssetPage({ params }: { params: Promise<{ id: string
                     className="mt-1 w-full rounded border border-white/10 bg-black/40 px-3 py-2 text-sm"
                   />
                 </label>
+              </div>
+            </div>
+          ) : null}
+        </div>
+
+        {/* Pre-Booking (Pre-Order) & Early Access Download Schedule */}
+        <div className="rounded-xl border border-cyan-500/30 bg-cyan-950/20 p-4 md:col-span-2 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-base font-semibold text-cyan-300">🚀 Pre-Booking (Pre-Order) & Early Download Schedule</span>
+                <span className="rounded bg-cyan-500/20 px-2 py-0.5 text-xs font-semibold text-cyan-200">
+                  {prebookingEnabled ? "ACTIVE" : "DISABLED"}
+                </span>
+                {asset.prebooking_count ? (
+                  <span className="rounded bg-emerald-500/20 px-2 py-0.5 text-xs font-semibold text-emerald-300">
+                    {asset.prebooking_count} Pre-Booked
+                  </span>
+                ) : null}
+              </div>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Allow customers to pre-order this upcoming asset ahead of release. VIP loyalty discounts automatically stack on top of the pre-booking price.
+              </p>
+            </div>
+            <label className="relative inline-flex cursor-pointer items-center">
+              <input
+                type="checkbox"
+                checked={prebookingEnabled}
+                onChange={(e) => setPrebookingEnabled(e.target.checked)}
+                className="peer sr-only"
+              />
+              <div className="peer h-6 w-11 rounded-full bg-slate-700 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all after:content-[''] peer-checked:bg-cyan-500 peer-checked:after:translate-x-full" />
+            </label>
+          </div>
+
+          {prebookingEnabled ? (
+            <div className="space-y-4 pt-2 border-t border-cyan-500/20">
+              <div className="grid gap-4 md:grid-cols-3">
+                <label className="block">
+                  <span className="text-xs font-medium text-slate-300">Pre-Booking Price (₹ INR)</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={prebookingPrice}
+                    onChange={(e) => setPrebookingPrice(e.target.value)}
+                    placeholder="Leave empty for regular price"
+                    className="mt-1 w-full rounded border border-white/10 bg-black/40 px-3 py-2 text-sm"
+                  />
+                  <span className="mt-1 block text-xs text-slate-400">
+                    Set a promotional pre-order price. VIP discounts stack on this.
+                  </span>
+                </label>
+
+                <label className="block">
+                  <span className="text-xs font-medium text-slate-300">Pre-Booking Badge</span>
+                  <input
+                    type="text"
+                    value={prebookingBadge}
+                    onChange={(e) => setPrebookingBadge(e.target.value)}
+                    placeholder="PRE-BOOKING OPEN"
+                    className="mt-1 w-full rounded border border-white/10 bg-black/40 px-3 py-2 text-sm"
+                  />
+                  <span className="mt-1 block text-xs text-slate-400">
+                    Badge shown on marketplace card & product page.
+                  </span>
+                </label>
+
+                <label className="block">
+                  <span className="text-xs font-medium text-slate-300">Pre-Booking Slots Limit</span>
+                  <input
+                    type="number"
+                    min="0"
+                    value={prebookingSlots}
+                    onChange={(e) => setPrebookingSlots(e.target.value === "" ? "" : Number(e.target.value))}
+                    placeholder="0 for unlimited"
+                    className="mt-1 w-full rounded border border-white/10 bg-black/40 px-3 py-2 text-sm"
+                  />
+                  <span className="mt-1 block text-xs text-slate-400">
+                    Max number of pre-orders allowed (0 = no limit).
+                  </span>
+                </label>
+              </div>
+
+              <label className="block">
+                <span className="text-xs font-medium text-slate-300">Pre-Booking Promo Message</span>
+                <input
+                  type="text"
+                  value={prebookingMessage}
+                  onChange={(e) => setPrebookingMessage(e.target.value)}
+                  placeholder="Pre-book your copy now to lock in exclusive launch pricing and guarantee day-one access!"
+                  className="mt-1 w-full rounded border border-white/10 bg-black/40 px-3 py-2 text-sm"
+                />
+              </label>
+
+              {/* Scheduled Pre-booking Download Release Date & Time */}
+              <div className="rounded-lg border border-cyan-500/30 bg-cyan-950/40 p-3.5 space-y-3">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <label className="block">
+                    <span className="text-xs font-semibold text-cyan-200">
+                      ⏰ Scheduled Pre-Booked Customer Download Unlock (Date & Time)
+                    </span>
+                    <input
+                      type="datetime-local"
+                      value={prebookingDownloadUnlockAt}
+                      onChange={(e) => setPrebookingDownloadUnlockAt(e.target.value)}
+                      className="mt-1.5 w-full rounded border border-cyan-500/30 bg-black/50 px-3 py-2 text-sm text-cyan-100"
+                    />
+                    <span className="mt-1 block text-xs text-slate-400">
+                      Exact schedule when pre-booked customers and VIPs can download (e.g. 24–48 hours before official release).
+                    </span>
+                  </label>
+
+                  <div className="flex flex-col justify-center rounded border border-white/10 bg-black/30 p-3">
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={prebookingDownloadsUnlocked}
+                        onChange={(e) => setPrebookingDownloadsUnlocked(e.target.checked)}
+                        className="h-4 w-4 rounded border-white/20 bg-black/40 text-cyan-500 focus:ring-cyan-500"
+                      />
+                      <div>
+                        <span className="text-sm font-semibold text-white">⚡ Unlock Downloads Immediately (1-Click Release)</span>
+                        <span className="block text-xs text-slate-400">
+                          Override schedule: Instantly grant download access to all pre-booked customers right now.
+                        </span>
+                      </div>
+                    </label>
+                  </div>
+                </div>
               </div>
             </div>
           ) : null}
