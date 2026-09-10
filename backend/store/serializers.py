@@ -331,11 +331,19 @@ class AssetDetailSerializer(AssetListSerializer):
         user = getattr(request, "user", None) if request else None
         if not user or not user.is_authenticated:
             return False
+        # If user has an explicit BLOCKED order for this asset, immediately revoke access
+        if Order.objects.filter(user=user, asset=obj, status=Order.Status.BLOCKED).exists():
+            return False
         if obj.is_free:
             return True
         if user_has_special_access(user, obj):
             return True
-        return Order.objects.filter(user=user, asset=obj, status__in=[Order.Status.PAID, Order.Status.APPROVED]).exists()
+        return Order.objects.filter(
+            user=user,
+            asset=obj,
+            status__in=[Order.Status.PAID, Order.Status.APPROVED],
+            download_enabled=True,
+        ).exists()
 
 
 class AssetWriteSerializer(serializers.ModelSerializer):
@@ -440,7 +448,9 @@ class OrderSerializer(serializers.ModelSerializer):
         read_only_fields = ["amount", "status", "provider_order_id", "utr", "payer_name", "payment_submitted_at", "download_enabled", "manual_payment", "payment_session_id", "payment_provider", "created_at"]
 
     def get_download_enabled(self, obj):
-        return obj.asset.is_free or obj.status == Order.Status.PAID
+        if obj.status == Order.Status.BLOCKED or not obj.download_enabled:
+            return False
+        return obj.asset.is_free or obj.status in [Order.Status.PAID, Order.Status.APPROVED]
 
     def get_manual_payment(self, obj):
         payment = getattr(obj, "payment", None)
@@ -455,13 +465,13 @@ class OrderSerializer(serializers.ModelSerializer):
         note = f"Order {obj.provider_order_id or obj.id}"
         return {
             "upi_id": upi_id,
+            "payee_vpa": upi_id,
             "payee_name": payee_name,
+            "transaction_note": note,
             "amount": str(obj.amount),
             "currency": obj.currency,
-            "upi_uri": (
-                f"upi://pay?pa={quote(upi_id)}&pn={quote(payee_name)}&am={obj.amount}"
-                f"&cu={quote(obj.currency)}&tn={quote(note)}"
-            ),
+            "qr_data": f"upi://pay?pa={quote(upi_id)}&pn={quote(payee_name)}&am={obj.amount}&cu={quote(obj.currency)}&tn={quote(note)}",
+            "upi_uri": f"upi://pay?pa={quote(upi_id)}&pn={quote(payee_name)}&am={obj.amount}&cu={quote(obj.currency)}&tn={quote(note)}",
             "instructions": "Pay the exact amount by UPI, then submit the UTR / transaction ID for admin verification.",
         }
 
@@ -474,6 +484,54 @@ class OrderSerializer(serializers.ModelSerializer):
     def get_payment_provider(self, obj):
         payment = getattr(obj, "payment", None)
         return payment.provider if payment else ""
+
+
+class AdminOrderSerializer(serializers.ModelSerializer):
+    asset = AssetListSerializer(read_only=True)
+    user = UserSerializer(read_only=True)
+    order_id = serializers.CharField(source="provider_order_id", read_only=True)
+    download_enabled = serializers.BooleanField(required=False)
+    status = serializers.ChoiceField(choices=Order.Status.choices, required=False)
+    block_reason = serializers.CharField(max_length=255, required=False, allow_blank=True)
+    admin_notes = serializers.CharField(required=False, allow_blank=True)
+    blocked_at = serializers.DateTimeField(read_only=True)
+
+    class Meta:
+        model = Order
+        fields = [
+            "id",
+            "order_id",
+            "user",
+            "asset",
+            "amount",
+            "currency",
+            "status",
+            "provider_order_id",
+            "utr",
+            "payer_name",
+            "payment_submitted_at",
+            "download_enabled",
+            "block_reason",
+            "admin_notes",
+            "blocked_at",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "order_id",
+            "user",
+            "asset",
+            "amount",
+            "currency",
+            "provider_order_id",
+            "utr",
+            "payer_name",
+            "payment_submitted_at",
+            "blocked_at",
+            "created_at",
+            "updated_at",
+        ]
 
 
 class PaymentVerifySerializer(serializers.Serializer):

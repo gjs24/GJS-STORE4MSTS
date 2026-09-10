@@ -42,6 +42,7 @@ from .serializers import (
     DownloadLogSerializer,
     NotifyRequestSerializer,
     OrderSerializer,
+    AdminOrderSerializer,
     PaymentVerifySerializer,
     RegisterSerializer,
     ReviewSerializer,
@@ -235,12 +236,23 @@ def log_admin_activity(request, action, target_type="", target_id="", message=""
 
 
 def order_has_download_access(order):
+    if order.status == Order.Status.BLOCKED or not order.download_enabled:
+        return False
     return order.asset.is_free or order.status in DOWNLOAD_READY_STATUSES
 
 
 def sync_order_download_access(order):
-    should_enable = order.asset.is_free or order.status in DOWNLOAD_READY_STATUSES
-    should_disable = not should_enable or order.status in [Order.Status.REJECTED, Order.Status.FAILED, Order.Status.REFUNDED]
+    if order.status == Order.Status.BLOCKED:
+        if order.download_enabled:
+            order.download_enabled = False
+            order.save(update_fields=["download_enabled"])
+        return order
+
+    should_enable = (order.asset.is_free or order.status in DOWNLOAD_READY_STATUSES) and order.download_enabled
+    should_disable = (
+        not should_enable
+        or order.status in [Order.Status.REJECTED, Order.Status.FAILED, Order.Status.REFUNDED, Order.Status.BLOCKED]
+    )
     if should_enable and not order.download_enabled:
         order.download_enabled = True
         order.save(update_fields=["download_enabled"])
@@ -1243,9 +1255,9 @@ class AdminOrderViewSet(viewsets.ModelViewSet):
         "asset__category"
     ).order_by("-id")
 
-    serializer_class = OrderSerializer
+    serializer_class = AdminOrderSerializer
     permission_classes = [permissions.IsAdminUser]
-    http_method_names = ["get", "patch", "head", "options"]
+    http_method_names = ["get", "patch", "post", "head", "options"]
 
     # Pagination
     pagination_class = AdminOrderPagination
@@ -1288,15 +1300,22 @@ class AdminOrderViewSet(viewsets.ModelViewSet):
 
     def perform_update(self, serializer):
         previous_status = self.get_object().status
+        previous_download = self.get_object().download_enabled
         order = serializer.save()
 
-        if order.status in [Order.Status.PAID, Order.Status.APPROVED]:
-            order.download_enabled = True
-            order.save(update_fields=["download_enabled"])
+        if order.status == Order.Status.BLOCKED:
+            order.download_enabled = False
+            if not order.blocked_at:
+                order.blocked_at = timezone.now()
+            order.save(update_fields=["download_enabled", "blocked_at"])
+            Payment.objects.filter(order=order).update(status="blocked")
 
-            Payment.objects.filter(order=order).update(
-                status="approved"
-            )
+        elif order.status in [Order.Status.PAID, Order.Status.APPROVED]:
+            if "download_enabled" not in serializer.validated_data:
+                order.download_enabled = True
+            order.blocked_at = None
+            order.save(update_fields=["download_enabled", "blocked_at"])
+            Payment.objects.filter(order=order).update(status="approved")
 
         elif order.status in [
             Order.Status.REJECTED,
@@ -1304,22 +1323,90 @@ class AdminOrderViewSet(viewsets.ModelViewSet):
             Order.Status.REFUNDED,
         ]:
             order.download_enabled = False
-            order.save(update_fields=["download_enabled"])
+            order.blocked_at = None
+            order.save(update_fields=["download_enabled", "blocked_at"])
+            Payment.objects.filter(order=order).update(status=order.status.lower())
 
-            Payment.objects.filter(order=order).update(
-                status=order.status.lower()
-            )
+        user_label = order.user.username if order.user else "User"
+        asset_title = order.asset.title if order.asset else "Asset"
 
-        if previous_status != order.status:
-            user_label = order.user.username if order.user else "User"
-            asset_title = order.asset.title if order.asset else "Asset"
+        status_changed = previous_status != order.status
+        download_changed = previous_download != order.download_enabled
+
+        if status_changed or download_changed:
+            action_verb = f"Order {order.status.lower()}"
+            detail_msg = f"Order #{order.id} for {user_label} ({asset_title}): status={order.status}, downloads={'ENABLED' if order.download_enabled else 'BLOCKED'}"
+            if order.block_reason:
+                detail_msg += f" (Reason: {order.block_reason})"
             log_admin_activity(
                 self.request,
-                f"Order {order.status.lower()}",
+                action_verb,
                 "Order",
                 order.id,
-                f"Order #{order.id} status changed from {previous_status} to {order.status} for {user_label} ({asset_title})"
+                detail_msg,
             )
+
+    @action(detail=True, methods=["post"], url_path="set-access")
+    def set_access(self, request, pk=None):
+        order = self.get_object()
+        new_status = request.data.get("status")
+        download_enabled = request.data.get("download_enabled")
+        block_reason = request.data.get("block_reason")
+        admin_notes = request.data.get("admin_notes")
+
+        previous_status = order.status
+        previous_download = order.download_enabled
+
+        if new_status and new_status in Order.Status.values:
+            order.status = new_status
+
+        if download_enabled is not None:
+            order.download_enabled = bool(download_enabled)
+        else:
+            if order.status in [Order.Status.PAID, Order.Status.APPROVED]:
+                order.download_enabled = True
+            elif order.status in [Order.Status.BLOCKED, Order.Status.REJECTED, Order.Status.FAILED, Order.Status.REFUNDED]:
+                order.download_enabled = False
+
+        if order.status == Order.Status.BLOCKED or not order.download_enabled:
+            if not order.blocked_at:
+                order.blocked_at = timezone.now()
+        else:
+            order.blocked_at = None
+
+        if block_reason is not None:
+            order.block_reason = str(block_reason).strip()
+        if admin_notes is not None:
+            order.admin_notes = str(admin_notes).strip()
+
+        order.save()
+
+        # Update payment record status
+        if order.status in [Order.Status.PAID, Order.Status.APPROVED]:
+            Payment.objects.filter(order=order).update(status="approved")
+        elif order.status == Order.Status.BLOCKED:
+            Payment.objects.filter(order=order).update(status="blocked")
+        elif order.status in [Order.Status.REJECTED, Order.Status.FAILED, Order.Status.REFUNDED]:
+            Payment.objects.filter(order=order).update(status=order.status.lower())
+
+        user_label = order.user.username if order.user else "User"
+        asset_title = order.asset.title if order.asset else "Asset"
+
+        action_name = "Order access blocked" if (order.status == Order.Status.BLOCKED or not order.download_enabled) else f"Order {order.status.lower()}"
+        msg = f"Order #{order.id} for {user_label} ({asset_title}): status changed from {previous_status} to {order.status}, downloads={'ENABLED' if order.download_enabled else 'BLOCKED'}"
+        if order.block_reason:
+            msg += f" | Reason: {order.block_reason}"
+
+        log_admin_activity(
+            request,
+            action_name,
+            "Order",
+            order.id,
+            msg,
+        )
+
+        return Response(AdminOrderSerializer(order).data, status=status.HTTP_200_OK)
+
 
 
 class AdminUserViewSet(viewsets.ModelViewSet):
@@ -1627,10 +1714,27 @@ def create_download_response(request, asset):
         ea_status = get_cached_early_access_status(asset, request)
         if not ea_status["can_access_early"]:
             return Response({"detail": "This asset is marked as upcoming and is not available for download yet."}, status=status.HTTP_403_FORBIDDEN)
+
+    # Check if user has an explicit BLOCKED order for this asset
+    blocked_order = Order.objects.filter(user=request.user, asset=asset, status=Order.Status.BLOCKED).first()
+    if blocked_order:
+        reason_msg = f": {blocked_order.block_reason}" if blocked_order.block_reason else ""
+        return Response(
+            {
+                "detail": f"Your download access to '{asset.title}' has been revoked/blocked by the store administrator{reason_msg}. Please contact support if you believe this is an error."
+            },
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
     allowed = (
         asset.is_free
         or user_has_special_access(request.user, asset)
-        or Order.objects.filter(user=request.user, asset=asset, status__in=DOWNLOAD_READY_STATUSES).exists()
+        or Order.objects.filter(
+            user=request.user,
+            asset=asset,
+            status__in=DOWNLOAD_READY_STATUSES,
+            download_enabled=True,
+        ).exists()
     )
     if not allowed:
         return Response({"detail": "Purchase required before downloading this asset."}, status=status.HTTP_403_FORBIDDEN)

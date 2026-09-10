@@ -47,13 +47,18 @@ export type AdminOrder = {
   asset?: Asset;
   amount: string;
   currency: string;
-  status: "PENDING" | "VERIFICATION_PENDING" | "APPROVED" | "PAID" | "REJECTED" | "FAILED" | "REFUNDED";
+  status: "PENDING" | "VERIFICATION_PENDING" | "APPROVED" | "PAID" | "REJECTED" | "FAILED" | "REFUNDED" | "BLOCKED";
   order_id?: string;
   provider_order_id?: string;
   utr?: string;
   payer_name?: string;
   payment_submitted_at?: string | null;
+  download_enabled?: boolean;
+  block_reason?: string;
+  admin_notes?: string;
+  blocked_at?: string | null;
   created_at: string;
+  updated_at?: string;
 };
 
 export type AdminReview = {
@@ -316,6 +321,18 @@ export async function adminUpdateSpecialAccess(
   }
 ): Promise<SpecialAccess> {
   return adminPatch<SpecialAccess>(`/admin/users/${userId}/special-access/`, payload);
+}
+
+export async function setAdminOrderAccess(
+  orderId: number,
+  payload: {
+    status?: AdminOrder["status"];
+    download_enabled?: boolean;
+    block_reason?: string;
+    admin_notes?: string;
+  }
+): Promise<AdminOrder> {
+  return adminPost<AdminOrder>(`/admin/orders/${orderId}/set-access/`, payload);
 }
 
 export const fallbackStats: AdminStats = {

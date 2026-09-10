@@ -149,6 +149,7 @@ class Order(models.Model):
         FAILED = "FAILED", "Failed"
         EXPIRED = "EXPIRED", "Expired"
         REFUNDED = "REFUNDED", "Refunded"
+        BLOCKED = "BLOCKED", "Blocked / Revoked"
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="orders", on_delete=models.CASCADE)
     asset = models.ForeignKey(Asset, related_name="orders", on_delete=models.PROTECT)
@@ -160,6 +161,9 @@ class Order(models.Model):
     payer_name = models.CharField(max_length=160, blank=True)
     payment_submitted_at = models.DateTimeField(blank=True, null=True)
     download_enabled = models.BooleanField(default=False)
+    block_reason = models.CharField(max_length=255, blank=True, default="")
+    admin_notes = models.TextField(blank=True, default="")
+    blocked_at = models.DateTimeField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
