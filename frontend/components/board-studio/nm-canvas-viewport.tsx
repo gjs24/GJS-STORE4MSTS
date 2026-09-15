@@ -1169,3 +1169,4 @@ function drawWeatheringEffects(ctx: CanvasRenderingContext2D, template: AtlasTem
     ctx.fillRect(0, 0, width, height);
   }
 }
+

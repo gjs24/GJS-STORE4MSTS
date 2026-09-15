@@ -75,15 +75,44 @@ function authHeaders(): Record<string, string> {
   return headers;
 }
 
+async function parseResponseJson<T = any>(res: Response, fallbackError: string): Promise<T> {
+  const text = await res.text();
+  let data: any = {};
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    if (res.status === 401) {
+      clearAuth();
+      throw new Error("Please log in again to continue.");
+    }
+    if (res.status === 404) {
+      throw new Error("Requested board template was not found on the server.");
+    }
+    throw new Error(fallbackError || `Server returned error (${res.status}).`);
+  }
+
+  if (!res.ok) {
+    if (res.status === 401) {
+      clearAuth();
+      throw new Error("Please log in again to continue.");
+    }
+    throw new Error(data.detail || data.non_field_errors?.[0] || fallbackError);
+  }
+  return data;
+}
+
 export async function getBoardTemplates(): Promise<BoardTemplate[]> {
   const res = await fetch(`${API_URL}/board-templates/`, {
     headers: authHeaders(),
     cache: "no-store",
   });
   if (!res.ok) {
-    throw new Error("Failed to load railway board templates.");
+    if (res.status === 401) return [];
+    const errText = await res.text().catch(() => "");
+    console.warn("Failed to load railway board templates:", res.status, errText);
+    return [];
   }
-  const data = await res.json();
+  const data = await parseResponseJson<any>(res, "Failed to load railway board templates.");
   return Array.isArray(data) ? data : data.results || [];
 }
 
@@ -92,10 +121,7 @@ export async function getBoardTemplate(id: string): Promise<BoardTemplate> {
     headers: authHeaders(),
     cache: "no-store",
   });
-  if (!res.ok) {
-    throw new Error(`Board template '${id}' not found.`);
-  }
-  return res.json();
+  return parseResponseJson<BoardTemplate>(res, `Board template '${id}' not found.`);
 }
 
 export async function getUserCustomBoards(): Promise<UserCustomBoard[]> {
@@ -110,9 +136,9 @@ export async function getUserCustomBoards(): Promise<UserCustomBoard[]> {
       clearAuth();
       return [];
     }
-    throw new Error("Failed to load your saved boards.");
+    return [];
   }
-  const data = await res.json();
+  const data = await parseResponseJson<any>(res, "Failed to load your saved boards.");
   return Array.isArray(data) ? data : data.results || [];
 }
 
@@ -139,11 +165,7 @@ export async function saveUserCustomBoard(payload: {
     body: JSON.stringify(body),
   });
 
-  const data = await res.json();
-  if (!res.ok) {
-    throw new Error(data.detail || "Failed to save customized board.");
-  }
-  return data;
+  return parseResponseJson<UserCustomBoard>(res, "Failed to save customized board.");
 }
 
 export async function deleteUserCustomBoard(id: number): Promise<void> {
@@ -157,16 +179,16 @@ export async function deleteUserCustomBoard(id: number): Promise<void> {
 }
 
 export async function createBoardOrder(templateId: string): Promise<any> {
+  const token = getAccessToken();
+  if (!token) {
+    throw new Error("Please log in to purchase or customize this board template.");
+  }
   const res = await fetch(`${API_URL}/create-order/`, {
     method: "POST",
     headers: authHeaders(),
     body: JSON.stringify({ board_template_id: templateId }),
   });
-  const data = await res.json();
-  if (!res.ok) {
-    throw new Error(data.detail || "Could not initiate checkout for this board template.");
-  }
-  return data;
+  return parseResponseJson(res, "Could not initiate checkout for this board template.");
 }
 
 export async function adminSaveBoardTemplate(template: Partial<BoardTemplate>): Promise<BoardTemplate> {

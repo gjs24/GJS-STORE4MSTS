@@ -69,6 +69,36 @@ export default function BoardStudioPage() {
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
+  const allTemplatesList = React.useMemo(() => {
+    const list: any[] = [...apiTemplates];
+    for (const t of TEMPLATES) {
+      if (!list.some(item => item.id === t.id)) {
+        list.push({
+          id: t.id,
+          name: t.name,
+          category: t.category,
+          description: t.description,
+          base_width: t.width,
+          base_height: t.height,
+          is_paid: false,
+          price: '0.00',
+          published: true,
+          fields: [],
+          fixed_graphics: [],
+          can_customize: true,
+          is_unlocked: true,
+          coachType: t.coachType
+        });
+      }
+    }
+    return list;
+  }, [apiTemplates]);
+
+  const displayTemplates = React.useMemo(() => {
+    if (selectedCategory === 'ALL') return allTemplatesList;
+    return allTemplatesList.filter(t => t.category === selectedCategory);
+  }, [allTemplatesList, selectedCategory]);
+
   // Full Nameboard Content & 4K Atlas State
   const [boardState, setBoardState] = useState<BoardState>({
     boardMode: "multi_rsa",
@@ -291,7 +321,8 @@ export default function BoardStudioPage() {
   };
 
   // Quick Unlock via Cashfree
-  const handleQuickUnlock = async (template: BoardTemplate) => {
+  const handleQuickUnlock = async (template: BoardTemplate | any) => {
+    if (!template || !template.id) return;
     if (!isLoggedIn()) {
       window.location.href = '/login?redirect=/board-studio';
       return;
@@ -316,7 +347,8 @@ export default function BoardStudioPage() {
   };
 
   // Open a store template in the Studio
-  const handleOpenStoreTemplateInStudio = (t: BoardTemplate) => {
+  const handleOpenStoreTemplateInStudio = (t: BoardTemplate | any) => {
+    if (!t || !t.id) return;
     const matched = TEMPLATES.find(built => built.id === t.id);
     if (matched) {
       setSelectedTemplate(matched);
@@ -327,7 +359,7 @@ export default function BoardStudioPage() {
         name: t.name,
         category: t.category,
         coachType: t.name,
-        description: t.description,
+        description: t.description || '',
         bgTheme: 'custom',
         boardColor: '#f7b118',
         boardBorderColor: '#9c1d1e',
@@ -335,7 +367,7 @@ export default function BoardStudioPage() {
         accentColor: '#9c1d1e',
         width: t.base_width || 4096,
         height: t.base_height || 4096,
-        fontFamily: "'Inter', sans-serif",
+        fontFamily: t.category === 'LED_MATRIX' || t.category === 'LOCO_HEADCODE' ? "'VT323', monospace" : "'Inter', sans-serif",
         layout: t.base_width === 4096 ? 'full_atlas' : 'three_tier',
         defaultParts: {
           longBoard: { x: 128, y: 128, width: 3840, height: 720 },
@@ -344,6 +376,19 @@ export default function BoardStudioPage() {
           depotStencils: { x: 128, y: 2600, width: 3840, height: 1368 }
         }
       };
+      if (t.fields && Array.isArray(t.fields)) {
+        const trainNoField = t.fields.find((f: any) => f.id === 'train_number');
+        const trainNameHi = t.fields.find((f: any) => f.id === 'train_name_hi');
+        const trainNameEn = t.fields.find((f: any) => f.id === 'train_name_en');
+        const destCode = t.fields.find((f: any) => f.id === 'dest_code');
+        setBoardState(prev => ({
+          ...prev,
+          trainNo: trainNoField?.default_text || prev.trainNo,
+          trainName: trainNameEn?.default_text || prev.trainName,
+          sourceHi: trainNameHi?.default_text || prev.sourceHi,
+          destEn: destCode?.default_text || prev.destEn,
+        }));
+      }
       setSelectedTemplate(adapted);
     }
     setMainTab('studio');
@@ -506,28 +551,35 @@ export default function BoardStudioPage() {
               <h2 className="text-2xl font-black text-white uppercase tracking-tight">Name Board Template Library</h2>
               <p className="text-xs text-slate-400">Authentic Indian Railways 4K Master Atlases & Single Strips</p>
             </div>
-            <div className="flex gap-2">
-              {['ALL', 'ICF', 'LHB', 'Digiboards'].map(cat => (
+            <div className="flex flex-wrap gap-2">
+              {[
+                { id: 'ALL', label: 'All Templates' },
+                { id: 'ICF', label: 'ICF 4K' },
+                { id: 'LHB', label: 'LHB 4K' },
+                { id: 'Digiboards', label: 'Digiboards LED' },
+                { id: 'LED_MATRIX', label: 'LED Matrix' },
+                { id: 'LOCO_HEADCODE', label: 'Loco Headcode' },
+              ].map(cat => (
                 <button
-                  key={cat}
-                  onClick={() => setSelectedCategory(cat)}
+                  key={cat.id}
+                  onClick={() => setSelectedCategory(cat.id)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${
-                    selectedCategory === cat
-                      ? 'bg-amber-500 text-slate-950'
+                    selectedCategory === cat.id
+                      ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
                       : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-white'
                   }`}
                 >
-                  {cat}
+                  {cat.label}
                 </button>
               ))}
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {TEMPLATES.filter(t => selectedCategory === 'ALL' || t.category === selectedCategory).map(tmpl => {
-              const apiMatch = apiTemplates.find(at => at.id === tmpl.id);
-              const isPaid = apiMatch?.is_paid;
-              const canCustomize = apiMatch?.can_customize ?? true;
+            {displayTemplates.map((tmpl: any) => {
+              const isPaid = tmpl.is_paid;
+              const canCustomize = tmpl.can_customize ?? true;
+              const is4k = tmpl.base_width === 4096 || tmpl.width === 4096;
 
               return (
                 <div
@@ -537,7 +589,7 @@ export default function BoardStudioPage() {
                   <div className="h-44 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-4 relative flex items-center justify-center border-b border-slate-800">
                     <div className="text-center space-y-2">
                       <span className="text-xs px-2.5 py-1 rounded-full font-black uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                        {tmpl.category} 4096×4096
+                        {tmpl.category} {is4k ? '4096×4096' : `${tmpl.base_width || 1024}×${tmpl.base_height || 1024}`}
                       </span>
                       <h3 className="text-sm font-bold text-white line-clamp-1">{tmpl.name}</h3>
                       <p className="text-[11px] text-slate-400 line-clamp-2 px-2">{tmpl.description}</p>
@@ -547,13 +599,13 @@ export default function BoardStudioPage() {
                   <div className="p-4 flex-1 flex flex-col justify-between space-y-4">
                     <div className="space-y-1">
                       <div className="text-[11px] text-slate-400">Coach Compatibility</div>
-                      <div className="text-xs font-bold text-slate-200">{tmpl.coachType}</div>
+                      <div className="text-xs font-bold text-slate-200">{tmpl.coachType || tmpl.name}</div>
                     </div>
 
                     <div className="pt-3 border-t border-slate-800 flex items-center justify-between">
                       {isPaid && !canCustomize ? (
                         <div className="text-amber-400 font-bold text-sm">
-                          ₹{apiMatch?.price}
+                          ₹{tmpl.price}
                         </div>
                       ) : (
                         <div className="text-emerald-400 font-bold text-xs flex items-center gap-1">
@@ -563,7 +615,7 @@ export default function BoardStudioPage() {
 
                       {isPaid && !canCustomize ? (
                         <button
-                          onClick={() => handleQuickUnlock(apiMatch!)}
+                          onClick={() => handleQuickUnlock(tmpl)}
                           className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl transition flex items-center gap-1.5 shadow"
                         >
                           <Lock className="w-3.5 h-3.5" />
@@ -571,14 +623,10 @@ export default function BoardStudioPage() {
                         </button>
                       ) : (
                         <button
-                          onClick={() => {
-                            setSelectedTemplate(tmpl);
-                            if (tmpl.defaultParts) setBoardState(prev => ({ ...prev, parts: { ...tmpl.defaultParts! } }));
-                            setMainTab('studio');
-                          }}
+                          onClick={() => handleOpenStoreTemplateInStudio(tmpl)}
                           className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-400 font-bold text-xs rounded-xl border border-slate-700 transition flex items-center gap-1.5"
                         >
-                          <span>Open in 4K Studio</span>
+                          <span>Open in Studio</span>
                           <ArrowRight className="w-3.5 h-3.5" />
                         </button>
                       )}

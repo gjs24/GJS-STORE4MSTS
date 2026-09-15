@@ -144,3 +144,4 @@ export const REGIONAL_LANGUAGES: RegionalLanguage[] = [
   { id: "Odia", name: "Odia (ଓଡ଼ିଆ)" },
   { id: "Punjabi", name: "Punjabi (ਪੰਜਾਬੀ)" }
 ];
+

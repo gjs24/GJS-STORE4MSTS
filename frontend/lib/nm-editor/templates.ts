@@ -150,3 +150,4 @@ export const TEMPLATES: AtlasTemplate[] = [
     layout: "digital_matrix"
   }
 ];
+

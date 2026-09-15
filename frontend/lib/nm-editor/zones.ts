@@ -31,3 +31,4 @@ export const COACH_CLASSES: CoachClass[] = [
   { code: "GS", name: "General / Second Class" },
   { code: "EOG", name: "End On Generation / Guard" }
 ];
+
