@@ -66,6 +66,14 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700&family=DotGothic16&family=Mukta:wght@400;600;700;800&family=Roboto+Condensed:wght@400;700;900&family=Share+Tech+Mono&family=Tiro+Devanagari+Hindi&family=VT323&display=swap"
+          rel="stylesheet"
+        />
+      </head>
       <body>
         <script
           dangerouslySetInnerHTML={{
