@@ -47,15 +47,15 @@ export const AdminCashfreeSettingsModal: React.FC<AdminCashfreeSettingsModalProp
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" style={{ maxWidth: 520, background: '#0d131d' }} onClick={(e) => e.stopPropagation()}>
+      <div className="modal-content" style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <div className="modal-title-group">
-            <div className="modal-icon-badge" style={{ background: 'linear-gradient(135deg, #00b4d8 0%, #0077b6 100%)' }}>
+            <div className="modal-icon-badge" style={{ background: 'linear-gradient(135deg, #ef3b2d 0%, #ff8a1f 100%)', boxShadow: '0 0 20px rgba(239, 59, 45, 0.4)' }}>
               <Key size={18} color="#fff" />
             </div>
             <div>
-              <h3>Cashfree Payments Settings</h3>
-              <p>Configure Cashfree gateway for paid template sales.</p>
+              <h3>Cashfree Payments Gateway</h3>
+              <p>Configure Cashfree gateway for digital simulator template sales.</p>
             </div>
           </div>
           <button type="button" className="btn-close-modal" onClick={onClose}>

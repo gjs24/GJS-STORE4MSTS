@@ -124,10 +124,10 @@ export const PurchaseTemplateModal: React.FC<PurchaseTemplateModalProps> = ({
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div>
                   <h4 style={{ fontSize: 14, color: '#fff', margin: '0 0 4px 0' }}>{template.name}</h4>
-                  <span style={{ fontSize: 11, color: '#00b4d8' }}>{template.category}</span>
+                  <span style={{ fontSize: 11, color: 'var(--rail-amber)', fontWeight: 700 }}>{template.category}</span>
                 </div>
                 <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: 20, fontWeight: 900, color: '#ffbe0b' }}>₹{price}</div>
+                  <div style={{ fontSize: 22, fontWeight: 900, color: 'var(--rail-amber)' }}>₹{price}</div>
                   <small style={{ fontSize: 10, color: '#64748b' }}>One-time payment</small>
                 </div>
               </div>
@@ -137,15 +137,15 @@ export const PurchaseTemplateModal: React.FC<PurchaseTemplateModalProps> = ({
             <div style={{ padding: '0 24px 20px 24px' }}>
               <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <li style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#cbd5e1' }}>
-                  <Sparkles size={14} style={{ color: '#ffbe0b' }} />
+                  <Sparkles size={14} style={{ color: 'var(--rail-amber)' }} />
                   <span>Real-time LED dot-matrix preview and styling</span>
                 </li>
                 <li style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#cbd5e1' }}>
-                  <FileCode size={14} style={{ color: '#00b4d8' }} />
+                  <FileCode size={14} style={{ color: 'var(--rail-red)' }} />
                   <span>Direct 32-bit BGRA & DXT5 DDS texture export</span>
                 </li>
                 <li style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#cbd5e1' }}>
-                  <Layers size={14} style={{ color: '#2ec4b6' }} />
+                  <Layers size={14} style={{ color: 'var(--rail-green)' }} />
                   <span>Save unlimited custom variants to My Store</span>
                 </li>
               </ul>

@@ -667,7 +667,7 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({
               <div style={{ marginTop: 12, borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Payment Gateway:</span>
-                  <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#00b4d8' }}>cashfree PAYMENTS</span>
+                  <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--rail-amber)' }}>cashfree PAYMENTS</span>
                 </div>
                 <button
                   type="button"

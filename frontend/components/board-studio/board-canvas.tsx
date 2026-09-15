@@ -253,8 +253,8 @@ export const BoardCanvas: React.FC<BoardCanvasProps> = ({
                     : 'flex-start',
                 cursor: isAdminMode ? 'move' : isLocked ? 'default' : 'pointer',
                 zIndex: isSelected ? 10 : 4,
-                outline: isAdminMode ? (isSelected ? '2px solid #00b4d8' : '1px dashed rgba(255,190,11,0.5)') : undefined,
-                backgroundColor: isAdminMode && isSelected ? 'rgba(0,180,216,0.15)' : 'transparent',
+                outline: isAdminMode ? (isSelected ? '2px solid #ef3b2d' : '1px dashed rgba(255,138,31,0.6)') : undefined,
+                backgroundColor: isAdminMode && isSelected ? 'rgba(239,59,45,0.18)' : 'transparent',
                 borderRadius: '4px',
                 overflow: 'hidden'
               }}

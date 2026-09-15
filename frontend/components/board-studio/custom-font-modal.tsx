@@ -83,10 +83,10 @@ export const CustomFontModal: React.FC<CustomFontModalProps> = ({ isOpen, onClos
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" style={{ maxWidth: 520, background: '#0d131d' }} onClick={(e) => e.stopPropagation()}>
+      <div className="modal-content" style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <div className="modal-title-group">
-            <div className="modal-icon-badge" style={{ background: 'linear-gradient(135deg, #ff9f1c 0%, #ff6200 100%)' }}>
+            <div className="modal-icon-badge" style={{ background: 'linear-gradient(135deg, #ef3b2d 0%, #ff8a1f 100%)', boxShadow: '0 0 20px rgba(239, 59, 45, 0.4)' }}>
               <Type size={18} color="#fff" />
             </div>
             <div>
@@ -117,7 +117,7 @@ export const CustomFontModal: React.FC<CustomFontModalProps> = ({ isOpen, onClos
           {/* OPTION 1: UPLOAD TTF / OTF */}
           <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: 14 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-              <Upload size={14} style={{ color: 'var(--rail-yellow)' }} />
+              <Upload size={14} style={{ color: 'var(--rail-amber)' }} />
               <strong style={{ fontSize: 13, color: '#fff' }}>Upload Font File (.TTF, .OTF, .WOFF)</strong>
             </div>
             <p style={{ fontSize: 11, color: '#94a3b8', margin: '0 0 10px 0' }}>
@@ -156,7 +156,7 @@ export const CustomFontModal: React.FC<CustomFontModalProps> = ({ isOpen, onClos
           {/* OPTION 2: GOOGLE FONT IMPORT */}
           <form onSubmit={handleAddGoogleFont} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: 14 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-              <Sparkles size={14} style={{ color: '#00b4d8' }} />
+              <Sparkles size={14} style={{ color: 'var(--rail-amber)' }} />
               <strong style={{ fontSize: 13, color: '#fff' }}>Add Google Web Font</strong>
             </div>
             <p style={{ fontSize: 11, color: '#94a3b8', margin: '0 0 10px 0' }}>

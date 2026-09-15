@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { CurrentUser } from '@/lib/api';
-import { ShieldCheck, UserCheck, LogOut, Train, HelpCircle, Store, BookmarkPlus, ArrowLeft } from 'lucide-react';
+import { ShieldCheck, UserCheck, LogOut, TrainFront, HelpCircle, Store, BookmarkPlus, ArrowLeft } from 'lucide-react';
 
 interface StudioNavbarProps {
   currentView: 'home' | 'editor' | 'admin';
@@ -49,11 +49,13 @@ export const StudioNavbar: React.FC<StudioNavbarProps> = ({
         </Link>
         <div className="navbar-brand" onClick={() => handleGoStore('store')} style={{ cursor: 'pointer' }} title="Go to Template Store">
           <div className="brand-logo-icon">
-            <Train size={20} />
+            <TrainFront size={20} />
           </div>
           <div className="brand-titles">
-            <h1>GJS Railway Board Studio</h1>
-            <span className="online-tag">Online Edition</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <h1>GJS PRODUCTION</h1>
+              <span className="online-tag">BOARD STUDIO</span>
+            </div>
           </div>
         </div>
       </div>
@@ -109,7 +111,7 @@ export const StudioNavbar: React.FC<StudioNavbarProps> = ({
         {/* Railway User Profile or Sign In / Register */}
         {currentUser ? (
           <div className="nav-user-profile" title={`Signed in as ${currentUser.username || currentUser.email} · ID: USR-${currentUser.id}`}>
-            <div className="user-avatar-circle" style={{ width: 28, height: 28, minWidth: 28, minHeight: 28, borderWidth: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #00b4d8, #0077b6)', color: '#fff', fontWeight: 700, borderRadius: '50%' }}>
+            <div className="user-avatar-circle" style={{ width: 28, height: 28, minWidth: 28, minHeight: 28, borderWidth: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #ef3b2d, #ff8a1f)', color: '#fff', fontWeight: 800, borderRadius: '50%', boxShadow: '0 0 12px rgba(239, 59, 45, 0.4)' }}>
               <span>{(currentUser.username || 'U').charAt(0).toUpperCase()}</span>
             </div>
             <div className="nav-user-info">

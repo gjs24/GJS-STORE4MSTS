@@ -202,22 +202,22 @@ export const HomePage: React.FC<HomePageProps> = ({
       <section className="home-hero">
         <div className="hero-content">
           <div className="hero-badge">
-            <Store size={15} />
-            <span>Official Railway Name Board & Simulator Texture Store</span>
+            <Train size={15} />
+            <span>MSTS & OPEN RAILS · SIMULATOR TEXTURE STUDIO</span>
           </div>
 
           <h1 className="hero-title">
-            Online Template Store & Asset Repository
+            Indian Railways Name Board & Texture Studio
           </h1>
           <p className="hero-description">
-            Easy 1-click access to simulator texture sheets and passenger boards. Pick a template to edit content, save your customized creations into <strong>My Store</strong>, or download directly in <strong>DDS & PNG format</strong>.
+            Authentic 1024×1024 locked UV mapping, Indian Railways LED amber matrix fonts, and universal <strong>DirectDraw Surface (.dds) & PNG</strong> exports for MSTS, Open Rails, and Trainz.
           </p>
 
           {/* User ID & Profile Status Pill */}
           <div className="hero-user-strip">
             {currentUser ? (
               <div className="hero-user-pill">
-                <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(135deg, #00b4d8, #0077b6)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, color: '#fff', fontSize: 13 }}>
+                <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(135deg, #ef3b2d, #ff8a1f)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, color: '#fff', fontSize: 13, boxShadow: '0 0 12px rgba(239, 59, 45, 0.4)' }}>
                   {(currentUser.username || 'U').charAt(0).toUpperCase()}
                 </div>
                 <div className="hero-user-details">
@@ -229,7 +229,7 @@ export const HomePage: React.FC<HomePageProps> = ({
                   </span>
                 </div>
                 <div className="hero-user-count">
-                  <ShieldCheck size={13} style={{ color: 'var(--rail-accent)' }} />
+                  <ShieldCheck size={13} style={{ color: 'var(--rail-amber)' }} />
                   <span>{unlockedPaidTemplates.length} Purchased Templates</span>
                 </div>
               </div>
