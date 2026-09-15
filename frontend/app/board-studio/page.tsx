@@ -7,11 +7,8 @@ import { fontManager } from '@/lib/board-studio/font-manager';
 import { getStoredUser, setStoredUser, clearAuth, AUTH_CHANGE_EVENT, CurrentUser } from '@/lib/api';
 import { userGet, verifyPayment, type StoreOrder } from '@/lib/store-api';
 
-import { StudioNavbar } from '@/components/board-studio/studio-navbar';
 import { HomePage } from '@/components/board-studio/home-gallery';
 import { UserBoardEditor } from '@/components/board-studio/user-board-editor';
-import { AdminTemplateStudio } from '@/components/board-studio/admin-template-studio';
-import { AdminLoginModal } from '@/components/board-studio/admin-login-modal';
 import { PurchaseTemplateModal } from '@/components/board-studio/purchase-template-modal';
 import { HelpModal } from '@/components/board-studio/help-modal';
 
@@ -26,13 +23,11 @@ export default function BoardStudioPage() {
   const [initialCustomBg, setInitialCustomBg] = useState<string | null>(null);
 
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
   const [unlockedIds, setUnlockedIds] = useState<string[]>([]);
   const [savedCount, setSavedCount] = useState<number>(0);
 
   // Modals
   const [isHelpOpen, setIsHelpOpen] = useState(false);
-  const [isAdminLoginOpen, setIsAdminLoginOpen] = useState(false);
   const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
   const [purchaseTarget, setPurchaseTarget] = useState<BoardTemplate | null>(null);
 
@@ -44,9 +39,6 @@ export default function BoardStudioPage() {
     const stored = getStoredUser();
     if (stored) {
       setCurrentUser(stored);
-      if (stored.is_staff) {
-        setIsAdmin(true);
-      }
     }
 
     const token = localStorage.getItem('accessToken');
@@ -55,9 +47,6 @@ export default function BoardStudioPage() {
         const fresh = await userGet<CurrentUser>('/auth/me/');
         setStoredUser(fresh);
         setCurrentUser(fresh);
-        if (fresh.is_staff) {
-          setIsAdmin(true);
-        }
       } catch (err) {
         if (!stored) {
           clearAuth();
@@ -218,122 +207,7 @@ export default function BoardStudioPage() {
   useEffect(() => {
     loadTemplates();
     updateSavedCount();
-  }, [loadTemplates, updateSavedCount, isAdmin, viewMode]);
-
-  // Admin save template
-  const handleSaveTemplate = (updated: BoardTemplate) => {
-    const saved = storageService.saveTemplate(updated);
-    const refreshed = storageService.getAllTemplates();
-    setTemplates(refreshed);
-    setActiveTemplate(saved);
-  };
-
-  // Admin delete template
-  const handleDeleteTemplate = (id: string) => {
-    storageService.deleteTemplate(id);
-    const refreshed = storageService.getAllTemplates();
-    setTemplates(refreshed);
-    if (refreshed.length === 0) {
-      handleCreateNewTemplate();
-    } else if (activeTemplate?.id === id) {
-      setActiveTemplate(refreshed[0]);
-    }
-  };
-
-  // Admin create new template
-  const handleCreateNewTemplate = () => {
-    const newTemplate: BoardTemplate = {
-      id: 'template_' + Date.now(),
-      name: 'New Custom LED Texture (1024×1024)',
-      category: 'LED Texture Sheet',
-      description: 'Indian Railways LED display sheet with locked UV coordinates for MSTS / Open Rails.',
-      aspectRatio: '1:1',
-      baseWidth: 1024,
-      baseHeight: 1024,
-      backgroundColor: '#0c0f12',
-      backgroundType: 'transparent',
-      borderColor: '#ef3b2d',
-      borderWidth: 2,
-      borderRadius: 0,
-      showBolts: false,
-      isTextureSheet: true,
-      textureResolution: 1024,
-      allowUserCustomBackground: false,
-      fixedGraphics: [],
-      fields: [
-        {
-          id: 'field_train_no',
-          label: 'Train Number Slot',
-          defaultValue: '12627',
-          placeholder: '12627',
-          x: 50,
-          y: 20,
-          width: 80,
-          height: 12,
-          fontFamily: "'VT323', 'DotGothic16', monospace",
-          fontSize: 72,
-          fontWeight: 700,
-          color: '#ff9f1c',
-          align: 'center',
-          textTransform: 'uppercase',
-          ledGlow: true,
-          glowColor: '#ff6200',
-          glowRadius: 12,
-          isDotMatrix: true
-        },
-        {
-          id: 'field_train_name',
-          label: 'Train Name Slot',
-          defaultValue: 'KARNATAKA EXPRESS',
-          placeholder: 'TRAIN NAME',
-          x: 50,
-          y: 40,
-          width: 90,
-          height: 12,
-          fontFamily: "'VT323', 'DotGothic16', monospace",
-          fontSize: 68,
-          fontWeight: 700,
-          color: '#ff9f1c',
-          align: 'center',
-          textTransform: 'uppercase',
-          ledGlow: true,
-          glowColor: '#ff6200',
-          glowRadius: 14,
-          isDotMatrix: true
-        }
-      ],
-      published: true,
-      isPaid: false,
-      price: 0,
-      currency: 'INR',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      author: currentUser?.username || 'Admin'
-    };
-
-    storageService.saveTemplate(newTemplate);
-    const refreshed = storageService.getAllTemplates();
-    setTemplates(refreshed);
-    setActiveTemplate(newTemplate);
-  };
-
-  const handleToggleAdmin = () => {
-    if (isAdmin) {
-      setIsAdmin(false);
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('gjs_board_studio_admin_session');
-      }
-    } else {
-      if (currentUser?.is_staff) {
-        setIsAdmin(true);
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('gjs_board_studio_admin_session', 'true');
-        }
-      } else {
-        setIsAdminLoginOpen(true);
-      }
-    }
-  };
+  }, [loadTemplates, updateSavedCount, viewMode]);
 
   const handleOpenPurchase = (tpl: BoardTemplate) => {
     setPurchaseTarget(tpl);
@@ -345,14 +219,6 @@ export default function BoardStudioPage() {
     setUnlockedIds(updated);
     if (typeof window !== 'undefined') {
       localStorage.setItem('gjs_unlocked_templates', JSON.stringify(updated));
-    }
-  };
-
-  const handleLogout = () => {
-    setCurrentUser(null);
-    setIsAdmin(false);
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('gjs_board_studio_admin_session');
     }
   };
 
@@ -372,36 +238,38 @@ export default function BoardStudioPage() {
   return (
     <div className="gjs-board-studio-root">
       <div className="app-container">
-        <StudioNavbar
-          currentView={isAdmin ? 'admin' : viewMode}
-          activeStoreTab={storeTab}
-          savedBoardsCount={savedCount}
-          isAdmin={isAdmin}
-          currentUser={currentUser}
-          onNavigateHome={() => {
-            setStoreTab('store');
-            setViewMode('home');
-          }}
-          onNavigateStore={(tab) => {
-            setStoreTab(tab);
-            setViewMode('home');
-            updateSavedCount();
-          }}
-          onOpenHelp={() => setIsHelpOpen(true)}
-          onToggleAdmin={handleToggleAdmin}
-          onLogout={handleLogout}
-        />
+        {/* If user is staff admin, provide a quick direct link to the Admin Panel */}
+        {currentUser?.is_staff && (
+          <div
+            style={{
+              background: 'linear-gradient(90deg, rgba(239, 59, 45, 0.15), rgba(255, 138, 31, 0.15))',
+              borderBottom: '1px solid rgba(239, 59, 45, 0.3)',
+              padding: '8px 16px',
+              fontSize: '0.8rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              color: '#f8fafc'
+            }}
+          >
+            <span>
+              🛡️ <strong>Store Admin Session Active:</strong> Manage board templates, pricing, and visual UV layouts securely in Admin Panel.
+            </span>
+            <a
+              href="/admin-dashboard/board-templates"
+              style={{
+                color: 'var(--rail-amber)',
+                textDecoration: 'underline',
+                fontWeight: 700,
+                fontSize: '0.8rem'
+              }}
+            >
+              Open Admin Board Manager →
+            </a>
+          </div>
+        )}
 
-        {isAdmin && activeTemplate ? (
-          <AdminTemplateStudio
-            templates={templates}
-            activeTemplate={activeTemplate}
-            onSaveTemplate={handleSaveTemplate}
-            onSelectTemplate={(tpl) => setActiveTemplate(tpl)}
-            onDeleteTemplate={handleDeleteTemplate}
-            onCreateNewTemplate={handleCreateNewTemplate}
-          />
-        ) : viewMode === 'home' ? (
+        {viewMode === 'home' ? (
           <HomePage
             templates={publishedTemplates.length > 0 ? publishedTemplates : templates}
             activeStoreTab={storeTab}
@@ -443,12 +311,6 @@ export default function BoardStudioPage() {
             unlockedTemplateIds={unlockedIds}
           />
         ) : null}
-
-        <AdminLoginModal
-          isOpen={isAdminLoginOpen}
-          onClose={() => setIsAdminLoginOpen(false)}
-          onSuccess={() => setIsAdmin(true)}
-        />
 
         <PurchaseTemplateModal
           isOpen={isPurchaseModalOpen}

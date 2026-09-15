@@ -254,6 +254,63 @@ export const storageService = {
       console.warn('Could not fetch cloud board templates, using local fallback:', e);
     }
     return [];
+  },
+
+  // Push template create/update to Django API
+  async syncCloudTemplate(template: BoardTemplate): Promise<boolean> {
+    try {
+      const payload = {
+        id: template.id,
+        name: template.name,
+        category: template.category,
+        description: template.description || '',
+        base_width: template.baseWidth || 1024,
+        base_height: template.baseHeight || 1024,
+        background_image_url: template.backgroundImageUrl || '',
+        is_paid: !!template.isPaid,
+        price: template.price || 0,
+        published: template.published !== false,
+        fields: template.fields || [],
+        fixed_graphics: template.fixedGraphics || []
+      };
+
+      const checkRes = await fetch(`${API_URL}/board-templates/${template.id}/`, {
+        headers: getAuthHeaders()
+      });
+
+      if (checkRes.ok) {
+        const res = await fetch(`${API_URL}/board-templates/${template.id}/`, {
+          method: 'PATCH',
+          headers: getAuthHeaders(),
+          body: JSON.stringify(payload)
+        });
+        return res.ok;
+      } else {
+        const res = await fetch(`${API_URL}/board-templates/`, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify(payload)
+        });
+        return res.ok;
+      }
+    } catch (err) {
+      console.warn('Failed to sync cloud board template:', err);
+      return false;
+    }
+  },
+
+  // Delete template from Django API
+  async deleteCloudTemplate(id: string): Promise<boolean> {
+    try {
+      const res = await fetch(`${API_URL}/board-templates/${id}/`, {
+        method: 'DELETE',
+        headers: getAuthHeaders()
+      });
+      return res.ok;
+    } catch (err) {
+      console.warn('Failed to delete cloud board template:', err);
+      return false;
+    }
   }
 };
 

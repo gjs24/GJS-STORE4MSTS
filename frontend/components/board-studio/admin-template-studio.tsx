@@ -3,7 +3,6 @@
 import React, { useState, useRef } from 'react';
 import { BoardTemplate, EditableField, BoardCategory } from '@/lib/board-studio/types';
 import { BoardCanvas } from './board-canvas';
-import { AdminCashfreeSettingsModal } from './admin-cashfree-settings-modal';
 import { CustomFontModal } from './custom-font-modal';
 import { fontManager } from '@/lib/board-studio/font-manager';
 import {
@@ -53,7 +52,6 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({
   onCreateNewTemplate
 }) => {
   const [template, setTemplate] = useState<BoardTemplate>(activeTemplate);
-  const [showCashfreeSettings, setShowCashfreeSettings] = useState<boolean>(false);
   const [showCustomFontModal, setShowCustomFontModal] = useState<boolean>(false);
   const [selectedFieldId, setSelectedFieldId] = useState<string | null>(
     activeTemplate.fields[0]?.id || null
@@ -663,21 +661,15 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({
                 </div>
               )}
 
-              {/* Cashfree Gateway Quick Link */}
+              {/* Payment Gateway Status */}
               <div style={{ marginTop: 12, borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Payment Gateway:</span>
-                  <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--rail-amber)' }}>cashfree PAYMENTS</span>
+                  <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--rail-amber)' }}>Cashfree & UPI</span>
                 </div>
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  style={{ fontSize: '0.72rem', padding: '4px 8px', display: 'flex', alignItems: 'center', gap: 4 }}
-                  onClick={() => setShowCashfreeSettings(true)}
-                  title="Configure Cashfree App ID, Secret Key, and Sandbox/Live mode"
-                >
-                  <Sliders size={12} /> Cashfree API Settings
-                </button>
+                <span style={{ fontSize: '0.72rem', color: '#10b981', display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <CheckCircle size={12} /> Server Managed (Render Env)
+                </span>
               </div>
             </div>
 
@@ -1571,11 +1563,6 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({
         </div>
       </main>
 
-      {/* Cashfree Merchant API Settings Modal */}
-      <AdminCashfreeSettingsModal
-        isOpen={showCashfreeSettings}
-        onClose={() => setShowCashfreeSettings(false)}
-      />
 
       {/* Custom Railway Font Manager Modal */}
       <CustomFontModal

@@ -68,7 +68,8 @@ function getSections(verificationCount: number): SidebarSection[] {
       items: [
         { label: "Free Assets", href: "/admin-dashboard/assets?type=free", icon: Gift },
         { label: "Premium Assets", href: "/admin-dashboard/assets?type=premium", icon: ShieldCheck },
-        { label: "Featured Assets", href: "/admin-dashboard/assets?featured=true", icon: Sparkles }
+        { label: "Featured Assets", href: "/admin-dashboard/assets?featured=true", icon: Sparkles },
+        { label: "Board Templates", href: "/admin-dashboard/board-templates", icon: TrainFront }
       ]
     },
     {
