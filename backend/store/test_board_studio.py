@@ -146,3 +146,33 @@ class BoardStudioTests(APITestCase):
         self.assertEqual(found["board_template"]["name"], self.paid_template.name)
         self.assertTrue(found["download_enabled"])
 
+    def test_paid_template_checkout_creates_order_without_crash(self):
+        self.client.force_authenticate(user=self.user1)
+        url = reverse("order-create")
+        res = self.client.post(url, {"board_template_id": self.paid_template.id}, format="json")
+        self.assertNotEqual(res.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
+        self.assertIn(res.status_code, [status.HTTP_201_CREATED, status.HTTP_200_OK, status.HTTP_503_SERVICE_UNAVAILABLE])
+        order = Order.objects.filter(user=self.user1, board_template=self.paid_template).first()
+        self.assertIsNotNone(order)
+        self.assertEqual(order.amount, self.paid_template.price)
+        self.assertIsNone(order.asset)
+
+    def test_board_template_invoice_generation(self):
+        from store.invoice import generate_invoice_pdf, generate_invoice_html
+        order = Order.objects.create(
+            user=self.user1,
+            board_template=self.paid_template,
+            amount=Decimal("49.00"),
+            currency="INR",
+            status=Order.Status.PAID,
+            download_enabled=True,
+            provider_order_id="GJS-B12345",
+        )
+        pdf_bytes = generate_invoice_pdf(order)
+        self.assertIsInstance(pdf_bytes, bytes)
+        self.assertGreater(len(pdf_bytes), 100)
+
+        html_str = generate_invoice_html(order)
+        self.assertIn(self.paid_template.name, html_str)
+        self.assertIn("LED Name Board", html_str)
+

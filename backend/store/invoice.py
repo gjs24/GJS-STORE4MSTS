@@ -148,10 +148,6 @@ def generate_invoice_pdf(order):
     customer_name = safe(order.user.get_full_name() or order.user.username)
     username = safe(order.user.username)
     email = safe(order.user.email or "No email provided")
-    asset_title = safe(order.asset.title)
-    asset_version = safe(order.asset.version or "1.0")
-    simulator = safe(getattr(order.asset, "simulator_type", "Open Rails (MSTS)").replace("_", " "))
-    category = safe(getattr(order.asset.category, "name", "Addon") if getattr(order.asset, "category", None) else "Addon")
     if order.asset:
         asset_title = safe(order.asset.title)
         asset_version = safe(order.asset.version or "1.0")
@@ -345,10 +341,6 @@ def generate_invoice_html(order):
     customer_name = safe(order.user.get_full_name() or order.user.username)
     username = safe(order.user.username)
     email = safe(order.user.email or "No email provided")
-    asset_title = safe(order.asset.title)
-    asset_version = safe(order.asset.version or "1.0")
-    simulator = safe(getattr(order.asset, "simulator_type", "Open Rails (MSTS)").replace("_", " "))
-    category = safe(getattr(order.asset.category, "name", "Addon") if getattr(order.asset, "category", None) else "Addon")
     if order.asset:
         asset_title = safe(order.asset.title)
         asset_version = safe(order.asset.version or "1.0")

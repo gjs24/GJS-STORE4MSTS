@@ -231,7 +231,6 @@ class Order(models.Model):
         BLOCKED = "BLOCKED", "Blocked / Revoked"
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="orders", on_delete=models.CASCADE)
-    asset = models.ForeignKey(Asset, related_name="orders", on_delete=models.PROTECT)
     asset = models.ForeignKey(Asset, related_name="orders", on_delete=models.PROTECT, null=True, blank=True)
     board_template = models.ForeignKey(BoardTemplate, related_name="orders", on_delete=models.SET_NULL, null=True, blank=True)
     amount = models.DecimalField(max_digits=10, decimal_places=2)

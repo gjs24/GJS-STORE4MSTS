@@ -582,7 +582,6 @@ class UserCustomBoardSerializer(serializers.ModelSerializer):
 
 class OrderSerializer(serializers.ModelSerializer):
     asset = AssetListSerializer(read_only=True)
-    asset_id = serializers.PrimaryKeyRelatedField(source="asset", queryset=Asset.objects.all(), write_only=True)
     asset_id = serializers.PrimaryKeyRelatedField(source="asset", queryset=Asset.objects.all(), write_only=True, required=False, allow_null=True)
     board_template = BoardTemplateSerializer(read_only=True)
     board_template_id = serializers.PrimaryKeyRelatedField(source="board_template", queryset=BoardTemplate.objects.all(), write_only=True, required=False, allow_null=True)

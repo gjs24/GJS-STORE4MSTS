@@ -135,7 +135,6 @@ def create_cashfree_order(order, request):
         "order_meta": {
             "return_url": cashfree_return_url(order),
         },
-        "order_note": f"{order.asset.title} digital download",
         "order_note": f"{(order.asset.title if order.asset else order.board_template.name if order.board_template else 'Store Item')} digital download",
     }
     response = requests.post(
@@ -262,7 +261,6 @@ def log_admin_activity(request, action, target_type="", target_id="", message=""
 def order_has_download_access(order):
     if order.status == Order.Status.BLOCKED or not order.download_enabled:
         return False
-    return order.asset.is_free or order.status in DOWNLOAD_READY_STATUSES
     if order.board_template:
         return order.status in DOWNLOAD_READY_STATUSES
     return (order.asset.is_free if order.asset else False) or order.status in DOWNLOAD_READY_STATUSES
@@ -275,7 +273,6 @@ def sync_order_download_access(order):
             order.save(update_fields=["download_enabled"])
         return order
 
-    should_enable = (order.asset.is_free or order.status in DOWNLOAD_READY_STATUSES) and order.download_enabled
     is_free = False
     if order.asset:
         is_free = order.asset.is_free
@@ -1495,7 +1492,6 @@ class AdminOrderViewSet(viewsets.ModelViewSet):
             Payment.objects.filter(order=order).update(status=order.status.lower())
 
         user_label = order.user.username if order.user else "User"
-        asset_title = order.asset.title if order.asset else "Asset"
         asset_title = order.asset.title if order.asset else (order.board_template.name if order.board_template else "Item")
 
         status_changed = previous_status != order.status
@@ -1560,7 +1556,6 @@ class AdminOrderViewSet(viewsets.ModelViewSet):
             Payment.objects.filter(order=order).update(status=order.status.lower())
 
         user_label = order.user.username if order.user else "User"
-        asset_title = order.asset.title if order.asset else "Asset"
         asset_title = order.asset.title if order.asset else (order.board_template.name if order.board_template else "Item")
 
         action_name = "Order access blocked" if (order.status == Order.Status.BLOCKED or not order.download_enabled) else f"Order {order.status.lower()}"
