@@ -56,6 +56,7 @@ export default function AdminBoardTemplatesPage() {
   const [formPublished, setFormPublished] = useState(true);
   const [formWidth, setFormWidth] = useState(1024);
   const [formHeight, setFormHeight] = useState(1024);
+  const [formTargetTextureName, setFormTargetTextureName] = useState("");
 
   const loadData = async () => {
     setLoading(true);
@@ -129,23 +130,23 @@ export default function AdminBoardTemplatesPage() {
     showFeedback("success", `Deleted "${tpl.name}".`);
   };
 
-  // Open Create modal
+  // Open Create Modal
   const handleOpenCreate = () => {
-    const newId = "board_tpl_" + Date.now();
     setEditingTemplate(null);
-    setFormId(newId);
+    setFormId(`board_${Date.now()}`);
     setFormName("");
     setFormCategory("LED Texture Sheet");
-    setFormDescription("Indian Railways LED display sheet with locked UV coordinates for MSTS / Open Rails.");
+    setFormDescription("");
     setFormIsPaid(false);
     setFormPrice("0");
     setFormPublished(true);
     setFormWidth(1024);
     setFormHeight(1024);
+    setFormTargetTextureName("");
     setIsEditModalOpen(true);
   };
 
-  // Open Edit modal
+  // Open Edit Modal
   const handleOpenEdit = (tpl: BoardTemplate) => {
     setEditingTemplate(tpl);
     setFormId(tpl.id);
@@ -157,6 +158,7 @@ export default function AdminBoardTemplatesPage() {
     setFormPublished(tpl.published !== false);
     setFormWidth(tpl.baseWidth || 1024);
     setFormHeight(tpl.baseHeight || 1024);
+    setFormTargetTextureName(tpl.targetTextureName || "");
     setIsEditModalOpen(true);
   };
 
@@ -177,6 +179,7 @@ export default function AdminBoardTemplatesPage() {
         name: formName.trim(),
         category: formCategory,
         description: formDescription.trim(),
+        targetTextureName: formTargetTextureName.trim(),
         isPaid: formIsPaid,
         price: cleanPrice,
         published: formPublished,
@@ -190,6 +193,7 @@ export default function AdminBoardTemplatesPage() {
         name: formName.trim(),
         category: formCategory,
         description: formDescription.trim(),
+        targetTextureName: formTargetTextureName.trim(),
         aspectRatio: `${formWidth}:${formHeight}`,
         baseWidth: formWidth,
         baseHeight: formHeight,
@@ -357,26 +361,6 @@ export default function AdminBoardTemplatesPage() {
           </div>
         </div>
 
-        {/* Cashfree Server Managed Notice */}
-        <div className="rounded-xl border border-emerald-500/30 bg-gradient-to-r from-emerald-950/30 via-slate-900/60 to-slate-900/80 p-4 shadow-sm">
-          <div className="flex items-start gap-3.5">
-            <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 shrink-0 mt-0.5">
-              <ShieldCheck className="h-5 w-5" />
-            </div>
-            <div>
-              <h4 className="text-sm font-semibold text-emerald-300 flex items-center gap-2">
-                Server-Managed Cashfree & UPI Checkout
-                <Badge variant="success" className="bg-emerald-500/20 text-emerald-300 border-emerald-500/40 text-[10px]">
-                  ACTIVE
-                </Badge>
-              </h4>
-              <p className="text-xs text-slate-300 mt-1 leading-relaxed">
-                All digital purchases and unlocks for paid board templates use the official Cashfree gateway and manual UPI fallback configured directly in your <strong>Render backend environment</strong>. You never need to enter Cashfree App IDs or Secret Keys inside template forms.
-              </p>
-            </div>
-          </div>
-        </div>
-
         {/* Stats Grid */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Card className="border-white/10 bg-slate-900/50 backdrop-blur-sm">
@@ -490,7 +474,14 @@ export default function AdminBoardTemplatesPage() {
                           </div>
                           <div>
                             <p className="font-semibold text-white leading-tight">{tpl.name}</p>
-                            <p className="text-xs font-mono text-muted-foreground mt-0.5">{tpl.id}</p>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <span className="text-xs font-mono text-muted-foreground">{tpl.id}</span>
+                              {tpl.targetTextureName && (
+                                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-cyan-950/60 text-cyan-300 border border-cyan-800/40">
+                                  📄 {tpl.targetTextureName}.dds
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </td>
@@ -586,7 +577,7 @@ export default function AdminBoardTemplatesPage() {
                       {editingTemplate ? "Edit Board Template" : "Create New Board Template"}
                     </h3>
                     <p className="text-xs text-muted-foreground">
-                      No Cashfree keys required — fully server secured.
+                      Configure template details, 3D texture mapping, and dimensions.
                     </p>
                   </div>
                 </div>
@@ -639,6 +630,27 @@ export default function AdminBoardTemplatesPage() {
                       <option value="SLR Board">SLR Board</option>
                     </select>
                   </div>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-semibold text-slate-300">
+                      Target Texture Name (MSTS 3D Model Filename)
+                    </label>
+                    <span className="text-[11px] font-mono text-rail-amber font-bold">
+                      {formTargetTextureName ? `${formTargetTextureName}.dds` : 'Standard Name'}
+                    </span>
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="e.g. VB_NAME or AMRIT_LED (saves as VB_NAME.dds)"
+                    value={formTargetTextureName}
+                    onChange={(e) => setFormTargetTextureName(e.target.value)}
+                    className="w-full px-3.5 py-2 rounded-lg bg-slate-950 border border-white/10 text-sm font-mono text-white focus:outline-none focus:border-rail-red"
+                  />
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    Simulator models map to this filename (e.g. VB_NAME downloads directly as VB_NAME.dds).
+                  </p>
                 </div>
 
                 <div>

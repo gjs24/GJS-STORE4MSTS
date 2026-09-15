@@ -241,6 +241,37 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ sl
               ) : null}
             </div>
           ) : null}
+          {asset.board_template && (
+            <div className="mt-6 rounded-xl border border-rail-amber/40 bg-gradient-to-r from-rail-amber/15 via-slate-900/70 to-slate-900/90 p-5 shadow-lg">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="rounded bg-rail-amber/20 border border-rail-amber/40 px-2.5 py-0.5 text-xs font-black uppercase tracking-wide text-rail-yellow">
+                      OFFICIAL NAME BOARD / LED TEXTURE
+                    </span>
+                    {asset.board_template.target_texture_name && (
+                      <span className="rounded bg-black/50 border border-white/10 px-2 py-0.5 text-[11px] font-mono text-cyan-300">
+                        Texture: {asset.board_template.target_texture_name}.dds
+                      </span>
+                    )}
+                  </div>
+                  <h3 className="mt-2 text-lg font-bold text-white">
+                    {asset.board_template.name}
+                  </h3>
+                  <p className="mt-1 text-xs text-slate-300 leading-relaxed">
+                    Customize destination nameboards, coach numbers, route codes, or LED dot-matrix textures matching this trainset in our live Board Studio.
+                  </p>
+                </div>
+                <Link
+                  href={`/board-studio?template=${asset.board_template.id}`}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-rail-red to-rail-amber px-4 py-2.5 text-xs font-bold text-white shadow-md hover:opacity-95 shrink-0"
+                >
+                  <span>Open in Board Studio</span>
+                  <span>→</span>
+                </Link>
+              </div>
+            </div>
+          )}
           <AssetActions asset={asset} />
           <div className="mt-6 grid gap-3 text-sm text-slate-300 sm:grid-cols-2">
             <span className="rounded border border-white/10 bg-white/[0.03] p-3"><ShieldCheck className="mr-2 inline text-rail-amber" size={16} /> Account protected access</span>

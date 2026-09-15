@@ -150,8 +150,12 @@ export const BoardCanvas: React.FC<BoardCanvasProps> = ({
           </>
         )}
 
-        {/* Fixed Graphics */}
+        {/* Fixed Graphics (Static Stamps, Logos, Dividers, Watermarks) */}
         {template.fixedGraphics.map((graphic) => {
+          const gRot = graphic.rotation || 0;
+          const gScale = graphic.scale || 1.0;
+          const gOpacity = graphic.opacity !== undefined ? graphic.opacity : 1.0;
+
           if (graphic.type === 'divider') {
             return (
               <div
@@ -163,10 +167,52 @@ export const BoardCanvas: React.FC<BoardCanvasProps> = ({
                   width: `${graphic.width || 90}%`,
                   height: `${(graphic.height || 2) * effectiveScale}px`,
                   backgroundColor: graphic.color || template.borderColor,
+                  transform: `translate(-50%, -50%) rotate(${gRot}deg) scale(${gScale})`,
+                  transformOrigin: 'center center',
+                  opacity: gOpacity,
                   pointerEvents: 'none',
                   zIndex: 2
                 }}
               />
+            );
+          }
+
+          if (graphic.type === 'logo') {
+            return (
+              <div
+                key={graphic.id}
+                style={{
+                  position: 'absolute',
+                  left: `${graphic.x}%`,
+                  top: `${graphic.y}%`,
+                  width: `${(graphic.width || 15)}%`,
+                  height: `${(graphic.height || 15)}%`,
+                  transform: `translate(-50%, -50%) rotate(${gRot}deg) scale(${gScale})`,
+                  transformOrigin: 'center center',
+                  opacity: gOpacity,
+                  pointerEvents: 'none',
+                  zIndex: 2,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                {graphic.content ? (
+                  <img
+                    src={graphic.content}
+                    alt="Static Stamp / Logo"
+                    style={{
+                      maxWidth: '100%',
+                      maxHeight: '100%',
+                      objectFit: 'contain'
+                    }}
+                  />
+                ) : (
+                  <div style={{ fontSize: `${12 * effectiveScale}px`, color: '#fff', opacity: 0.5 }}>
+                    🚂 [Stamp]
+                  </div>
+                )}
+              </div>
             );
           }
 
@@ -178,7 +224,9 @@ export const BoardCanvas: React.FC<BoardCanvasProps> = ({
                   position: 'absolute',
                   left: `${graphic.x}%`,
                   top: `${graphic.y}%`,
-                  transform: 'translate(-50%, -50%)',
+                  transform: `translate(-50%, -50%) rotate(${gRot}deg) scale(${gScale})`,
+                  transformOrigin: 'center center',
+                  opacity: gOpacity,
                   padding: `${2 * effectiveScale}px ${8 * effectiveScale}px`,
                   borderRadius: `${4 * effectiveScale}px`,
                   backgroundColor: graphic.color || template.borderColor,
@@ -202,7 +250,9 @@ export const BoardCanvas: React.FC<BoardCanvasProps> = ({
                 position: 'absolute',
                 left: `${graphic.x}%`,
                 top: `${graphic.y}%`,
-                transform: graphic.align === 'center' ? 'translate(-50%, -50%)' : 'translate(0, -50%)',
+                transform: `translate(-50%, -50%) rotate(${gRot}deg) scale(${gScale})`,
+                transformOrigin: 'center center',
+                opacity: gOpacity,
                 color: graphic.color || template.borderColor,
                 fontSize: `${(graphic.fontSize || 13) * effectiveScale}px`,
                 fontWeight: graphic.fontWeight || 700,
@@ -229,6 +279,8 @@ export const BoardCanvas: React.FC<BoardCanvasProps> = ({
           const glowColor = field.glowColor || '#ff6200';
           const glowBlur = (field.glowRadius || 12) * effectiveScale;
           const displayValue = field.textTransform === 'uppercase' ? rawValue.toUpperCase() : rawValue;
+          const fieldRot = field.rotation || 0;
+          const fieldScale = field.scale || 1.0;
 
           return (
             <div
@@ -242,7 +294,8 @@ export const BoardCanvas: React.FC<BoardCanvasProps> = ({
                 top: `${field.y}%`,
                 width: `${field.width}%`,
                 height: `${field.height}%`,
-                transform: 'translate(-50%, -50%)',
+                transform: `translate(-50%, -50%) rotate(${fieldRot}deg) scale(${fieldScale})`,
+                transformOrigin: 'center center',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent:
@@ -336,6 +389,27 @@ export const BoardCanvas: React.FC<BoardCanvasProps> = ({
             </div>
           );
         })}
+
+        {/* Site Details & Watermark at end of template */}
+        {template.showWatermark !== false && (
+          <div
+            style={{
+              position: 'absolute',
+              bottom: `${4 * effectiveScale}px`,
+              right: `${8 * effectiveScale}px`,
+              fontSize: `${Math.max(8, 10 * effectiveScale)}px`,
+              fontFamily: 'system-ui, -apple-system, sans-serif',
+              fontWeight: 600,
+              color: 'rgba(255, 255, 255, 0.45)',
+              letterSpacing: '0.5px',
+              pointerEvents: 'none',
+              zIndex: 5,
+              textShadow: '0 1px 2px rgba(0,0,0,0.8)'
+            }}
+          >
+            {template.watermarkText || 'Created with GJS Railway Board Studio • https://gjs-store-4-msts.vercel.app'}
+          </div>
+        )}
       </div>
     </div>
   );

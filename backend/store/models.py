@@ -116,6 +116,14 @@ class Asset(models.Model):
     external_download_url = models.URLField(blank=True)
     private_download_key = models.CharField(max_length=500, blank=True)
     google_drive_file_id = models.CharField(max_length=200, blank=True)
+    board_template = models.ForeignKey(
+        "BoardTemplate",
+        related_name="assets",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        help_text="Associated Board Template for trainset",
+    )
     download_count = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -164,6 +172,12 @@ class BoardTemplate(models.Model):
     base_height = models.PositiveIntegerField(default=1024)
     background_image = models.ImageField(upload_to="assets/board_templates/", blank=True, null=True)
     background_image_url = models.URLField(blank=True, default="")
+    target_texture_name = models.CharField(
+        max_length=120,
+        blank=True,
+        default="",
+        help_text="Target texture filename required by MSTS/Open Rails 3D model, e.g. VB_NAME.dds",
+    )
     is_paid = models.BooleanField(default=False)
     price = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
     published = models.BooleanField(default=True)

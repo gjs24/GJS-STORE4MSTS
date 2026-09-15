@@ -110,33 +110,54 @@ export async function renderBoardToCanvas(
     });
   }
 
-  // 4. Fixed Graphics
+  // 4. Fixed Graphics (Static Stamps, Logos, Dividers, Watermarks)
   for (const g of template.fixedGraphics) {
     const gx = (g.x / 100) * w;
     const gy = (g.y / 100) * h;
+    const rot = ((g.rotation || 0) * Math.PI) / 180;
+    const sc = g.scale || 1.0;
+    const opacity = g.opacity !== undefined ? g.opacity : 1.0;
+
+    ctx.save();
+    ctx.translate(gx, gy);
+    if (rot) ctx.rotate(rot);
+    if (sc !== 1.0) ctx.scale(sc, sc);
+    if (opacity < 1.0) ctx.globalAlpha = opacity;
 
     if (g.type === 'divider') {
       const gw = ((g.width || 90) / 100) * w;
       const gh = (g.height || 2) * scale;
       ctx.fillStyle = g.color || template.borderColor;
-      ctx.fillRect(gx, gy, gw, gh);
+      ctx.fillRect(-gw / 2, -gh / 2, gw, gh);
+    } else if (g.type === 'logo') {
+      if (g.content) {
+        try {
+          const img = await loadImage(g.content);
+          const gw = ((g.width || 15) / 100) * w;
+          const gh = ((g.height || 15) / 100) * h;
+          ctx.drawImage(img, -gw / 2, -gh / 2, gw, gh);
+        } catch (err) {
+          console.warn('Failed to load logo stamp image for export:', err);
+        }
+      }
     } else if (g.type === 'badge') {
       ctx.font = `900 ${(g.fontSize || 14) * scale}px Arial, sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillStyle = g.color || template.borderColor;
-      ctx.fillText(g.content || '', gx, gy);
+      ctx.fillText(g.content || '', 0, 0);
     } else if (g.type === 'text') {
       const fSize = (g.fontSize || 14) * scale;
       ctx.font = `${g.fontWeight || 700} ${fSize}px ${g.fontFamily || 'Arial'}`;
       ctx.textAlign = (g.align as CanvasTextAlign) || 'center';
       ctx.textBaseline = 'middle';
       ctx.fillStyle = g.color || template.borderColor;
-      ctx.fillText(g.content || '', gx, gy);
+      ctx.fillText(g.content || '', 0, 0);
     }
+    ctx.restore();
   }
 
-  // 5. Fields (Text or Image)
+  // 5. Fields (Text or Image) with Free Rotation & Zoom/Scale
   for (const f of template.fields) {
     const rawVal = values[f.id] !== undefined ? values[f.id] : (f.defaultValue || f.imageUrl || '');
     if (!rawVal) continue;
@@ -145,14 +166,22 @@ export async function renderBoardToCanvas(
     const fy = (f.y / 100) * h;
     const fw = (f.width / 100) * w;
     const fh = (f.height / 100) * h;
+    const rot = ((f.rotation || 0) * Math.PI) / 180;
+    const sc = f.scale || 1.0;
+
+    ctx.save();
+    ctx.translate(fx, fy);
+    if (rot) ctx.rotate(rot);
+    if (sc !== 1.0) ctx.scale(sc, sc);
 
     if (f.type === 'image') {
       try {
         const img = await loadImage(rawVal);
-        ctx.drawImage(img, fx - fw / 2, fy - fh / 2, fw, fh);
+        ctx.drawImage(img, -fw / 2, -fh / 2, fw, fh);
       } catch (err) {
         console.warn('Failed to load image field for export:', err);
       }
+      ctx.restore();
       continue;
     }
 
@@ -170,52 +199,69 @@ export async function renderBoardToCanvas(
     ctx.textAlign = (f.align as CanvasTextAlign) || 'center';
     ctx.textBaseline = 'middle';
 
+    const drawX = f.align === 'left' ? -fw / 2 : f.align === 'right' ? fw / 2 : 0;
+
     // Apply LED Glow
     if (f.ledGlow) {
-      ctx.save();
       const glowR = (f.glowRadius || 12) * scale;
       ctx.shadowColor = f.glowColor || '#ff6200';
       ctx.shadowBlur = glowR;
       ctx.fillStyle = f.color;
-      ctx.fillText(text, fx, fy);
+      ctx.fillText(text, drawX, 0);
       // Secondary pass for intense core glow
       ctx.shadowBlur = glowR / 2;
-      ctx.fillText(text, fx, fy);
-      ctx.restore();
+      ctx.fillText(text, drawX, 0);
     } else {
       ctx.fillStyle = f.color;
-      ctx.fillText(text, fx, fy);
+      ctx.fillText(text, drawX, 0);
     }
+    ctx.restore();
+  }
+
+  // 6. Site Details / Watermark at bottom of template
+  if (template.showWatermark !== false) {
+    const watermark = template.watermarkText || 'Created with GJS Railway Board Studio • https://gjs-store-4-msts.vercel.app';
+    ctx.save();
+    ctx.font = `600 ${Math.max(8, Math.round(10 * scale))}px system-ui, -apple-system, sans-serif`;
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText(watermark, w - 8 * scale, h - 5 * scale);
+    ctx.restore();
   }
 
   return canvas;
 }
 
 /**
- * Export board directly to DDS format file
+ * Export board directly to DDS format file with custom filename support
  */
 export async function exportBoardToDDS(
   template: BoardTemplate,
   values: UserBoardValues,
   format: DDSFormat = 'bgra8',
-  customBackgroundUrl?: string
+  customBackgroundUrl?: string,
+  customFilename?: string
 ): Promise<void> {
   const w = template.isTextureSheet ? (template.textureResolution || 1024) : template.baseWidth;
   const h = template.isTextureSheet ? (template.textureResolution || 1024) : template.baseHeight;
 
   const canvas = await renderBoardToCanvas(template, values, w, h, customBackgroundUrl);
-  const safeName = template.name.toLowerCase().replace(/[^a-z0-9]/g, '_');
-  canvasToDDS(canvas, `${safeName}.dds`, { format });
+  const chosenName = (customFilename?.trim() || template.targetTextureName?.trim() || template.name)
+    .replace(/\.(dds|png)$/i, '')
+    .replace(/[^a-zA-Z0-9_\-]/g, '_');
+  canvasToDDS(canvas, `${chosenName}.dds`, { format });
 }
 
 /**
- * Export board to PNG file
+ * Export board to PNG file with custom filename support
  */
 export async function exportBoardToPNG(
   template: BoardTemplate,
   values: UserBoardValues,
   scale: number = 2,
-  customBackgroundUrl?: string
+  customBackgroundUrl?: string,
+  customFilename?: string
 ): Promise<void> {
   const w = template.baseWidth * scale;
   const h = template.baseHeight * scale;
@@ -223,8 +269,10 @@ export async function exportBoardToPNG(
   const canvas = await renderBoardToCanvas(template, values, w, h, customBackgroundUrl);
   const dataUrl = canvas.toDataURL('image/png');
   const link = document.createElement('a');
-  const safeName = template.name.toLowerCase().replace(/[^a-z0-9]/g, '_');
-  link.download = `${safeName}.png`;
+  const chosenName = (customFilename?.trim() || template.targetTextureName?.trim() || template.name)
+    .replace(/\.(dds|png)$/i, '')
+    .replace(/[^a-zA-Z0-9_\-]/g, '_');
+  link.download = `${chosenName}.png`;
   link.href = dataUrl;
   document.body.appendChild(link);
   link.click();

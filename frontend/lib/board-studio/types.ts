@@ -16,6 +16,9 @@ export interface FixedGraphicElement {
   fontFamily?: string;
   align?: 'left' | 'center' | 'right';
   iconName?: string; // 'ir-emblem' | 'train' | 'flag' | 'warning'
+  rotation?: number; // 0 - 360 degrees
+  scale?: number; // zoom / scale factor e.g. 1.0
+  opacity?: number; // 0.0 - 1.0 (useful for watermark / stamp)
 }
 
 export interface EditableField {
@@ -28,6 +31,10 @@ export interface EditableField {
   y: number; // percentage (0-100)
   width: number; // percentage (0-100)
   height: number; // percentage (0-100)
+  
+  // Free rotation and zoom/scale
+  rotation?: number; // 0 - 360 degrees rotation
+  scale?: number; // zoom / scale multiplier (e.g. 1.0)
   
   // Admin permissions: Can users edit this field?
   allowUserEdit?: boolean; // default true. If false, strictly locked for users!
@@ -75,6 +82,11 @@ export interface BoardTemplate {
   backgroundFit?: 'cover' | 'contain' | 'stretch';
   isTextureSheet?: boolean; // 1024x1024 UV texture sheet for simulators
   textureResolution?: number; // 1024 or 2048
+  targetTextureName?: string; // Exact texture filename required by MSTS/Open Rails 3D model, e.g. 'VB_NAME' or 'VB_NAME.dds'
+  
+  // Site branding / watermark at template end
+  showWatermark?: boolean; // default true
+  watermarkText?: string; // e.g. 'Created with GJS Railway Board Studio • https://gjs-store-4-msts.vercel.app'
   
   // Admin permission: Can users customize the background?
   allowUserCustomBackground?: boolean; // default false (locked)

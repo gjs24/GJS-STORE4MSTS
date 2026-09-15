@@ -61,6 +61,9 @@ export const UserBoardEditor: React.FC<UserBoardEditorProps> = ({
   const [isExportingDDS, setIsExportingDDS] = useState(false);
   const [isExportingPNG, setIsExportingPNG] = useState(false);
   const [ddsFormat, setDdsFormat] = useState<'bgra8' | 'dxt5'>('bgra8');
+  const [exportFilename, setExportFilename] = useState<string>(
+    activeTemplate.targetTextureName || activeTemplate.name
+  );
   
   const [uploadingFieldId, setUploadingFieldId] = useState<string | null>(null);
   const userBgFileRef = useRef<HTMLInputElement>(null);
@@ -68,6 +71,7 @@ export const UserBoardEditor: React.FC<UserBoardEditorProps> = ({
 
   // Automatically load fields when template or initialValues changes
   useEffect(() => {
+    setExportFilename(activeTemplate.targetTextureName || activeTemplate.name);
     if (initialValues) {
       setValues(initialValues);
       setCustomBackground(initialCustomBackground || null);
@@ -163,8 +167,14 @@ export const UserBoardEditor: React.FC<UserBoardEditorProps> = ({
     }
     setIsExportingDDS(true);
     try {
-      await exportBoardToDDS(activeTemplate, values, ddsFormat, customBackground || undefined);
-      setSavedStatus(`Exported ${activeTemplate.name} to DDS (${ddsFormat.toUpperCase()}) successfully!`);
+      await exportBoardToDDS(
+        activeTemplate,
+        values,
+        ddsFormat,
+        customBackground || undefined,
+        exportFilename
+      );
+      setSavedStatus(`Exported ${exportFilename || activeTemplate.name} to DDS (${ddsFormat.toUpperCase()}) successfully!`);
       setTimeout(() => setSavedStatus(null), 3500);
     } catch (err) {
       console.error('DDS export error:', err);
@@ -181,8 +191,14 @@ export const UserBoardEditor: React.FC<UserBoardEditorProps> = ({
     }
     setIsExportingPNG(true);
     try {
-      await exportBoardToPNG(activeTemplate, values, 1, customBackground || undefined);
-      setSavedStatus('Exported PNG successfully!');
+      await exportBoardToPNG(
+        activeTemplate,
+        values,
+        1,
+        customBackground || undefined,
+        exportFilename
+      );
+      setSavedStatus(`Exported ${exportFilename || activeTemplate.name}.png successfully!`);
       setTimeout(() => setSavedStatus(null), 3000);
     } catch (err) {
       console.error('PNG export error:', err);
@@ -423,6 +439,69 @@ export const UserBoardEditor: React.FC<UserBoardEditorProps> = ({
               title="DXT5 (BC3) Compressed: Standard for Trainz game textures"
             >
               DXT5 (Compressed)
+            </button>
+          </div>
+        </div>
+
+        {/* Custom Target Texture Export Filename */}
+        <div className="dds-options-box" style={{ marginTop: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+            <label className="picker-label" style={{ margin: 0 }}>
+              <FileCode size={14} /> Export Filename (MSTS 3D Texture Name)
+            </label>
+            <span style={{ fontSize: 11, color: 'var(--rail-amber)', fontWeight: 700, fontFamily: 'monospace' }}>
+              {exportFilename ? `${exportFilename}.dds` : `${activeTemplate.name}.dds`}
+            </span>
+          </div>
+          <input
+            type="text"
+            value={exportFilename}
+            onChange={(e) => setExportFilename(e.target.value)}
+            placeholder="e.g. VB_NAME or AMRIT_LED"
+            style={{
+              width: '100%',
+              padding: '7px 10px',
+              fontSize: 12,
+              background: 'rgba(0,0,0,0.4)',
+              color: '#fff',
+              border: '1px solid rgba(255,255,255,0.15)',
+              borderRadius: 4
+            }}
+          />
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
+            <span style={{ fontSize: 10, color: '#94a3b8', alignSelf: 'center', marginRight: 2 }}>Presets:</span>
+            {['VB_NAME', 'AMRIT_LED', 'COACH_LED', 'STATION_BOARD'].map((preset) => (
+              <button
+                key={preset}
+                type="button"
+                onClick={() => setExportFilename(preset)}
+                style={{
+                  padding: '2px 6px',
+                  fontSize: 10,
+                  background: exportFilename === preset ? 'var(--rail-amber)' : 'rgba(255,255,255,0.08)',
+                  color: '#fff',
+                  border: '1px solid rgba(255,255,255,0.15)',
+                  borderRadius: 3,
+                  cursor: 'pointer'
+                }}
+              >
+                {preset}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => setExportFilename(activeTemplate.targetTextureName || activeTemplate.name)}
+              style={{
+                padding: '2px 6px',
+                fontSize: 10,
+                background: 'transparent',
+                color: '#94a3b8',
+                border: '1px dashed rgba(255,255,255,0.2)',
+                borderRadius: 3,
+                cursor: 'pointer'
+              }}
+            >
+              Reset
             </button>
           </div>
         </div>

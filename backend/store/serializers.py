@@ -183,6 +183,7 @@ class AssetListSerializer(serializers.ModelSerializer):
     prebooking_count = serializers.SerializerMethodField()
     user_has_prebooked = serializers.SerializerMethodField()
     prebooking_downloads_ready = serializers.SerializerMethodField()
+    board_template = serializers.SerializerMethodField()
 
     class Meta:
         model = Asset
@@ -247,6 +248,8 @@ class AssetListSerializer(serializers.ModelSerializer):
             "gallery_image_urls",
             "media_gallery_urls",
             "has_file",
+            "board_template",
+            "board_template_id",
             "download_count",
             "average_rating",
             "review_count",
@@ -364,6 +367,19 @@ class AssetListSerializer(serializers.ModelSerializer):
         if rel_date and now >= rel_date:
             return True
         return False
+
+    def get_board_template(self, obj):
+        if not getattr(obj, "board_template_id", None):
+            return None
+        bt = obj.board_template
+        return {
+            "id": bt.id,
+            "name": bt.name,
+            "category": bt.category,
+            "price": str(bt.price),
+            "is_paid": bt.is_paid,
+            "target_texture_name": getattr(bt, "target_texture_name", "") or "",
+        }
 
 
 class AssetDetailSerializer(AssetListSerializer):
@@ -531,6 +547,7 @@ class BoardTemplateSerializer(serializers.ModelSerializer):
             "base_height",
             "background_image",
             "background_image_url",
+            "target_texture_name",
             "is_paid",
             "price",
             "published",

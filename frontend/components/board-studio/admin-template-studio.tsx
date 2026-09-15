@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef } from 'react';
-import { BoardTemplate, EditableField, BoardCategory } from '@/lib/board-studio/types';
+import { BoardTemplate, EditableField, BoardCategory, FixedGraphicElement } from '@/lib/board-studio/types';
 import { BoardCanvas } from './board-canvas';
 import { CustomFontModal } from './custom-font-modal';
 import { fontManager } from '@/lib/board-studio/font-manager';
@@ -68,6 +68,10 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({
 
   const bgFileInputRef = useRef<HTMLInputElement>(null);
   const slotImageInputRef = useRef<HTMLInputElement>(null);
+  const stampImageInputRef = useRef<HTMLInputElement>(null);
+  const [selectedStampId, setSelectedStampId] = useState<string | null>(
+    activeTemplate.fixedGraphics[0]?.id || null
+  );
 
   // Keep local template in sync when parent activeTemplate changes
   React.useEffect(() => {
@@ -77,6 +81,9 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({
     setZoomLevel(1.0);
     if (activeTemplate.fields.length > 0) {
       setSelectedFieldId(activeTemplate.fields[0].id);
+    }
+    if (activeTemplate.fixedGraphics.length > 0) {
+      setSelectedStampId(activeTemplate.fixedGraphics[0].id);
     }
   }, [activeTemplate.id]);
 
@@ -243,6 +250,27 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({
     reader.readAsDataURL(file);
   };
 
+  // Image Upload handler for a static stamp / logo / watermark
+  const handleStampImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedStampId) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string;
+      const updated = template.fixedGraphics.map((item) => {
+        if (item.id === selectedStampId) {
+          return { ...item, type: 'logo' as const, content: dataUrl };
+        }
+        return item;
+      });
+      updateTemplate({ fixedGraphics: updated });
+      setSaveToast('Loco stamp / watermark uploaded!');
+      setTimeout(() => setSaveToast(null), 2500);
+    };
+    reader.readAsDataURL(file);
+  };
+
   // Field updates
   const handleUpdateFieldPosition = (fieldId: string, x: number, y: number) => {
     setTemplate((prev) => ({
@@ -352,8 +380,70 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({
         onChange={handleSlotImageUpload}
       />
 
+      {/* Hidden file input for static stamp / logo / watermark */}
+      <input
+        ref={stampImageInputRef}
+        type="file"
+        accept="image/*"
+        style={{ display: 'none' }}
+        onChange={handleStampImageUpload}
+      />
+
       {/* Admin Sidebar */}
       <aside className="admin-sidebar">
+        {/* Template Selector & New Template Action */}
+        <div style={{ padding: '10px 12px 6px 12px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: '#94a3b8' }}>
+              Active Template:
+            </span>
+            <button
+              type="button"
+              onClick={onCreateNewTemplate}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+                padding: '3px 8px',
+                fontSize: 11,
+                fontWeight: 700,
+                background: 'linear-gradient(135deg, #ef3b2d, #ff8a1f)',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: 4,
+                cursor: 'pointer'
+              }}
+              title="Create a new blank template"
+            >
+              <Plus size={12} /> New Template
+            </button>
+          </div>
+          <select
+            style={{
+              width: '100%',
+              padding: '6px 8px',
+              fontSize: 12,
+              background: '#0e1620',
+              color: '#f8fafc',
+              border: '1px solid rgba(255,255,255,0.18)',
+              borderRadius: 5
+            }}
+            value={template.id}
+            onChange={(e) => {
+              const chosen = templates.find((t) => t.id === e.target.value);
+              if (chosen) {
+                onSelectTemplate(chosen);
+              }
+            }}
+          >
+            {templates.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name} ({t.category || 'Board'}) {t.targetTextureName ? `[${t.targetTextureName}]` : ''}
+              </option>
+            ))}
+          </select>
+        </div>
+
         <div className="admin-header-badge">
           <div className="status-pill admin">
             <Sliders size={13} />
@@ -518,6 +608,46 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({
                 placeholder="e.g. GJS Productions / Indian Railways"
                 onChange={(e) => updateTemplate({ author: e.target.value })}
               />
+            </div>
+
+            {/* Target Texture Filename (MSTS / Open Rails 3D Model Mapping) */}
+            <div className="prop-row" style={{ marginTop: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                <label style={{ margin: 0 }}>Target Texture Name (MSTS 3D Model Filename):</label>
+                <span style={{ fontSize: 11, color: 'var(--rail-amber)', fontWeight: 700, fontFamily: 'monospace' }}>
+                  {template.targetTextureName ? `${template.targetTextureName}.dds` : 'Standard Name'}
+                </span>
+              </div>
+              <input
+                type="text"
+                value={template.targetTextureName || ''}
+                placeholder="e.g. VB_NAME or AMRIT_LED"
+                onChange={(e) => updateTemplate({ targetTextureName: e.target.value })}
+              />
+              <span className="field-help" style={{ fontSize: 11, marginTop: 4, display: 'block', color: '#94a3b8' }}>
+                Required by train models (e.g. setting <code>VB_NAME</code> exports texture as <code>VB_NAME.dds</code> directly so users don&apos;t have to rename).
+              </span>
+            </div>
+
+            {/* Site Details & Watermark Branding at Template End */}
+            <div className="prop-row" style={{ marginTop: 12 }}>
+              <label className="checkbox-label" style={{ fontWeight: 600 }}>
+                <input
+                  type="checkbox"
+                  checked={template.showWatermark !== false}
+                  onChange={(e) => updateTemplate({ showWatermark: e.target.checked })}
+                />
+                <span>Display Site Details & URL Watermark at bottom of template</span>
+              </label>
+              {template.showWatermark !== false && (
+                <input
+                  type="text"
+                  style={{ marginTop: 6, fontSize: 12 }}
+                  value={template.watermarkText || 'Created with GJS Railway Board Studio • https://gjs-store-4-msts.vercel.app'}
+                  placeholder="Site details & URL..."
+                  onChange={(e) => updateTemplate({ watermarkText: e.target.value })}
+                />
+              )}
             </div>
 
             {/* Resolution Specifications */}
@@ -1091,6 +1221,97 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({
                     />
                   </div>
                 </div>
+
+                {/* FREE ROTATION & FREE ZOOM / SCALE CONTROLS */}
+                <div className="prop-row-double" style={{ marginTop: 8 }}>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <label style={{ margin: 0 }}>Rotation ({currentField.rotation || 0}°):</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="360"
+                        value={currentField.rotation || 0}
+                        onChange={(e) => handleUpdateSelectedField({ rotation: Math.max(0, Math.min(360, Number(e.target.value) || 0)) })}
+                        style={{ width: 52, padding: '1px 4px', fontSize: 11, textAlign: 'right' }}
+                      />
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="360"
+                      value={currentField.rotation || 0}
+                      onChange={(e) => handleUpdateSelectedField({ rotation: +e.target.value })}
+                      style={{ marginTop: 4 }}
+                    />
+                    <div style={{ display: 'flex', gap: 3, marginTop: 4 }}>
+                      {[0, 90, 180, 270].map((deg) => (
+                        <button
+                          key={deg}
+                          type="button"
+                          onClick={() => handleUpdateSelectedField({ rotation: deg })}
+                          style={{
+                            flex: 1,
+                            padding: '2px 0',
+                            fontSize: 10,
+                            background: (currentField.rotation || 0) === deg ? 'var(--rail-red)' : 'rgba(255,255,255,0.08)',
+                            color: '#fff',
+                            border: '1px solid rgba(255,255,255,0.15)',
+                            borderRadius: 3,
+                            cursor: 'pointer'
+                          }}
+                        >
+                          {deg}°
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <label style={{ margin: 0 }}>Zoom / Scale ({(currentField.scale !== undefined ? currentField.scale : 1.0).toFixed(2)}x):</label>
+                      <input
+                        type="number"
+                        min="0.2"
+                        max="3.0"
+                        step="0.05"
+                        value={currentField.scale !== undefined ? currentField.scale : 1.0}
+                        onChange={(e) => handleUpdateSelectedField({ scale: Math.max(0.1, Math.min(5.0, Number(e.target.value) || 1.0)) })}
+                        style={{ width: 52, padding: '1px 4px', fontSize: 11, textAlign: 'right' }}
+                      />
+                    </div>
+                    <input
+                      type="range"
+                      min="0.2"
+                      max="3.0"
+                      step="0.05"
+                      value={currentField.scale !== undefined ? currentField.scale : 1.0}
+                      onChange={(e) => handleUpdateSelectedField({ scale: +e.target.value })}
+                      style={{ marginTop: 4 }}
+                    />
+                    <div style={{ display: 'flex', gap: 3, marginTop: 4 }}>
+                      {[0.5, 1.0, 1.5, 2.0].map((s) => (
+                        <button
+                          key={s}
+                          type="button"
+                          onClick={() => handleUpdateSelectedField({ scale: s })}
+                          style={{
+                            flex: 1,
+                            padding: '2px 0',
+                            fontSize: 10,
+                            background: (currentField.scale ?? 1.0) === s ? 'var(--rail-amber)' : 'rgba(255,255,255,0.08)',
+                            color: '#fff',
+                            border: '1px solid rgba(255,255,255,0.15)',
+                            borderRadius: 3,
+                            cursor: 'pointer'
+                          }}
+                        >
+                          {s}x
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
               </div>
             ) : (
               <p className="no-selection-hint">Select or add a slot above to inspect and adjust.</p>
@@ -1261,63 +1482,406 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({
           </div>
         )}
 
-        {/* TAB 3: FIXED ELEMENTS */}
+        {/* TAB 3: FIXED ELEMENTS (STATIC STAMPS & LOCO WATERMARKS) */}
         {activeTab === 'fixed' && (
           <div className="tab-content">
-            <span className="sub-title">Static Non-Editable Stamps</span>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+              <span className="sub-title">Static Stamps & Watermarks</span>
+              <span style={{ fontSize: 11, color: '#94a3b8' }}>
+                {template.fixedGraphics.length} elements
+              </span>
+            </div>
             <p className="field-help">
-              Elements that users cannot move or edit.
+              Non-editable locomotive logos, watermarks, stamps, crests, and fixed borders. Admin can freely move, rotate, zoom, or upload custom graphics.
             </p>
 
-            <div className="fixed-elements-list">
-              {template.fixedGraphics.map((item, idx) => (
-                <div key={item.id} className="fixed-item-row">
-                  <span className="fixed-badge">{item.type}</span>
-                  <input
-                    type="text"
-                    value={item.content || ''}
-                    placeholder="Content..."
-                    onChange={(e) => {
-                      const updated = [...template.fixedGraphics];
-                      updated[idx] = { ...updated[idx], content: e.target.value };
-                      updateTemplate({ fixedGraphics: updated });
-                    }}
-                  />
-                  <button
-                    type="button"
-                    className="btn-delete-slot"
-                    onClick={() => {
-                      updateTemplate({
-                        fixedGraphics: template.fixedGraphics.filter((_, i) => i !== idx)
-                      });
-                    }}
-                  >
-                    <Trash2 size={13} />
-                  </button>
-                </div>
-              ))}
+            {/* Quick Add Stamp Buttons */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, margin: '10px 0' }}>
+              <button
+                type="button"
+                className="btn-primary"
+                style={{ fontSize: 11, padding: '7px 8px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}
+                onClick={() => {
+                  const newId = `stamp_${Date.now()}`;
+                  const newG: FixedGraphicElement = {
+                    id: newId,
+                    type: 'logo',
+                    content: '',
+                    x: 50,
+                    y: 50,
+                    width: 20,
+                    height: 20,
+                    rotation: 0,
+                    scale: 1.0,
+                    opacity: 0.85
+                  };
+                  updateTemplate({ fixedGraphics: [...template.fixedGraphics, newG] });
+                  setSelectedStampId(newId);
+                }}
+              >
+                <Upload size={12} /> + Loco Stamp / Logo
+              </button>
+
+              <button
+                type="button"
+                className="btn-secondary"
+                style={{ fontSize: 11, padding: '7px 8px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}
+                onClick={() => {
+                  const newId = `fixed_txt_${Date.now()}`;
+                  const newG: FixedGraphicElement = {
+                    id: newId,
+                    type: 'text',
+                    content: 'INDIAN RAILWAYS',
+                    x: 50,
+                    y: 12,
+                    fontSize: 16,
+                    fontWeight: 800,
+                    color: '#ffffff',
+                    rotation: 0,
+                    scale: 1.0,
+                    opacity: 1.0
+                  };
+                  updateTemplate({ fixedGraphics: [...template.fixedGraphics, newG] });
+                  setSelectedStampId(newId);
+                }}
+              >
+                <Plus size={12} /> + Static Text
+              </button>
             </div>
 
-            <button
-              type="button"
-              className="btn-secondary"
-              style={{ marginTop: 10 }}
-              onClick={() => {
-                const newG = {
-                  id: `fixed_${Date.now()}`,
-                  type: 'text' as const,
-                  content: 'INDIAN RAILWAYS',
-                  x: 50,
-                  y: 10,
-                  fontSize: 14,
-                  fontWeight: 700,
-                  color: '#ffffff'
-                };
-                updateTemplate({ fixedGraphics: [...template.fixedGraphics, newG] });
-              }}
-            >
-              <Plus size={13} /> Add Static Text / Divider
-            </button>
+            {/* Stamp Element Selector Chips */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 12 }}>
+              {template.fixedGraphics.map((item, idx) => {
+                const isCur = (selectedStampId || template.fixedGraphics[0]?.id) === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setSelectedStampId(item.id)}
+                    style={{
+                      padding: '4px 8px',
+                      fontSize: 11,
+                      borderRadius: 4,
+                      cursor: 'pointer',
+                      border: isCur ? '1px solid var(--rail-amber)' : '1px solid rgba(255,255,255,0.12)',
+                      background: isCur ? 'rgba(255,159,28,0.2)' : 'rgba(255,255,255,0.04)',
+                      color: isCur ? 'var(--rail-yellow)' : '#cbd5e1',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 4
+                    }}
+                  >
+                    <span>{item.type === 'logo' ? '🚂 Stamp' : item.type === 'text' ? '📝 Text' : item.type === 'divider' ? '➖ Line' : '🏷️ Badge'}</span>
+                    <span style={{ opacity: 0.6, fontSize: 10 }}>#{idx + 1}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Selected Stamp Inspector & Controls */}
+            {(() => {
+              const activeStamp = template.fixedGraphics.find((g) => g.id === (selectedStampId || template.fixedGraphics[0]?.id));
+              if (!activeStamp) {
+                return (
+                  <p className="no-selection-hint" style={{ marginTop: 12 }}>
+                    Click &quot;+ Loco Stamp / Logo&quot; above to add a watermark, logo, or fixed text.
+                  </p>
+                );
+              }
+
+              const updateActiveStamp = (updates: Partial<FixedGraphicElement>) => {
+                const updated = template.fixedGraphics.map((item) =>
+                  item.id === activeStamp.id ? { ...item, ...updates } : item
+                );
+                updateTemplate({ fixedGraphics: updated });
+              };
+
+              return (
+                <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--rail-amber)' }}>
+                      Editing: {activeStamp.type.toUpperCase()} ({activeStamp.id})
+                    </span>
+                    <button
+                      type="button"
+                      className="btn-danger-outline"
+                      style={{ padding: '3px 8px', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}
+                      onClick={() => {
+                        const filtered = template.fixedGraphics.filter((g) => g.id !== activeStamp.id);
+                        updateTemplate({ fixedGraphics: filtered });
+                        setSelectedStampId(filtered[0]?.id || null);
+                      }}
+                      title="Delete this static element"
+                    >
+                      <Trash2 size={12} /> Delete
+                    </button>
+                  </div>
+
+                  <div className="prop-row-double">
+                    <div>
+                      <label>Element Type:</label>
+                      <select
+                        value={activeStamp.type}
+                        onChange={(e) => updateActiveStamp({ type: e.target.value as any })}
+                      >
+                        <option value="logo">Loco Logo / Watermark Image</option>
+                        <option value="text">Static Text</option>
+                        <option value="badge">Badge Pill</option>
+                        <option value="divider">Divider Line</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label>Opacity / Transparency ({Math.round((activeStamp.opacity !== undefined ? activeStamp.opacity : 1) * 100)}%):</label>
+                      <input
+                        type="range"
+                        min="0.1"
+                        max="1.0"
+                        step="0.05"
+                        value={activeStamp.opacity !== undefined ? activeStamp.opacity : 1.0}
+                        onChange={(e) => updateActiveStamp({ opacity: +e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  {/* LOGO / WATERMARK IMAGE CONTROLS */}
+                  {activeStamp.type === 'logo' ? (
+                    <div style={{ margin: '10px 0', padding: 10, background: 'rgba(0,0,0,0.3)', borderRadius: 6, border: '1px solid rgba(255,255,255,0.06)' }}>
+                      <label style={{ fontSize: 11, fontWeight: 700, color: '#e2e8f0', marginBottom: 6, display: 'block' }}>
+                        Locomotive Stamp / Logo Picture:
+                      </label>
+                      {activeStamp.content ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                          <img
+                            src={activeStamp.content}
+                            alt="Stamp"
+                            style={{ width: 48, height: 48, objectFit: 'contain', background: '#111', borderRadius: 4, border: '1px solid rgba(255,255,255,0.2)' }}
+                          />
+                          <button
+                            type="button"
+                            className="btn-secondary"
+                            style={{ fontSize: 11, padding: '5px 10px' }}
+                            onClick={() => stampImageInputRef.current?.click()}
+                          >
+                            <Upload size={12} /> Replace Image
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          className="btn-primary"
+                          style={{ width: '100%', fontSize: 12, padding: '8px 12px', marginBottom: 8 }}
+                          onClick={() => stampImageInputRef.current?.click()}
+                        >
+                          <Upload size={13} /> Upload Loco / Watermark File
+                        </button>
+                      )}
+                      <input
+                        type="text"
+                        placeholder="Or paste Image URL (https://... or data:...)"
+                        value={activeStamp.content || ''}
+                        onChange={(e) => updateActiveStamp({ content: e.target.value })}
+                        style={{ fontSize: 11 }}
+                      />
+                    </div>
+                  ) : (
+                    /* TEXT / BADGE / DIVIDER CONTROLS */
+                    <div style={{ margin: '10px 0' }}>
+                      <div className="prop-row">
+                        <label>Content / Text:</label>
+                        <input
+                          type="text"
+                          value={activeStamp.content || ''}
+                          placeholder="e.g. INDIAN RAILWAYS..."
+                          onChange={(e) => updateActiveStamp({ content: e.target.value })}
+                        />
+                      </div>
+                      <div className="prop-row-double">
+                        <div>
+                          <label>Font Size ({activeStamp.fontSize || 14}px):</label>
+                          <input
+                            type="range"
+                            min="10"
+                            max="80"
+                            value={activeStamp.fontSize || 14}
+                            onChange={(e) => updateActiveStamp({ fontSize: +e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <label>Color:</label>
+                          <input
+                            type="color"
+                            value={activeStamp.color || '#ffffff'}
+                            onChange={(e) => updateActiveStamp({ color: e.target.value })}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* POSITION (MOVE BY ADMIN) */}
+                  <div className="prop-row-double" style={{ marginTop: 8 }}>
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <label style={{ margin: 0 }}>Position X ({activeStamp.x}%):</label>
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={activeStamp.x}
+                          onChange={(e) => updateActiveStamp({ x: Math.max(0, Math.min(100, Number(e.target.value) || 0)) })}
+                          style={{ width: 48, padding: '1px 3px', fontSize: 11, textAlign: 'right' }}
+                        />
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        value={activeStamp.x}
+                        onChange={(e) => updateActiveStamp({ x: +e.target.value })}
+                        style={{ marginTop: 4 }}
+                      />
+                    </div>
+
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <label style={{ margin: 0 }}>Position Y ({activeStamp.y}%):</label>
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={activeStamp.y}
+                          onChange={(e) => updateActiveStamp({ y: Math.max(0, Math.min(100, Number(e.target.value) || 0)) })}
+                          style={{ width: 48, padding: '1px 3px', fontSize: 11, textAlign: 'right' }}
+                        />
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        value={activeStamp.y}
+                        onChange={(e) => updateActiveStamp({ y: +e.target.value })}
+                        style={{ marginTop: 4 }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* WIDTH & HEIGHT */}
+                  <div className="prop-row-double" style={{ marginTop: 8 }}>
+                    <div>
+                      <label>Width ({activeStamp.width || 15}%):</label>
+                      <input
+                        type="range"
+                        min="2"
+                        max="100"
+                        value={activeStamp.width || 15}
+                        onChange={(e) => updateActiveStamp({ width: +e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label>Height ({activeStamp.height || 15}%):</label>
+                      <input
+                        type="range"
+                        min="2"
+                        max="100"
+                        value={activeStamp.height || 15}
+                        onChange={(e) => updateActiveStamp({ height: +e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  {/* FREE ROTATION & FREE ZOOM / SCALE CONTROLS */}
+                  <div className="prop-row-double" style={{ marginTop: 8 }}>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <label style={{ margin: 0 }}>Rotation ({activeStamp.rotation || 0}°):</label>
+                        <input
+                          type="number"
+                          min="0"
+                          max="360"
+                          value={activeStamp.rotation || 0}
+                          onChange={(e) => updateActiveStamp({ rotation: Math.max(0, Math.min(360, Number(e.target.value) || 0)) })}
+                          style={{ width: 48, padding: '1px 3px', fontSize: 11, textAlign: 'right' }}
+                        />
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="360"
+                        value={activeStamp.rotation || 0}
+                        onChange={(e) => updateActiveStamp({ rotation: +e.target.value })}
+                        style={{ marginTop: 4 }}
+                      />
+                      <div style={{ display: 'flex', gap: 3, marginTop: 4 }}>
+                        {[0, 90, 180, 270].map((deg) => (
+                          <button
+                            key={deg}
+                            type="button"
+                            onClick={() => updateActiveStamp({ rotation: deg })}
+                            style={{
+                              flex: 1,
+                              padding: '2px 0',
+                              fontSize: 10,
+                              background: (activeStamp.rotation || 0) === deg ? 'var(--rail-red)' : 'rgba(255,255,255,0.08)',
+                              color: '#fff',
+                              border: '1px solid rgba(255,255,255,0.15)',
+                              borderRadius: 3,
+                              cursor: 'pointer'
+                            }}
+                          >
+                            {deg}°
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <label style={{ margin: 0 }}>Zoom / Scale ({(activeStamp.scale !== undefined ? activeStamp.scale : 1.0).toFixed(2)}x):</label>
+                        <input
+                          type="number"
+                          min="0.2"
+                          max="3.0"
+                          step="0.05"
+                          value={activeStamp.scale !== undefined ? activeStamp.scale : 1.0}
+                          onChange={(e) => updateActiveStamp({ scale: Math.max(0.1, Math.min(5.0, Number(e.target.value) || 1.0)) })}
+                          style={{ width: 48, padding: '1px 3px', fontSize: 11, textAlign: 'right' }}
+                        />
+                      </div>
+                      <input
+                        type="range"
+                        min="0.2"
+                        max="3.0"
+                        step="0.05"
+                        value={activeStamp.scale !== undefined ? activeStamp.scale : 1.0}
+                        onChange={(e) => updateActiveStamp({ scale: +e.target.value })}
+                        style={{ marginTop: 4 }}
+                      />
+                      <div style={{ display: 'flex', gap: 3, marginTop: 4 }}>
+                        {[0.5, 1.0, 1.5, 2.0].map((s) => (
+                          <button
+                            key={s}
+                            type="button"
+                            onClick={() => updateActiveStamp({ scale: s })}
+                            style={{
+                              flex: 1,
+                              padding: '2px 0',
+                              fontSize: 10,
+                              background: (activeStamp.scale ?? 1.0) === s ? 'var(--rail-amber)' : 'rgba(255,255,255,0.08)',
+                              color: '#fff',
+                              border: '1px solid rgba(255,255,255,0.15)',
+                              borderRadius: 3,
+                              cursor: 'pointer'
+                            }}
+                          >
+                            {s}x
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         )}
 

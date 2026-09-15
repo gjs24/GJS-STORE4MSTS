@@ -42,10 +42,16 @@ export default function CreateAssetPage() {
   const [prebookingDownloadUnlockAt, setPrebookingDownloadUnlockAt] = useState<string>("");
   const [prebookingDownloadsUnlocked, setPrebookingDownloadsUnlocked] = useState(false);
   const [prebookingSlots, setPrebookingSlots] = useState<number | "">("");
+  const [boardTemplates, setBoardTemplates] = useState<any[]>([]);
+  const [selectedBoardTemplateId, setSelectedBoardTemplateId] = useState<string>("");
 
   useEffect(() => {
     adminGet<Category[]>("/admin/categories/", fallbackCategories).then(setCategories);
     adminGet<Asset[]>("/admin/assets/", []).then(setAvailableAssets);
+    adminGet<any[]>("/board-templates/", []).then((data) => {
+      const list = Array.isArray(data) ? data : (data as any)?.results || [];
+      setBoardTemplates(list);
+    });
   }, []);
 
   async function createAsset(formData: FormData) {
@@ -93,6 +99,11 @@ export default function CreateAssetPage() {
         });
       } else {
         formData.set("early_access_required_assets", "[]");
+      }
+      if (selectedBoardTemplateId) {
+        formData.set("board_template", selectedBoardTemplateId);
+      } else {
+        formData.delete("board_template");
       }
       if (!formData.get("deal_ends_at")) {
         formData.delete("deal_ends_at");
@@ -225,6 +236,35 @@ export default function CreateAssetPage() {
           <input name="is_upcoming" type="checkbox" />
           <span>Upcoming product / coming soon</span>
         </label>
+
+        {/* Associated Name Board Template Selector */}
+        <div className="space-y-3 rounded-lg border border-rail-amber/30 bg-rail-amber/5 p-4 md:col-span-2">
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold text-rail-amber flex items-center gap-2">
+              <span>🚂</span> Associated Name Board / LED Studio Template
+            </h2>
+            {selectedBoardTemplateId && (
+              <span className="text-xs font-mono text-cyan-300 bg-cyan-950/60 border border-cyan-800/40 px-2 py-0.5 rounded">
+                Linked: {selectedBoardTemplateId}
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-slate-400 leading-relaxed">
+            Link this trainset asset to its official LED destination board or coach nameboard template. When users visit this trainset on the website, they will see a direct link to customize and export the matching 3D texture in the Board Studio.
+          </p>
+          <select
+            value={selectedBoardTemplateId}
+            onChange={(e) => setSelectedBoardTemplateId(e.target.value)}
+            className="w-full rounded border border-white/10 bg-black/40 px-3 py-3 text-sm text-white focus:outline-none focus:border-rail-amber"
+          >
+            <option value="">-- No Associated Name Board Template --</option>
+            {boardTemplates.map((tpl) => (
+              <option key={tpl.id} value={tpl.id}>
+                {tpl.name} ({tpl.category || 'Board'}) {tpl.target_texture_name ? `[Texture: ${tpl.target_texture_name}.dds]` : ''}
+              </option>
+            ))}
+          </select>
+        </div>
         <div className="space-y-4 rounded border border-emerald-400/20 bg-emerald-400/5 p-4 md:col-span-2">
           <h2 className="font-semibold text-emerald-300">Deal Open / Close</h2>
           <label className="flex items-center gap-3 rounded border border-white/10 bg-black/30 px-3 py-3">
