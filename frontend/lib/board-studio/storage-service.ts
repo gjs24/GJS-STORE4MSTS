@@ -243,6 +243,8 @@ export const storageService = {
           isPaid: item.is_paid || item.isPaid || false,
           price: Number(item.price || 0),
           currency: item.currency || 'INR',
+          isUnlocked: item.is_unlocked !== undefined ? item.is_unlocked : (!item.is_paid),
+          canCustomize: item.can_customize !== undefined ? item.can_customize : (!item.is_paid),
           createdAt: item.created_at || new Date().toISOString(),
           updatedAt: item.updated_at || new Date().toISOString(),
           author: item.author || 'Admin'

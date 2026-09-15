@@ -3,7 +3,8 @@
 import React from 'react';
 import Link from 'next/link';
 import { CurrentUser } from '@/lib/api';
-import { ShieldCheck, UserCheck, LogOut, TrainFront, HelpCircle, Store, BookmarkPlus, ArrowLeft } from 'lucide-react';
+import { ShieldCheck, UserCheck, LogOut, TrainFront, HelpCircle, Store, BookmarkPlus, ArrowLeft, PackageCheck } from 'lucide-react';
+import { clearAuth } from '@/lib/api';
 
 interface StudioNavbarProps {
   currentView: 'home' | 'editor' | 'admin';
@@ -15,6 +16,7 @@ interface StudioNavbarProps {
   onNavigateStore?: (tab: 'store' | 'my-store') => void;
   onOpenHelp: () => void;
   onToggleAdmin: () => void;
+  onLogout?: () => void;
 }
 
 export const StudioNavbar: React.FC<StudioNavbarProps> = ({
@@ -26,7 +28,8 @@ export const StudioNavbar: React.FC<StudioNavbarProps> = ({
   onNavigateHome,
   onNavigateStore,
   onOpenHelp,
-  onToggleAdmin
+  onToggleAdmin,
+  onLogout
 }) => {
   const handleGoStore = (tab: 'store' | 'my-store') => {
     if (onNavigateStore) {
@@ -110,14 +113,42 @@ export const StudioNavbar: React.FC<StudioNavbarProps> = ({
 
         {/* Railway User Profile or Sign In / Register */}
         {currentUser ? (
-          <div className="nav-user-profile" title={`Signed in as ${currentUser.username || currentUser.email} · ID: USR-${currentUser.id}`}>
-            <div className="user-avatar-circle" style={{ width: 28, height: 28, minWidth: 28, minHeight: 28, borderWidth: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #ef3b2d, #ff8a1f)', color: '#fff', fontWeight: 800, borderRadius: '50%', boxShadow: '0 0 12px rgba(239, 59, 45, 0.4)' }}>
-              <span>{(currentUser.username || 'U').charAt(0).toUpperCase()}</span>
-            </div>
-            <div className="nav-user-info">
-              <span className="nav-user-name">{currentUser.username}</span>
-              <span className="nav-user-id-badge" title="Unique Store User ID">USR-{currentUser.id}</span>
-            </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Link
+              href="/dashboard/purchases"
+              className="btn-nav-switch"
+              style={{ textDecoration: 'none' }}
+              title="View your paid assets & nameboard templates in MSTS Store"
+            >
+              <PackageCheck size={14} /> My Purchases
+            </Link>
+
+            <Link
+              href={currentUser.is_staff ? "/admin-dashboard" : "/dashboard"}
+              className="nav-user-profile"
+              style={{ textDecoration: 'none', cursor: 'pointer' }}
+              title={`Signed in as ${currentUser.username || currentUser.email} · ID: USR-${currentUser.id} (Click to open Dashboard)`}
+            >
+              <div className="user-avatar-circle" style={{ width: 28, height: 28, minWidth: 28, minHeight: 28, borderWidth: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #ef3b2d, #ff8a1f)', color: '#fff', fontWeight: 800, borderRadius: '50%', boxShadow: '0 0 12px rgba(239, 59, 45, 0.4)' }}>
+                <span>{(currentUser.username || 'U').charAt(0).toUpperCase()}</span>
+              </div>
+              <div className="nav-user-info">
+                <span className="nav-user-name">{currentUser.username}</span>
+                <span className="nav-user-id-badge" title="Unique Store User ID">USR-{currentUser.id}</span>
+              </div>
+            </Link>
+
+            <button
+              type="button"
+              className="btn-nav-icon"
+              onClick={() => {
+                clearAuth();
+                if (onLogout) onLogout();
+              }}
+              title="Log out of MSTS Store"
+            >
+              <LogOut size={15} />
+            </button>
           </div>
         ) : (
           <Link

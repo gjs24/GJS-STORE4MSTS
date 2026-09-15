@@ -65,6 +65,15 @@ export function AuthForm({ mode, portal = "user" }: AuthFormProps) {
 
     router.refresh();
 
+    const redirectUrl = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("redirect") : null;
+    const safeRedirect = redirectUrl && redirectUrl.startsWith("/") && !redirectUrl.startsWith("//") ? redirectUrl : null;
+
+    if (safeRedirect) {
+      setMessage("Login successful. Returning to requested page...");
+      router.push(safeRedirect);
+      return;
+    }
+
     if (portal === "user" && data.user?.is_staff) {
       setMessage("Admin account detected. Opening admin dashboard...");
       router.push("/admin-dashboard");

@@ -123,3 +123,26 @@ class BoardStudioTests(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_201_CREATED)
         self.assertTrue(UserBoardUnlock.objects.filter(user=self.user1, template=self.free_template).exists())
 
+    def test_purchase_list_includes_board_template_order(self):
+        self.client.force_authenticate(user=self.user1)
+        order = Order.objects.create(
+            user=self.user1,
+            board_template=self.paid_template,
+            amount=Decimal("49.00"),
+            currency="INR",
+            status=Order.Status.PAID,
+            download_enabled=True,
+            provider_order_id="GJS-B99999",
+        )
+        url = reverse("purchases")
+        res = self.client.get(url)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertGreaterEqual(len(res.data), 1)
+        found = next((item for item in res.data if item["id"] == order.id), None)
+        self.assertIsNotNone(found)
+        self.assertIsNone(found["asset"])
+        self.assertIsNotNone(found["board_template"])
+        self.assertEqual(found["board_template"]["id"], self.paid_template.id)
+        self.assertEqual(found["board_template"]["name"], self.paid_template.name)
+        self.assertTrue(found["download_enabled"])
+

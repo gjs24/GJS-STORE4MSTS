@@ -97,6 +97,8 @@ export interface BoardTemplate {
   isPaid?: boolean; // false = Free; true = Paid purchase required
   price?: number; // e.g. 49, 99, 149 (in INR ₹)
   currency?: string; // default 'INR' (₹)
+  isUnlocked?: boolean; // true if free, unlocked, or purchased
+  canCustomize?: boolean; // true if permitted to save customized variants
 }
 
 export type UserBoardValues = Record<string, string>;

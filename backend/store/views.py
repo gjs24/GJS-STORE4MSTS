@@ -916,7 +916,10 @@ class OrderCreateView(generics.CreateAPIView):
     def create(self, request, *args, **kwargs):
         board_template_id = request.data.get("board_template_id")
         if board_template_id:
-            template = get_object_or_404(BoardTemplate, id=board_template_id, published=True)
+            if request.user.is_staff:
+                template = get_object_or_404(BoardTemplate, id=board_template_id)
+            else:
+                template = get_object_or_404(BoardTemplate, id=board_template_id, published=True)
             already_unlocked = not template.is_paid or UserBoardUnlock.objects.filter(user=request.user, template=template).exists() or request.user.is_staff
             if already_unlocked:
                 existing_order = Order.objects.filter(user=request.user, board_template=template, status__in=[Order.Status.APPROVED, Order.Status.PAID]).order_by("-id").first()
@@ -1176,7 +1179,7 @@ class PurchaseListView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return Order.objects.filter(user=self.request.user).select_related("asset", "asset__category")
+        return Order.objects.filter(user=self.request.user).select_related("asset", "asset__category", "board_template")
 
 
 @api_view(["GET"])

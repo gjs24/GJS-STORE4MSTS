@@ -2,7 +2,17 @@ import { API_URL, clearAuth, type Asset } from "@/lib/api";
 
 export type StoreOrder = {
   id: number;
-  asset: Asset;
+  asset?: Asset | null;
+  board_template?: {
+    id: string;
+    name: string;
+    category?: string;
+    price?: number | string;
+    is_paid?: boolean;
+    background_image_url?: string;
+    is_unlocked?: boolean;
+  } | null;
+  board_template_id?: string | null;
   amount: string;
   currency: string;
   status: "PENDING" | "VERIFICATION_PENDING" | "APPROVED" | "REJECTED" | "PAID" | "FAILED" | "REFUNDED";
@@ -154,6 +164,24 @@ export async function createOrder(assetId: number): Promise<StoreOrder> {
     });
   }
   if (!res.ok) throw new Error(await parseError(res, "Could not create order."));
+  return res.json();
+}
+
+export async function createBoardTemplateOrder(templateId: string): Promise<StoreOrder> {
+  await validAccessToken();
+  let res = await fetch(`${API_URL}/orders/create/`, {
+    method: "POST",
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify({ board_template_id: templateId })
+  });
+  if (res.status === 401 && await refreshAccessToken()) {
+    res = await fetch(`${API_URL}/orders/create/`, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ board_template_id: templateId })
+    });
+  }
+  if (!res.ok) throw new Error(await parseError(res, "Could not create order for this board template."));
   return res.json();
 }
 

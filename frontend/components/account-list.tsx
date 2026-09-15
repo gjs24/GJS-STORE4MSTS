@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Download, FileText, PackageCheck, ShoppingCart, Trash2 } from "lucide-react";
+import { Download, FileText, PackageCheck, ShoppingCart, TrainFront, Trash2 } from "lucide-react";
 import { PriceDisplay } from "@/components/price-display";
 import type { Asset } from "@/lib/api";
 import { downloadAsset, downloadInvoice, removeFromWishlist, type DownloadLog, type StoreOrder, type WishlistItem, userGet, verifyPayment } from "@/lib/store-api";
@@ -13,7 +13,17 @@ type AccountListProps = {
 
 type Row = {
   id: number;
-  asset: Asset;
+  asset?: Asset | null;
+  boardTemplate?: {
+    id: string;
+    name: string;
+    category?: string;
+    price?: number | string;
+    is_paid?: boolean;
+    background_image_url?: string;
+  } | null;
+  amount?: string;
+  currency?: string;
   meta: string;
   status?: string;
   downloadEnabled?: boolean;
@@ -42,9 +52,14 @@ export function AccountList({ type }: AccountListProps) {
             downloadEnabled = "download_enabled" in item ? Boolean(item.download_enabled) : Boolean(item.asset?.is_free);
           }
 
+          const order = item as StoreOrder;
+          const isBoard = Boolean(order.board_template);
           return {
             id: item.id,
-            asset: item.asset,
+            asset: "asset" in item ? (item as any).asset : null,
+            boardTemplate: isBoard ? order.board_template : null,
+            amount: "amount" in item ? (item as StoreOrder).amount : undefined,
+            currency: "currency" in item ? (item as StoreOrder).currency : "INR",
             meta:
               type === "purchases"
                 ? `Purchased ${formatDate((item as StoreOrder).created_at)}`
@@ -148,21 +163,43 @@ export function AccountList({ type }: AccountListProps) {
       <div className="grid gap-4">
         {rows.map((row) => (
           <div key={row.id} className="grid gap-4 rounded border border-white/10 bg-white/[0.03] p-4 md:grid-cols-[1fr_auto] md:items-center">
-            <div>
-              <p className="text-xs font-semibold uppercase text-rail-amber">{row.asset.category?.name}</p>
-              <Link href={`/assets/${row.asset.slug}`} className="mt-1 block text-lg font-semibold text-white hover:text-rail-amber">
-                {row.asset.title}
-              </Link>
-              <p className="mt-2 text-sm text-slate-400">{row.meta}</p>
-              <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-300">
-                <span className="rounded border border-white/10 px-2 py-1">v{row.asset.version}</span>
-                <span className="rounded border border-white/10 px-2 py-1">{row.asset.file_size}</span>
-                <span className="rounded border border-white/10 px-2 py-1"><PriceDisplay asset={row.asset} compact /></span>
-                {row.status ? <span className="rounded border border-white/10 px-2 py-1">{row.status}</span> : null}
+            {row.boardTemplate ? (
+              <div>
+                <p className="text-xs font-semibold uppercase text-rail-amber">{row.boardTemplate.category || "Railway Name Board"}</p>
+                <Link href={`/board-studio?template=${row.boardTemplate.id}`} className="mt-1 block text-lg font-semibold text-white hover:text-rail-amber">
+                  {row.boardTemplate.name}
+                </Link>
+                <p className="mt-2 text-sm text-slate-400">{row.meta}</p>
+                <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-300">
+                  <span className="rounded border border-white/10 px-2 py-1">1024×1024 Texture</span>
+                  <span className="rounded border border-white/10 px-2 py-1">DDS & PNG</span>
+                  <span className="rounded border border-white/10 px-2 py-1">INR {row.amount || row.boardTemplate.price || "0.00"}</span>
+                  {row.status ? <span className="rounded border border-white/10 px-2 py-1">{row.status}</span> : null}
+                </div>
               </div>
-            </div>
+            ) : row.asset ? (
+              <div>
+                <p className="text-xs font-semibold uppercase text-rail-amber">{row.asset.category?.name}</p>
+                <Link href={`/assets/${row.asset.slug}`} className="mt-1 block text-lg font-semibold text-white hover:text-rail-amber">
+                  {row.asset.title}
+                </Link>
+                <p className="mt-2 text-sm text-slate-400">{row.meta}</p>
+                <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-300">
+                  <span className="rounded border border-white/10 px-2 py-1">v{row.asset.version}</span>
+                  <span className="rounded border border-white/10 px-2 py-1">{row.asset.file_size}</span>
+                  <span className="rounded border border-white/10 px-2 py-1"><PriceDisplay asset={row.asset} compact /></span>
+                  {row.status ? <span className="rounded border border-white/10 px-2 py-1">{row.status}</span> : null}
+                </div>
+              </div>
+            ) : (
+              <div>
+                <p className="text-xs font-semibold uppercase text-rail-amber">Store Item</p>
+                <p className="mt-1 text-lg font-semibold text-white">Order #{row.id}</p>
+                <p className="mt-2 text-sm text-slate-400">{row.meta}</p>
+              </div>
+            )}
             <div className="flex flex-wrap items-center gap-2">
-              {type === "wishlist" && (
+              {type === "wishlist" && row.asset && (
                 <>
                   <Link
                     href={`/assets/${row.asset.slug}`}
@@ -174,7 +211,7 @@ export function AccountList({ type }: AccountListProps) {
 
                   {row.downloadEnabled ? (
                     <button
-                      onClick={() => handleDownload(row.asset)}
+                      onClick={() => handleDownload(row.asset!)}
                       disabled={busyId === row.asset.id}
                       className="flex items-center gap-1.5 rounded-lg bg-rail-red px-3.5 py-2 text-xs font-bold text-white shadow-glow transition-all hover:bg-rail-red/90 disabled:opacity-60"
                     >
@@ -215,26 +252,42 @@ export function AccountList({ type }: AccountListProps) {
                     </button>
                   )}
 
-                  {row.downloadEnabled ? (
-                    <button
-                      onClick={() => handleDownload(row.asset)}
-                      disabled={busyId === row.asset.id}
-                      className="flex items-center gap-1.5 rounded-lg bg-rail-red px-3.5 py-2 text-xs font-bold text-white shadow-glow transition-all hover:bg-rail-red/90 disabled:opacity-60"
-                    >
-                      <PackageCheck size={15} />
-                      <span>Download</span>
-                    </button>
-                  ) : (
-                    <span className="rounded-lg border border-rail-amber/30 bg-rail-amber/10 px-3 py-1.5 text-xs font-semibold text-rail-amber">
-                      Payment Pending
-                    </span>
-                  )}
+                  {row.boardTemplate ? (
+                    row.downloadEnabled ? (
+                      <Link
+                        href={`/board-studio?template=${row.boardTemplate.id}`}
+                        className="flex items-center gap-1.5 rounded-lg bg-rail-red px-3.5 py-2 text-xs font-bold text-white shadow-glow transition-all hover:bg-rail-red/90"
+                      >
+                        <TrainFront size={15} />
+                        <span>Customize in Studio</span>
+                      </Link>
+                    ) : (
+                      <span className="rounded-lg border border-rail-amber/30 bg-rail-amber/10 px-3 py-1.5 text-xs font-semibold text-rail-amber">
+                        Payment Pending
+                      </span>
+                    )
+                  ) : row.asset ? (
+                    row.downloadEnabled ? (
+                      <button
+                        onClick={() => handleDownload(row.asset!)}
+                        disabled={busyId === row.asset.id}
+                        className="flex items-center gap-1.5 rounded-lg bg-rail-red px-3.5 py-2 text-xs font-bold text-white shadow-glow transition-all hover:bg-rail-red/90 disabled:opacity-60"
+                      >
+                        <PackageCheck size={15} />
+                        <span>Download</span>
+                      </button>
+                    ) : (
+                      <span className="rounded-lg border border-rail-amber/30 bg-rail-amber/10 px-3 py-1.5 text-xs font-semibold text-rail-amber">
+                        Payment Pending
+                      </span>
+                    )
+                  ) : null}
                 </>
               )}
 
-              {type === "downloads" && (
+              {type === "downloads" && row.asset && (
                 <button
-                  onClick={() => handleDownload(row.asset)}
+                  onClick={() => handleDownload(row.asset!)}
                   disabled={busyId === row.asset.id}
                   className="flex items-center gap-1.5 rounded-lg bg-rail-red px-3.5 py-2 text-xs font-bold text-white shadow-glow transition-all hover:bg-rail-red/90 disabled:opacity-60"
                 >

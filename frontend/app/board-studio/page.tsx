@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { BoardTemplate, UserBoardValues } from '@/lib/board-studio/types';
 import { storageService } from '@/lib/board-studio/storage-service';
 import { fontManager } from '@/lib/board-studio/font-manager';
-import { getStoredUser, CurrentUser } from '@/lib/api';
+import { getStoredUser, setStoredUser, clearAuth, AUTH_CHANGE_EVENT, CurrentUser } from '@/lib/api';
+import { userGet, verifyPayment, type StoreOrder } from '@/lib/store-api';
 
 import { StudioNavbar } from '@/components/board-studio/studio-navbar';
 import { HomePage } from '@/components/board-studio/home-gallery';
@@ -35,21 +36,127 @@ export default function BoardStudioPage() {
   const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
   const [purchaseTarget, setPurchaseTarget] = useState<BoardTemplate | null>(null);
 
-  // Initialize fonts & auth on mount
+  const targetTemplateIdRef = useRef<string | null>(null);
+
+  // 1. Sync authentication with MSTS Production Store
+  const syncUserAuth = useCallback(async () => {
+    if (typeof window === 'undefined') return;
+    const stored = getStoredUser();
+    if (stored) {
+      setCurrentUser(stored);
+      if (stored.is_staff) {
+        setIsAdmin(true);
+      }
+    }
+
+    const token = localStorage.getItem('accessToken');
+    if (token) {
+      try {
+        const fresh = await userGet<CurrentUser>('/auth/me/');
+        setStoredUser(fresh);
+        setCurrentUser(fresh);
+        if (fresh.is_staff) {
+          setIsAdmin(true);
+        }
+      } catch (err) {
+        if (!stored) {
+          clearAuth();
+          setCurrentUser(null);
+        }
+      }
+    } else {
+      setCurrentUser(null);
+    }
+  }, []);
+
+  // 2. Fetch and sync unlocked templates from MSTS user purchases
+  const syncUserPurchases = useCallback(async () => {
+    if (typeof window === 'undefined') return;
+    const storedUnlocks: string[] = JSON.parse(localStorage.getItem('gjs_unlocked_templates') || '[]');
+    const unlockSet = new Set<string>(storedUnlocks);
+
+    const token = localStorage.getItem('accessToken');
+    if (token) {
+      try {
+        const purchases = await userGet<StoreOrder[]>('/user/purchases/');
+        if (Array.isArray(purchases)) {
+          purchases.forEach((order) => {
+            if (
+              order.board_template?.id &&
+              (order.download_enabled || order.status === 'PAID' || order.status === 'APPROVED')
+            ) {
+              unlockSet.add(order.board_template.id);
+            }
+          });
+        }
+      } catch (err) {
+        // Guest or offline
+      }
+    }
+
+    const merged = Array.from(unlockSet);
+    setUnlockedIds(merged);
+    localStorage.setItem('gjs_unlocked_templates', JSON.stringify(merged));
+  }, []);
+
+  // Initialize fonts, auth, and listen for store-wide auth changes
   useEffect(() => {
     fontManager.applyCustomFontsToDOM();
 
-    if (typeof window !== 'undefined') {
-      const user = getStoredUser();
-      setCurrentUser(user);
+    syncUserAuth();
+    syncUserPurchases();
 
-      const hasAdminSession = localStorage.getItem('gjs_board_studio_admin_session') === 'true';
-      if (user?.is_staff || hasAdminSession) {
-        setIsAdmin(hasAdminSession);
+    window.addEventListener(AUTH_CHANGE_EVENT, syncUserAuth);
+    window.addEventListener('storage', syncUserAuth);
+
+    return () => {
+      window.removeEventListener(AUTH_CHANGE_EVENT, syncUserAuth);
+      window.removeEventListener('storage', syncUserAuth);
+    };
+  }, [syncUserAuth, syncUserPurchases]);
+
+  // Handle URL query parameters: ?template= and ?order_id= (Cashfree return)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const templateParam = params.get('template');
+    const orderIdParam = params.get('order_id');
+
+    if (templateParam) {
+      targetTemplateIdRef.current = templateParam;
+    }
+
+    if (orderIdParam) {
+      const orderId = Number(orderIdParam);
+      if (!isNaN(orderId) && orderId > 0) {
+        verifyPayment(orderId)
+          .then((verifiedOrder) => {
+            if (
+              verifiedOrder.download_enabled ||
+              verifiedOrder.status === 'PAID' ||
+              verifiedOrder.status === 'APPROVED'
+            ) {
+              const targetTpl = verifiedOrder.board_template?.id || templateParam;
+              if (targetTpl) {
+                const currentUnlocks: string[] = JSON.parse(
+                  localStorage.getItem('gjs_unlocked_templates') || '[]'
+                );
+                if (!currentUnlocks.includes(targetTpl)) {
+                  currentUnlocks.push(targetTpl);
+                  localStorage.setItem('gjs_unlocked_templates', JSON.stringify(currentUnlocks));
+                  setUnlockedIds(currentUnlocks);
+                }
+              }
+            }
+          })
+          .catch((err) => {
+            console.warn('Cashfree payment verification notice:', err);
+          })
+          .finally(() => {
+            const cleanUrl = templateParam ? `/board-studio?template=${templateParam}` : '/board-studio';
+            window.history.replaceState(null, '', cleanUrl);
+          });
       }
-
-      const storedUnlocks: string[] = JSON.parse(localStorage.getItem('gjs_unlocked_templates') || '[]');
-      setUnlockedIds(storedUnlocks);
     }
   }, []);
 
@@ -67,7 +174,13 @@ export default function BoardStudioPage() {
     const local = storageService.getAllTemplates();
     if (local.length > 0) {
       setTemplates(local);
-      if (!activeTemplate) {
+      const target = targetTemplateIdRef.current
+        ? local.find((t) => t.id === targetTemplateIdRef.current)
+        : null;
+      if (target) {
+        setActiveTemplate(target);
+        setViewMode('editor');
+      } else if (!activeTemplate) {
         const first = local.find((t) => t.published !== false) || local[0];
         setActiveTemplate(first);
       }
@@ -78,7 +191,21 @@ export default function BoardStudioPage() {
       const cloud = await storageService.fetchCloudTemplates();
       if (cloud && cloud.length > 0) {
         setTemplates(cloud);
-        if (!activeTemplate) {
+
+        // Sync any server-confirmed unlocks into unlockedIds
+        cloud.forEach((t) => {
+          if (t.isUnlocked) {
+            setUnlockedIds((prev) => (prev.includes(t.id) ? prev : [...prev, t.id]));
+          }
+        });
+
+        const target = targetTemplateIdRef.current
+          ? cloud.find((t) => t.id === targetTemplateIdRef.current)
+          : null;
+        if (target) {
+          setActiveTemplate(target);
+          setViewMode('editor');
+        } else if (!activeTemplate) {
           const first = cloud.find((t) => t.published !== false) || cloud[0];
           setActiveTemplate(first);
         }
@@ -119,31 +246,32 @@ export default function BoardStudioPage() {
       id: 'template_' + Date.now(),
       name: 'New Custom LED Texture (1024×1024)',
       category: 'LED Texture Sheet',
-      description: 'Custom train simulator texture sheet or board.',
+      description: 'Indian Railways LED display sheet with locked UV coordinates for MSTS / Open Rails.',
       aspectRatio: '1:1',
       baseWidth: 1024,
       baseHeight: 1024,
-      isTextureSheet: true,
-      textureResolution: 1024,
       backgroundColor: '#0c0f12',
       backgroundType: 'transparent',
-      borderColor: '#33404d',
-      borderWidth: 0,
+      borderColor: '#ef3b2d',
+      borderWidth: 2,
       borderRadius: 0,
       showBolts: false,
+      isTextureSheet: true,
+      textureResolution: 1024,
+      allowUserCustomBackground: false,
       fixedGraphics: [],
       fields: [
         {
           id: 'field_train_no',
           label: 'Train Number Slot',
-          defaultValue: '12627 / 12628',
-          placeholder: 'TRAIN NUMBER',
+          defaultValue: '12627',
+          placeholder: '12627',
           x: 50,
           y: 20,
-          width: 70,
-          height: 10,
+          width: 80,
+          height: 12,
           fontFamily: "'VT323', 'DotGothic16', monospace",
-          fontSize: 58,
+          fontSize: 72,
           fontWeight: 700,
           color: '#ff9f1c',
           align: 'center',
@@ -220,6 +348,14 @@ export default function BoardStudioPage() {
     }
   };
 
+  const handleLogout = () => {
+    setCurrentUser(null);
+    setIsAdmin(false);
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('gjs_board_studio_admin_session');
+    }
+  };
+
   const publishedTemplates = templates.filter((t) => t.published !== false);
 
   if (!activeTemplate && templates.length === 0) {
@@ -253,6 +389,7 @@ export default function BoardStudioPage() {
           }}
           onOpenHelp={() => setIsHelpOpen(true)}
           onToggleAdmin={handleToggleAdmin}
+          onLogout={handleLogout}
         />
 
         {isAdmin && activeTemplate ? (
