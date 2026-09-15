@@ -53,7 +53,7 @@ export type UserCustomBoard = {
   template: string;
   template_details?: BoardTemplate;
   title: string;
-  custom_field_values: Record<string, string>;
+  custom_field_values: Record<string, any>;
   preview_image_url?: string;
   saved_at: string;
   created_at: string;
@@ -118,19 +118,25 @@ export async function getUserCustomBoards(): Promise<UserCustomBoard[]> {
 
 export async function saveUserCustomBoard(payload: {
   id?: number;
-  template: string;
+  template?: string;
+  template_id?: string;
   title: string;
-  custom_field_values: Record<string, string>;
+  custom_field_values: Record<string, any>;
   preview_image_url?: string;
+  preview_image?: string;
 }): Promise<UserCustomBoard> {
   const isUpdate = Boolean(payload.id);
   const url = isUpdate ? `${API_URL}/custom-boards/${payload.id}/` : `${API_URL}/custom-boards/`;
   const method = isUpdate ? "PATCH" : "POST";
+  const body = {
+    ...payload,
+    template: payload.template || payload.template_id,
+  };
 
   const res = await fetch(url, {
     method,
     headers: authHeaders(),
-    body: JSON.stringify(payload),
+    body: JSON.stringify(body),
   });
 
   const data = await res.json();
