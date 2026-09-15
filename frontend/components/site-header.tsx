@@ -14,6 +14,7 @@ import {
   Package,
   Search,
   TrainFront,
+  Tv,
   X
 } from "lucide-react";
 import { AuthNav } from "@/components/auth-nav";
@@ -24,6 +25,7 @@ import { getSiteSettings } from "@/lib/api";
 const navItems = [
   { label: "Home", href: "/", icon: Home },
   { label: "Assets", href: "/assets", icon: Package },
+  { label: "Board Studio", href: "/board-studio", icon: Tv },
   { label: "Categories", href: "/categories", icon: LayoutGrid },
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Desktop App", href: "/download-app", icon: MonitorDown },

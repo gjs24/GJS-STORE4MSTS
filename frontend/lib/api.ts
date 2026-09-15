@@ -187,6 +187,11 @@ export function getStoredUser(): CurrentUser | null {
   }
 }
 
+export function isLoggedIn(): boolean {
+  if (typeof window === "undefined") return false;
+  return Boolean(localStorage.getItem("accessToken"));
+}
+
 export function setStoredUser(user: CurrentUser | null) {
   if (typeof window === "undefined") return;
   if (user) {

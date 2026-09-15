@@ -7,6 +7,25 @@ from rest_framework import serializers
 
 from .early_access import get_cached_early_access_status
 from .models import AdminActivityLog, Asset, AssetImage, Category, DownloadLog, EmailOTP, NotifyRequest, Order, Payment, Review, SiteSetting, UpdateLog, UserSpecialAccess, Wishlist
+from .models import (
+    AdminActivityLog,
+    Asset,
+    AssetImage,
+    BoardTemplate,
+    Category,
+    DownloadLog,
+    EmailOTP,
+    NotifyRequest,
+    Order,
+    Payment,
+    Review,
+    SiteSetting,
+    UpdateLog,
+    UserBoardUnlock,
+    UserCustomBoard,
+    UserSpecialAccess,
+    Wishlist,
+)
 from .special_access import user_has_special_access
 
 
@@ -497,9 +516,76 @@ class AssetWriteSerializer(serializers.ModelSerializer):
         return super().to_internal_value(data)
 
 
+class BoardTemplateSerializer(serializers.ModelSerializer):
+    can_customize = serializers.SerializerMethodField()
+    is_unlocked = serializers.SerializerMethodField()
+
+    class Meta:
+        model = BoardTemplate
+        fields = [
+            "id",
+            "name",
+            "category",
+            "description",
+            "base_width",
+            "base_height",
+            "background_image",
+            "background_image_url",
+            "is_paid",
+            "price",
+            "published",
+            "fields",
+            "fixed_graphics",
+            "can_customize",
+            "is_unlocked",
+            "created_at",
+            "updated_at",
+        ]
+
+    def get_can_customize(self, obj):
+        request = self.context.get("request")
+        user = getattr(request, "user", None) if request else None
+        return obj.can_user_customize(user)
+
+    def get_is_unlocked(self, obj):
+        if not obj.is_paid:
+            return True
+        request = self.context.get("request")
+        user = getattr(request, "user", None) if request else None
+        if not user or not user.is_authenticated:
+            return False
+        if user.is_staff or user.is_superuser:
+            return True
+        return UserBoardUnlock.objects.filter(user=user, template=obj).exists()
+
+
+class UserCustomBoardSerializer(serializers.ModelSerializer):
+    user = UserSerializer(read_only=True)
+    template_details = BoardTemplateSerializer(source="template", read_only=True)
+    template = serializers.PrimaryKeyRelatedField(queryset=BoardTemplate.objects.all())
+
+    class Meta:
+        model = UserCustomBoard
+        fields = [
+            "id",
+            "user",
+            "template",
+            "template_details",
+            "title",
+            "custom_field_values",
+            "preview_image_url",
+            "saved_at",
+            "created_at",
+        ]
+        read_only_fields = ["id", "user", "saved_at", "created_at"]
+
+
 class OrderSerializer(serializers.ModelSerializer):
     asset = AssetListSerializer(read_only=True)
     asset_id = serializers.PrimaryKeyRelatedField(source="asset", queryset=Asset.objects.all(), write_only=True)
+    asset_id = serializers.PrimaryKeyRelatedField(source="asset", queryset=Asset.objects.all(), write_only=True, required=False, allow_null=True)
+    board_template = BoardTemplateSerializer(read_only=True)
+    board_template_id = serializers.PrimaryKeyRelatedField(source="board_template", queryset=BoardTemplate.objects.all(), write_only=True, required=False, allow_null=True)
     user = UserSerializer(read_only=True)
     order_id = serializers.CharField(source="provider_order_id", read_only=True)
     download_enabled = serializers.SerializerMethodField()
@@ -515,6 +601,8 @@ class OrderSerializer(serializers.ModelSerializer):
             "user",
             "asset",
             "asset_id",
+            "board_template",
+            "board_template_id",
             "amount",
             "currency",
             "status",
@@ -533,7 +621,9 @@ class OrderSerializer(serializers.ModelSerializer):
     def get_download_enabled(self, obj):
         if obj.status == Order.Status.BLOCKED or not obj.download_enabled:
             return False
-        return obj.asset.is_free or obj.status in [Order.Status.PAID, Order.Status.APPROVED]
+        if obj.board_template:
+            return obj.status in [Order.Status.PAID, Order.Status.APPROVED]
+        return (obj.asset.is_free if obj.asset else False) or obj.status in [Order.Status.PAID, Order.Status.APPROVED]
 
     def get_manual_payment(self, obj):
         payment = getattr(obj, "payment", None)
@@ -571,6 +661,7 @@ class OrderSerializer(serializers.ModelSerializer):
 
 class AdminOrderSerializer(serializers.ModelSerializer):
     asset = AssetListSerializer(read_only=True)
+    board_template = BoardTemplateSerializer(read_only=True)
     user = UserSerializer(read_only=True)
     order_id = serializers.CharField(source="provider_order_id", read_only=True)
     download_enabled = serializers.BooleanField(required=False)
@@ -586,6 +677,7 @@ class AdminOrderSerializer(serializers.ModelSerializer):
             "order_id",
             "user",
             "asset",
+            "board_template",
             "amount",
             "currency",
             "status",

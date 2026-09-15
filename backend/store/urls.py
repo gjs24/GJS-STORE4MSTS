@@ -4,6 +4,7 @@ from rest_framework_simplejwt.views import TokenRefreshView
 
 from .views import (
     AssetViewSet,
+    BoardTemplateViewSet,
     CategoryViewSet,
     DownloadListView,
     GoogleLoginView,
@@ -14,6 +15,7 @@ from .views import (
     RegisterView,
     ReviewCreateView,
     SendOTPView,
+    UserCustomBoardViewSet,
     VerifyOTPView,
     WishlistView,
     WishlistDetailView,
@@ -39,6 +41,8 @@ from .views import (
 router = DefaultRouter()
 router.register("assets", AssetViewSet, basename="asset")
 router.register("categories", CategoryViewSet, basename="category")
+router.register("board-templates", BoardTemplateViewSet, basename="board-template")
+router.register("custom-boards", UserCustomBoardViewSet, basename="custom-board")
 router.register("admin/assets", AdminAssetViewSet, basename="admin-asset")
 router.register("admin/categories", AdminCategoryViewSet, basename="admin-category")
 router.register("admin/orders", AdminOrderViewSet, basename="admin-order")

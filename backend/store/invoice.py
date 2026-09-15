@@ -1,4 +1,4 @@
-﻿import io
+import io
 import html
 from django.utils import timezone
 
@@ -152,6 +152,21 @@ def generate_invoice_pdf(order):
     asset_version = safe(order.asset.version or "1.0")
     simulator = safe(getattr(order.asset, "simulator_type", "Open Rails (MSTS)").replace("_", " "))
     category = safe(getattr(order.asset.category, "name", "Addon") if getattr(order.asset, "category", None) else "Addon")
+    if order.asset:
+        asset_title = safe(order.asset.title)
+        asset_version = safe(order.asset.version or "1.0")
+        simulator = safe(getattr(order.asset, "simulator_type", "Open Rails (MSTS)").replace("_", " "))
+        category = safe(getattr(order.asset.category, "name", "Addon") if getattr(order.asset, "category", None) else "Addon")
+    elif order.board_template:
+        asset_title = safe(order.board_template.name)
+        asset_version = "1.0"
+        simulator = "Open Rails / TRS19 / TRS22"
+        category = "LED Name Board"
+    else:
+        asset_title = "Store Item"
+        asset_version = "1.0"
+        simulator = "Train Simulator"
+        category = "Digital Addon"
     order_ref = safe(order.provider_order_id or f"ORD-{order.id}")
     date_str = order.created_at.strftime("%d %b %Y, %I:%M %p") if order.created_at else timezone.now().strftime("%d %b %Y")
     status_label = safe(order.status)
@@ -334,6 +349,21 @@ def generate_invoice_html(order):
     asset_version = safe(order.asset.version or "1.0")
     simulator = safe(getattr(order.asset, "simulator_type", "Open Rails (MSTS)").replace("_", " "))
     category = safe(getattr(order.asset.category, "name", "Addon") if getattr(order.asset, "category", None) else "Addon")
+    if order.asset:
+        asset_title = safe(order.asset.title)
+        asset_version = safe(order.asset.version or "1.0")
+        simulator = safe(getattr(order.asset, "simulator_type", "Open Rails (MSTS)").replace("_", " "))
+        category = safe(getattr(order.asset.category, "name", "Addon") if getattr(order.asset, "category", None) else "Addon")
+    elif order.board_template:
+        asset_title = safe(order.board_template.name)
+        asset_version = "1.0"
+        simulator = "Open Rails / TRS19 / TRS22"
+        category = "LED Name Board"
+    else:
+        asset_title = "Store Item"
+        asset_version = "1.0"
+        simulator = "Train Simulator"
+        category = "Digital Addon"
     order_ref = safe(order.provider_order_id or f"ORD-{order.id}")
     date_str = order.created_at.strftime("%d %b %Y, %I:%M %p") if order.created_at else timezone.now().strftime("%d %b %Y")
     status_label = safe(order.status)

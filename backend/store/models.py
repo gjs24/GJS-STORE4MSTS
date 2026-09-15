@@ -155,6 +155,69 @@ class AssetFile(models.Model):
         return f"{self.asset.title} v{self.version}"
 
 
+class BoardTemplate(models.Model):
+    id = models.CharField(max_length=100, primary_key=True, help_text="Unique slug ID e.g. amrit-bharat-led-1024")
+    name = models.CharField(max_length=180)
+    category = models.CharField(max_length=80, default="LED_MATRIX")
+    description = models.TextField(blank=True)
+    base_width = models.PositiveIntegerField(default=1024)
+    base_height = models.PositiveIntegerField(default=1024)
+    background_image = models.ImageField(upload_to="assets/board_templates/", blank=True, null=True)
+    background_image_url = models.URLField(blank=True, default="")
+    is_paid = models.BooleanField(default=False)
+    price = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
+    published = models.BooleanField(default=True)
+    fields = models.JSONField(default=list, blank=True, help_text="LED text slot definitions")
+    fixed_graphics = models.JSONField(default=list, blank=True, help_text="Fixed graphics, borders, bolts, IR crests")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["is_paid", "name"]
+
+    def __str__(self):
+        return f"{self.name} ({'Paid: ₹' + str(self.price) if self.is_paid else 'Free'})"
+
+    def can_user_customize(self, user):
+        if not self.is_paid:
+            return True
+        if not user or not user.is_authenticated:
+            return False
+        if user.is_staff or user.is_superuser:
+            return True
+        return UserBoardUnlock.objects.filter(user=user, template=self).exists()
+
+
+class UserBoardUnlock(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="board_unlocks", on_delete=models.CASCADE)
+    template = models.ForeignKey(BoardTemplate, related_name="unlocks", on_delete=models.CASCADE)
+    order = models.ForeignKey("Order", related_name="board_unlocks", on_delete=models.SET_NULL, null=True, blank=True)
+    unlocked_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ["user", "template"]
+        ordering = ["-unlocked_at"]
+
+    def __str__(self):
+        return f"{self.user.username} unlocked {self.template.name}"
+
+
+class UserCustomBoard(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="custom_boards", on_delete=models.CASCADE)
+    template = models.ForeignKey(BoardTemplate, related_name="custom_boards", on_delete=models.CASCADE)
+    title = models.CharField(max_length=180, default="My Custom Board")
+    custom_field_values = models.JSONField(default=dict, blank=True)
+    preview_image_url = models.TextField(blank=True, default="")
+    saved_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-saved_at"]
+
+    def __str__(self):
+        return f"{self.title} ({self.user.username} - {self.template.id})"
+
+
 class Order(models.Model):
     class Status(models.TextChoices):
         PENDING = "PENDING", "Pending"
@@ -169,6 +232,8 @@ class Order(models.Model):
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="orders", on_delete=models.CASCADE)
     asset = models.ForeignKey(Asset, related_name="orders", on_delete=models.PROTECT)
+    asset = models.ForeignKey(Asset, related_name="orders", on_delete=models.PROTECT, null=True, blank=True)
+    board_template = models.ForeignKey(BoardTemplate, related_name="orders", on_delete=models.SET_NULL, null=True, blank=True)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     currency = models.CharField(max_length=8, default="INR")
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
@@ -188,10 +253,19 @@ class Order(models.Model):
         constraints = [
             models.UniqueConstraint(
                 fields=["user", "asset"],
-                condition=models.Q(status="PAID"),
+                condition=models.Q(status="PAID", asset__isnull=False),
                 name="one_paid_order_per_user_asset",
-            )
+            ),
+            models.UniqueConstraint(
+                fields=["user", "board_template"],
+                condition=models.Q(status="PAID", board_template__isnull=False),
+                name="one_paid_order_per_user_board_template",
+            ),
         ]
+
+    def __str__(self):
+        item_title = self.asset.title if self.asset else (self.board_template.name if self.board_template else f"Order #{self.id}")
+        return f"Order #{self.id} - {item_title} ({self.status})"
 
 
 class Payment(models.Model):

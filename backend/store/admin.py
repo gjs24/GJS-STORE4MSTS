@@ -1,6 +1,61 @@
 from django.contrib import admin
 
 from .models import AdminActivityLog, Asset, AssetFile, AssetImage, Category, DownloadLog, NotifyRequest, Order, Payment, Review, SiteSetting, UpdateLog, UserSpecialAccess, Wishlist
+from .models import (
+    AdminActivityLog,
+    Asset,
+    AssetFile,
+    AssetImage,
+    BoardTemplate,
+    Category,
+    DownloadLog,
+    NotifyRequest,
+    Order,
+    Payment,
+    Review,
+    SiteSetting,
+    UpdateLog,
+    UserBoardUnlock,
+    UserCustomBoard,
+    UserSpecialAccess,
+    Wishlist,
+)
+
+
+class UserCustomBoardInline(admin.TabularInline):
+    model = UserCustomBoard
+    extra = 0
+    readonly_fields = ("user", "title", "saved_at")
+    can_delete = True
+
+
+class UserBoardUnlockInline(admin.TabularInline):
+    model = UserBoardUnlock
+    extra = 0
+    readonly_fields = ("user", "order", "unlocked_at")
+
+
+@admin.register(BoardTemplate)
+class BoardTemplateAdmin(admin.ModelAdmin):
+    list_display = ("id", "name", "category", "is_paid", "price", "published", "created_at")
+    list_filter = ("is_paid", "published", "category")
+    search_fields = ("id", "name", "category", "description")
+    inlines = [UserCustomBoardInline, UserBoardUnlockInline]
+
+
+@admin.register(UserCustomBoard)
+class UserCustomBoardAdmin(admin.ModelAdmin):
+    list_display = ("id", "title", "user", "template", "saved_at")
+    list_filter = ("template", "saved_at")
+    search_fields = ("title", "user__username", "user__email", "template__name")
+    readonly_fields = ("saved_at", "created_at")
+
+
+@admin.register(UserBoardUnlock)
+class UserBoardUnlockAdmin(admin.ModelAdmin):
+    list_display = ("id", "user", "template", "order", "unlocked_at")
+    list_filter = ("template",)
+    search_fields = ("user__username", "template__name")
 
 
 class AssetImageInline(admin.TabularInline):
@@ -37,8 +92,10 @@ class CategoryAdmin(admin.ModelAdmin):
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
     list_display = ("id", "user", "asset", "amount", "currency", "status", "created_at")
+    list_display = ("id", "user", "asset", "board_template", "amount", "currency", "status", "created_at")
     list_filter = ("status", "currency")
     search_fields = ("user__username", "asset__title", "provider_order_id")
+    search_fields = ("user__username", "asset__title", "board_template__name", "provider_order_id")
 
 
 admin.site.register(Payment)

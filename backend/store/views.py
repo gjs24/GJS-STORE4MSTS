@@ -28,16 +28,36 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 
+from rest_framework.exceptions import PermissionDenied
+
 from .throttles import DownloadRateThrottle
 
 from .early_access import get_cached_early_access_status
 from .models import AdminActivityLog, Asset, Category, DownloadLog, EmailOTP, NotifyRequest, Order, Payment, Review, SiteSetting, UserSpecialAccess, Wishlist
+from .models import (
+    AdminActivityLog,
+    Asset,
+    BoardTemplate,
+    Category,
+    DownloadLog,
+    EmailOTP,
+    NotifyRequest,
+    Order,
+    Payment,
+    Review,
+    SiteSetting,
+    UserBoardUnlock,
+    UserCustomBoard,
+    UserSpecialAccess,
+    Wishlist,
+)
 from .permissions import IsAdminOrReadOnly
 from .serializers import (
     AssetDetailSerializer,
     AssetListSerializer,
     AssetWriteSerializer,
     AdminActivityLogSerializer,
+    BoardTemplateSerializer,
     CategorySerializer,
     DownloadLogSerializer,
     NotifyRequestSerializer,
@@ -48,6 +68,7 @@ from .serializers import (
     ReviewSerializer,
     SendOTPSerializer,
     SiteSettingSerializer,
+    UserCustomBoardSerializer,
     UserSerializer,
     UserSpecialAccessSerializer,
     VerifyOTPSerializer,
@@ -115,6 +136,7 @@ def create_cashfree_order(order, request):
             "return_url": cashfree_return_url(order),
         },
         "order_note": f"{order.asset.title} digital download",
+        "order_note": f"{(order.asset.title if order.asset else order.board_template.name if order.board_template else 'Store Item')} digital download",
     }
     response = requests.post(
         f"{cashfree_base_url()}/orders",
@@ -169,6 +191,8 @@ def sync_cashfree_order(order):
         order.status = Order.Status.PAID
         order.download_enabled = True
         order.save(update_fields=["status", "download_enabled"])
+        if order.board_template:
+            UserBoardUnlock.objects.get_or_create(user=order.user, template=order.board_template, defaults={"order": order})
     elif order_status in CASHFREE_TERMINAL_STATUSES:
         order.status = Order.Status.FAILED
         order.download_enabled = False
@@ -239,6 +263,9 @@ def order_has_download_access(order):
     if order.status == Order.Status.BLOCKED or not order.download_enabled:
         return False
     return order.asset.is_free or order.status in DOWNLOAD_READY_STATUSES
+    if order.board_template:
+        return order.status in DOWNLOAD_READY_STATUSES
+    return (order.asset.is_free if order.asset else False) or order.status in DOWNLOAD_READY_STATUSES
 
 
 def sync_order_download_access(order):
@@ -249,6 +276,13 @@ def sync_order_download_access(order):
         return order
 
     should_enable = (order.asset.is_free or order.status in DOWNLOAD_READY_STATUSES) and order.download_enabled
+    is_free = False
+    if order.asset:
+        is_free = order.asset.is_free
+    elif order.board_template:
+        is_free = not order.board_template.is_paid
+
+    should_enable = (is_free or order.status in DOWNLOAD_READY_STATUSES) and order.download_enabled
     should_disable = (
         not should_enable
         or order.status in [Order.Status.REJECTED, Order.Status.FAILED, Order.Status.REFUNDED, Order.Status.BLOCKED]
@@ -880,6 +914,72 @@ class OrderCreateView(generics.CreateAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def create(self, request, *args, **kwargs):
+        board_template_id = request.data.get("board_template_id")
+        if board_template_id:
+            template = get_object_or_404(BoardTemplate, id=board_template_id, published=True)
+            already_unlocked = not template.is_paid or UserBoardUnlock.objects.filter(user=request.user, template=template).exists() or request.user.is_staff
+            if already_unlocked:
+                existing_order = Order.objects.filter(user=request.user, board_template=template, status__in=[Order.Status.APPROVED, Order.Status.PAID]).order_by("-id").first()
+                if existing_order:
+                    return Response(OrderSerializer(existing_order, context={"request": request}).data, status=status.HTTP_200_OK)
+                order = Order.objects.create(
+                    user=request.user,
+                    board_template=template,
+                    amount=Decimal("0.00"),
+                    currency="INR",
+                    status=Order.Status.APPROVED,
+                    download_enabled=True,
+                )
+                order.provider_order_id = f"GJS-B{order.id:05d}"
+                order.save(update_fields=["provider_order_id"])
+                UserBoardUnlock.objects.get_or_create(user=request.user, template=template, defaults={"order": order})
+                return Response(OrderSerializer(order, context={"request": request}).data, status=status.HTTP_201_CREATED)
+
+            target_amount = template.price
+            existing_order = Order.objects.filter(
+                user=request.user,
+                board_template=template,
+                status__in=[Order.Status.PENDING, Order.Status.VERIFICATION_PENDING, Order.Status.APPROVED, Order.Status.PAID],
+            ).order_by("-id").first()
+
+            if existing_order and existing_order.status == Order.Status.PENDING and existing_order.amount != target_amount:
+                existing_order.status = Order.Status.EXPIRED
+                existing_order.download_enabled = False
+                existing_order.save(update_fields=["status", "download_enabled"])
+                Payment.objects.filter(order=existing_order).update(status="expired")
+                existing_order = None
+
+            if existing_order:
+                sync_order_download_access(existing_order)
+                if not order_has_download_access(existing_order):
+                    synced, sync_error = sync_cashfree_order(existing_order)
+                    if not synced and not cashfree_order_missing_error(sync_error):
+                        return Response({"detail": sync_error or "Cashfree payment status could not be checked."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+                    if existing_order.status == Order.Status.FAILED:
+                        existing_order = None
+            if existing_order:
+                if not order_has_download_access(existing_order):
+                    cashfree_ready, cashfree_error = ensure_cashfree_payment(existing_order, request)
+                    if not cashfree_ready:
+                        return Response({"detail": cashfree_error or "Cashfree checkout is not available."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+                return Response(OrderSerializer(existing_order, context={"request": request}).data, status=status.HTTP_200_OK)
+
+            order = Order.objects.create(
+                user=request.user,
+                board_template=template,
+                amount=target_amount,
+                currency="INR",
+                status=Order.Status.PENDING,
+                download_enabled=False,
+            )
+            order.provider_order_id = f"GJS-B{order.id:05d}"
+            order.save(update_fields=["provider_order_id"])
+            cashfree_ready, cashfree_error = ensure_cashfree_payment(order, request)
+            if not cashfree_ready:
+                return Response({"detail": cashfree_error or "Cashfree checkout is not available."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            data = OrderSerializer(order, context={"request": request}).data
+            return Response(data, status=status.HTTP_201_CREATED)
+
         asset = get_object_or_404(Asset, id=request.data.get("asset_id"), is_published=True)
         ea_status = get_cached_early_access_status(asset, request)
         can_purchase = (
@@ -940,6 +1040,13 @@ class OrderCreateView(generics.CreateAPIView):
 
     def perform_create(self, serializer):
         asset = serializer.validated_data["asset"]
+        asset = serializer.validated_data.get("asset")
+        if not asset:
+            order = serializer.save(user=self.request.user)
+            order.provider_order_id = f"GJS-{order.id:06d}"
+            order.save(update_fields=["provider_order_id"])
+            return
+
         ea_status = get_cached_early_access_status(asset, self.request)
         final_amount = ea_status["effective_price"]
         has_special = user_has_special_access(self.request.user, asset)
@@ -960,6 +1067,56 @@ class OrderCreateView(generics.CreateAPIView):
             order=order,
             defaults={"provider": Payment.Provider.MANUAL, "status": status_value.lower()},
         )
+
+
+class BoardTemplateViewSet(viewsets.ModelViewSet):
+    queryset = BoardTemplate.objects.all()
+    serializer_class = BoardTemplateSerializer
+    parser_classes = [JSONParser, FormParser, MultiPartParser]
+
+    def get_permissions(self):
+        if self.action in ["list", "retrieve"]:
+            return [permissions.AllowAny()]
+        return [permissions.IsAdminUser()]
+
+    def get_queryset(self):
+        if self.request.user and self.request.user.is_authenticated and self.request.user.is_staff:
+            return BoardTemplate.objects.all()
+        return BoardTemplate.objects.filter(published=True)
+
+    def perform_create(self, serializer):
+        instance = serializer.save()
+        log_admin_activity(self.request, "Created board template", "BoardTemplate", instance.id, f"Created {instance.name}")
+
+    def perform_update(self, serializer):
+        instance = serializer.save()
+        log_admin_activity(self.request, "Updated board template", "BoardTemplate", instance.id, f"Updated {instance.name}")
+
+    def perform_destroy(self, instance):
+        template_id = instance.id
+        template_name = instance.name
+        instance.delete()
+        log_admin_activity(self.request, "Deleted board template", "BoardTemplate", template_id, f"Deleted {template_name}")
+
+
+class UserCustomBoardViewSet(viewsets.ModelViewSet):
+    serializer_class = UserCustomBoardSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return UserCustomBoard.objects.filter(user=self.request.user).select_related("template")
+
+    def perform_create(self, serializer):
+        template = serializer.validated_data["template"]
+        if not template.can_user_customize(self.request.user):
+            raise PermissionDenied("You must unlock this board template before saving custom configurations.")
+        serializer.save(user=self.request.user)
+
+    def perform_update(self, serializer):
+        template = serializer.instance.template
+        if not template.can_user_customize(self.request.user):
+            raise PermissionDenied("You must unlock this board template before saving custom configurations.")
+        serializer.save()
 
 
 class PaymentVerifyView(generics.GenericAPIView):
@@ -1321,6 +1478,8 @@ class AdminOrderViewSet(viewsets.ModelViewSet):
             order.blocked_at = None
             order.save(update_fields=["download_enabled", "blocked_at"])
             Payment.objects.filter(order=order).update(status="approved")
+            if order.board_template:
+                UserBoardUnlock.objects.get_or_create(user=order.user, template=order.board_template, defaults={"order": order})
 
         elif order.status in [
             Order.Status.REJECTED,
@@ -1334,6 +1493,7 @@ class AdminOrderViewSet(viewsets.ModelViewSet):
 
         user_label = order.user.username if order.user else "User"
         asset_title = order.asset.title if order.asset else "Asset"
+        asset_title = order.asset.title if order.asset else (order.board_template.name if order.board_template else "Item")
 
         status_changed = previous_status != order.status
         download_changed = previous_download != order.download_enabled
@@ -1389,6 +1549,8 @@ class AdminOrderViewSet(viewsets.ModelViewSet):
         # Update payment record status
         if order.status in [Order.Status.PAID, Order.Status.APPROVED]:
             Payment.objects.filter(order=order).update(status="approved")
+            if order.board_template:
+                UserBoardUnlock.objects.get_or_create(user=order.user, template=order.board_template, defaults={"order": order})
         elif order.status == Order.Status.BLOCKED:
             Payment.objects.filter(order=order).update(status="blocked")
         elif order.status in [Order.Status.REJECTED, Order.Status.FAILED, Order.Status.REFUNDED]:
@@ -1396,6 +1558,7 @@ class AdminOrderViewSet(viewsets.ModelViewSet):
 
         user_label = order.user.username if order.user else "User"
         asset_title = order.asset.title if order.asset else "Asset"
+        asset_title = order.asset.title if order.asset else (order.board_template.name if order.board_template else "Item")
 
         action_name = "Order access blocked" if (order.status == Order.Status.BLOCKED or not order.download_enabled) else f"Order {order.status.lower()}"
         msg = f"Order #{order.id} for {user_label} ({asset_title}): status changed from {previous_status} to {order.status}, downloads={'ENABLED' if order.download_enabled else 'BLOCKED'}"
