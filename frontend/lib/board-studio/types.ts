@@ -111,6 +111,8 @@ export interface BoardTemplate {
   currency?: string; // default 'INR' (₹)
   isUnlocked?: boolean; // true if free, unlocked, or purchased
   canCustomize?: boolean; // true if permitted to save customized variants
+  unlockedViaAsset?: { id: number; title: string; slug: string } | null;
+  bundledWithAssets?: { id: number; title: string; slug: string; price: string }[];
 }
 
 export type UserBoardValues = Record<string, string>;

@@ -124,6 +124,10 @@ class Asset(models.Model):
         blank=True,
         help_text="Associated Board Template for trainset",
     )
+    bundle_board_template_free = models.BooleanField(
+        default=False,
+        help_text="Bundle associated board template for free when user purchases this asset at single price",
+    )
     download_count = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -199,7 +203,16 @@ class BoardTemplate(models.Model):
             return False
         if user.is_staff or user.is_superuser:
             return True
-        return UserBoardUnlock.objects.filter(user=user, template=self).exists()
+        if UserBoardUnlock.objects.filter(user=user, template=self).exists():
+            return True
+        from .models import Order
+        return Order.objects.filter(
+            user=user,
+            asset__board_template=self,
+            asset__bundle_board_template_free=True,
+            status__in=[Order.Status.APPROVED, Order.Status.PAID],
+            download_enabled=True,
+        ).exists()
 
 
 class UserBoardUnlock(models.Model):

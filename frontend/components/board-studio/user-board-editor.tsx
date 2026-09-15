@@ -48,7 +48,7 @@ export const UserBoardEditor: React.FC<UserBoardEditorProps> = ({
   onOpenPurchaseModal,
   unlockedTemplateIds = []
 }) => {
-  const isUnlocked = !activeTemplate.isPaid || unlockedTemplateIds.includes(activeTemplate.id);
+  const isUnlocked = !activeTemplate.isPaid || activeTemplate.isUnlocked || unlockedTemplateIds.includes(activeTemplate.id);
   const openPurchaseModal = (tpl: BoardTemplate) => {
     if (onOpenPurchaseModal) onOpenPurchaseModal(tpl);
   };
@@ -323,6 +323,17 @@ export const UserBoardEditor: React.FC<UserBoardEditorProps> = ({
           </p>
         </div>
 
+        {/* Unlocked via Asset Banner */}
+        {isUnlocked && activeTemplate.unlockedViaAsset && (
+          <div style={{ margin: '0 0 14px 0', padding: '10px 12px', borderRadius: 8, background: 'rgba(16, 185, 129, 0.12)', border: '1px solid rgba(16, 185, 129, 0.3)', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 16 }}>🎁</span>
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#6ee7b7' }}>Unlocked via Trainset Asset</div>
+              <div style={{ fontSize: 11, color: '#a7f3d0' }}>Included free with your purchase of <strong>{activeTemplate.unlockedViaAsset.title}</strong>.</div>
+            </div>
+          </div>
+        )}
+
         {/* Template Locked Warning Box if unpurchased */}
         {!isUnlocked && (
           <div className="template-locked-warning-box">
@@ -341,6 +352,21 @@ export const UserBoardEditor: React.FC<UserBoardEditorProps> = ({
               <ShoppingCart size={14} />
               <span>Unlock Template (₹{activeTemplate.price || 99})</span>
             </button>
+
+            {activeTemplate.bundledWithAssets && activeTemplate.bundledWithAssets.length > 0 && (
+              <div style={{ marginTop: 10, padding: '8px 10px', borderRadius: 6, background: 'rgba(234, 179, 8, 0.1)', border: '1px solid rgba(234, 179, 8, 0.3)', fontSize: 11, color: '#fef08a' }}>
+                💡 <strong>Bundle Option:</strong> Get this template <strong>FREE</strong> when you purchase{' '}
+                <a
+                  href={`/assets/${activeTemplate.bundledWithAssets[0].slug}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ textDecoration: 'underline', fontWeight: 700, color: '#facc15' }}
+                >
+                  {activeTemplate.bundledWithAssets[0].title}
+                </a>{' '}
+                (Single Price Bundle)!
+              </div>
+            )}
           </div>
         )}
 

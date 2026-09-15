@@ -242,33 +242,73 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ sl
             </div>
           ) : null}
           {asset.board_template && (
-            <div className="mt-6 rounded-xl border border-rail-amber/40 bg-gradient-to-r from-rail-amber/15 via-slate-900/70 to-slate-900/90 p-5 shadow-lg">
+            <div
+              className={`mt-6 rounded-xl border p-5 shadow-lg ${
+                asset.bundle_board_template_free
+                  ? "border-emerald-500/50 bg-gradient-to-r from-emerald-950/40 via-slate-900/80 to-slate-900/90"
+                  : "border-rail-amber/40 bg-gradient-to-r from-rail-amber/15 via-slate-900/70 to-slate-900/90"
+              }`}
+            >
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div>
+                <div className="space-y-1.5">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="rounded bg-rail-amber/20 border border-rail-amber/40 px-2.5 py-0.5 text-xs font-black uppercase tracking-wide text-rail-yellow">
-                      OFFICIAL NAME BOARD / LED TEXTURE
-                    </span>
+                    {asset.bundle_board_template_free ? (
+                      <span className="rounded bg-emerald-500/20 border border-emerald-500/40 px-2.5 py-0.5 text-xs font-black uppercase tracking-wide text-emerald-300 flex items-center gap-1">
+                        <span>🎁</span> FREE WITH THIS ASSET
+                      </span>
+                    ) : (
+                      <span className="rounded bg-rail-amber/20 border border-rail-amber/40 px-2.5 py-0.5 text-xs font-black uppercase tracking-wide text-rail-yellow">
+                        OFFICIAL NAME BOARD / LED TEXTURE
+                      </span>
+                    )}
                     {asset.board_template.target_texture_name && (
                       <span className="rounded bg-black/50 border border-white/10 px-2 py-0.5 text-[11px] font-mono text-cyan-300">
                         Texture: {asset.board_template.target_texture_name}.dds
                       </span>
                     )}
+                    {asset.board_template.price && Number(asset.board_template.price) > 0 && (
+                      <span className="rounded bg-white/10 px-2 py-0.5 text-[11px] font-semibold text-slate-300">
+                        Standalone: ₹{asset.board_template.price}
+                      </span>
+                    )}
                   </div>
-                  <h3 className="mt-2 text-lg font-bold text-white">
-                    {asset.board_template.name}
+                  <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                    <span>{asset.board_template.name}</span>
+                    {asset.bundle_board_template_free && (
+                      <span className="text-xs font-normal text-emerald-400 bg-emerald-950/60 border border-emerald-800/50 px-2 py-0.5 rounded-full">
+                        Included in Asset Price
+                      </span>
+                    )}
                   </h3>
-                  <p className="mt-1 text-xs text-slate-300 leading-relaxed">
-                    Customize destination nameboards, coach numbers, route codes, or LED dot-matrix textures matching this trainset in our live Board Studio.
+                  <p className="text-xs text-slate-300 leading-relaxed max-w-2xl">
+                    {asset.can_download && asset.bundle_board_template_free
+                      ? "✓ UNLOCKED FOR FREE: You own this trainset! This official nameboard template is unlocked in your Board Studio library. Customize destination text, coach numbers, and download matching textures now."
+                      : asset.bundle_board_template_free
+                      ? `Get this official Name Board template completely FREE when you buy this trainset at the single price! You can also purchase this nameboard template separately in the Board Studio for ₹${asset.board_template.price || "0"}.`
+                      : `Customize destination nameboards, coach numbers, route codes, or LED dot-matrix textures matching this trainset in our live Board Studio (available separately for ₹${asset.board_template.price || "0"}).`}
                   </p>
                 </div>
-                <Link
-                  href={`/board-studio?template=${asset.board_template.id}`}
-                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-rail-red to-rail-amber px-4 py-2.5 text-xs font-bold text-white shadow-md hover:opacity-95 shrink-0"
-                >
-                  <span>Open in Board Studio</span>
-                  <span>→</span>
-                </Link>
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0">
+                  {asset.can_download ? (
+                    <Link
+                      href={`/board-studio?template=${asset.board_template.id}`}
+                      className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 px-4 py-2.5 text-xs font-bold text-white shadow-md transition-all"
+                    >
+                      <span>Customize in Board Studio</span>
+                      <span>→</span>
+                    </Link>
+                  ) : (
+                    <>
+                      <Link
+                        href={`/board-studio?template=${asset.board_template.id}`}
+                        className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/20 bg-white/5 hover:bg-white/10 px-3.5 py-2.5 text-xs font-semibold text-slate-200 transition-colors"
+                      >
+                        <span>Buy Board Separately (₹{asset.board_template.price})</span>
+                        <span>→</span>
+                      </Link>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
           )}

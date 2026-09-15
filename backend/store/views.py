@@ -171,6 +171,15 @@ def fetch_cashfree_order(provider_order_id):
     return data, ""
 
 
+def grant_board_unlock_if_applicable(order):
+    if not order or not order.user:
+        return
+    if order.board_template:
+        UserBoardUnlock.objects.get_or_create(user=order.user, template=order.board_template, defaults={"order": order})
+    if order.asset and order.asset.board_template and getattr(order.asset, "bundle_board_template_free", False):
+        UserBoardUnlock.objects.get_or_create(user=order.user, template=order.asset.board_template, defaults={"order": order})
+
+
 def sync_cashfree_order(order):
     payment = getattr(order, "payment", None)
     if not payment or payment.provider != Payment.Provider.CASHFREE or not order.provider_order_id:
@@ -190,8 +199,7 @@ def sync_cashfree_order(order):
         order.status = Order.Status.PAID
         order.download_enabled = True
         order.save(update_fields=["status", "download_enabled"])
-        if order.board_template:
-            UserBoardUnlock.objects.get_or_create(user=order.user, template=order.board_template, defaults={"order": order})
+        grant_board_unlock_if_applicable(order)
     elif order_status in CASHFREE_TERMINAL_STATUSES:
         order.status = Order.Status.FAILED
         order.download_enabled = False
@@ -917,7 +925,7 @@ class OrderCreateView(generics.CreateAPIView):
                 template = get_object_or_404(BoardTemplate, id=board_template_id)
             else:
                 template = get_object_or_404(BoardTemplate, id=board_template_id, published=True)
-            already_unlocked = not template.is_paid or UserBoardUnlock.objects.filter(user=request.user, template=template).exists() or request.user.is_staff
+            already_unlocked = template.can_user_customize(request.user)
             if already_unlocked:
                 existing_order = Order.objects.filter(user=request.user, board_template=template, status__in=[Order.Status.APPROVED, Order.Status.PAID]).order_by("-id").first()
                 if existing_order:
@@ -932,7 +940,7 @@ class OrderCreateView(generics.CreateAPIView):
                 )
                 order.provider_order_id = f"GJS-B{order.id:05d}"
                 order.save(update_fields=["provider_order_id"])
-                UserBoardUnlock.objects.get_or_create(user=request.user, template=template, defaults={"order": order})
+                grant_board_unlock_if_applicable(order)
                 return Response(OrderSerializer(order, context={"request": request}).data, status=status.HTTP_201_CREATED)
 
             target_amount = template.price
@@ -1067,6 +1075,8 @@ class OrderCreateView(generics.CreateAPIView):
             order=order,
             defaults={"provider": Payment.Provider.MANUAL, "status": status_value.lower()},
         )
+        if is_free_purchase:
+            grant_board_unlock_if_applicable(order)
 
 
 class BoardTemplateViewSet(viewsets.ModelViewSet):
@@ -1478,8 +1488,7 @@ class AdminOrderViewSet(viewsets.ModelViewSet):
             order.blocked_at = None
             order.save(update_fields=["download_enabled", "blocked_at"])
             Payment.objects.filter(order=order).update(status="approved")
-            if order.board_template:
-                UserBoardUnlock.objects.get_or_create(user=order.user, template=order.board_template, defaults={"order": order})
+            grant_board_unlock_if_applicable(order)
 
         elif order.status in [
             Order.Status.REJECTED,
@@ -1548,8 +1557,7 @@ class AdminOrderViewSet(viewsets.ModelViewSet):
         # Update payment record status
         if order.status in [Order.Status.PAID, Order.Status.APPROVED]:
             Payment.objects.filter(order=order).update(status="approved")
-            if order.board_template:
-                UserBoardUnlock.objects.get_or_create(user=order.user, template=order.board_template, defaults={"order": order})
+            grant_board_unlock_if_applicable(order)
         elif order.status == Order.Status.BLOCKED:
             Payment.objects.filter(order=order).update(status="blocked")
         elif order.status in [Order.Status.REJECTED, Order.Status.FAILED, Order.Status.REFUNDED]:

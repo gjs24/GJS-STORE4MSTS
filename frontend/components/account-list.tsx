@@ -189,6 +189,11 @@ export function AccountList({ type }: AccountListProps) {
                   <span className="rounded border border-white/10 px-2 py-1">{row.asset.file_size}</span>
                   <span className="rounded border border-white/10 px-2 py-1"><PriceDisplay asset={row.asset} compact /></span>
                   {row.status ? <span className="rounded border border-white/10 px-2 py-1">{row.status}</span> : null}
+                  {row.asset.board_template && (row.asset.bundle_board_template_free || (row.asset.board_template as any).is_bundled_free) && (
+                    <span className="rounded border border-emerald-500/40 bg-emerald-500/10 px-2 py-1 text-emerald-300 font-semibold flex items-center gap-1">
+                      <span>🎁</span> Free Name Board: {row.asset.board_template.name}
+                    </span>
+                  )}
                 </div>
               </div>
             ) : (
@@ -268,14 +273,26 @@ export function AccountList({ type }: AccountListProps) {
                     )
                   ) : row.asset ? (
                     row.downloadEnabled ? (
-                      <button
-                        onClick={() => handleDownload(row.asset!)}
-                        disabled={busyId === row.asset.id}
-                        className="flex items-center gap-1.5 rounded-lg bg-rail-red px-3.5 py-2 text-xs font-bold text-white shadow-glow transition-all hover:bg-rail-red/90 disabled:opacity-60"
-                      >
-                        <PackageCheck size={15} />
-                        <span>Download</span>
-                      </button>
+                      <>
+                        <button
+                          onClick={() => handleDownload(row.asset!)}
+                          disabled={busyId === row.asset.id}
+                          className="flex items-center gap-1.5 rounded-lg bg-rail-red px-3.5 py-2 text-xs font-bold text-white shadow-glow transition-all hover:bg-rail-red/90 disabled:opacity-60"
+                        >
+                          <PackageCheck size={15} />
+                          <span>Download</span>
+                        </button>
+                        {row.asset.board_template && (row.asset.bundle_board_template_free || (row.asset.board_template as any).is_bundled_free) && (
+                          <Link
+                            href={`/board-studio?template=${row.asset.board_template.id}`}
+                            className="flex items-center gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-3 py-2 text-xs font-bold text-emerald-300 transition-colors hover:bg-emerald-500/25"
+                            title="Open free included Name Board in Board Studio"
+                          >
+                            <TrainFront size={15} />
+                            <span>Free Name Board</span>
+                          </Link>
+                        )}
+                      </>
                     ) : (
                       <span className="rounded-lg border border-rail-amber/30 bg-rail-amber/10 px-3 py-1.5 text-xs font-semibold text-rail-amber">
                         Payment Pending

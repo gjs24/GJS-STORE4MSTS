@@ -176,3 +176,64 @@ class BoardStudioTests(APITestCase):
         self.assertIn(self.paid_template.name, html_str)
         self.assertIn("LED Name Board", html_str)
 
+    def test_asset_with_free_bundled_board_template_unlocks_for_user(self):
+        from store.models import Asset, Category
+        cat = Category.objects.create(name="Trains", slug="trains")
+        asset = Asset.objects.create(
+            title="Vande Bharat Trainset",
+            slug="vande-bharat-trainset",
+            category=cat,
+            price=Decimal("299.00"),
+            is_published=True,
+            board_template=self.paid_template,
+            bundle_board_template_free=True,
+        )
+        self.assertFalse(self.paid_template.can_user_customize(self.user1))
+
+        # User purchases asset
+        from store.views import grant_board_unlock_if_applicable
+        order = Order.objects.create(
+            user=self.user1,
+            asset=asset,
+            amount=Decimal("299.00"),
+            currency="INR",
+            status=Order.Status.PAID,
+            download_enabled=True,
+            provider_order_id="GJS-000123",
+        )
+        grant_board_unlock_if_applicable(order)
+
+        self.assertTrue(self.paid_template.can_user_customize(self.user1))
+        self.assertTrue(UserBoardUnlock.objects.filter(user=self.user1, template=self.paid_template).exists())
+
+    def test_asset_without_free_bundle_keeps_template_locked(self):
+        from store.models import Asset, Category
+        cat = Category.objects.create(name="Locos", slug="locos")
+        asset = Asset.objects.create(
+            title="WAP7 Locomotive",
+            slug="wap7-locomotive",
+            category=cat,
+            price=Decimal("199.00"),
+            is_published=True,
+            board_template=self.paid_template,
+            bundle_board_template_free=False,
+        )
+        self.assertFalse(self.paid_template.can_user_customize(self.user2))
+
+        # User2 purchases asset without free bundle
+        from store.views import grant_board_unlock_if_applicable
+        order = Order.objects.create(
+            user=self.user2,
+            asset=asset,
+            amount=Decimal("199.00"),
+            currency="INR",
+            status=Order.Status.PAID,
+            download_enabled=True,
+            provider_order_id="GJS-000124",
+        )
+        grant_board_unlock_if_applicable(order)
+
+        # Template remains locked so user must buy it separately
+        self.assertFalse(self.paid_template.can_user_customize(self.user2))
+        self.assertFalse(UserBoardUnlock.objects.filter(user=self.user2, template=self.paid_template).exists())
+

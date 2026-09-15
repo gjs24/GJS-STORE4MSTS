@@ -76,6 +76,13 @@ export default function BoardStudioPage() {
             ) {
               unlockSet.add(order.board_template.id);
             }
+            if (
+              order.asset?.board_template?.id &&
+              (order.asset.bundle_board_template_free || (order.asset.board_template as any).is_bundled_free) &&
+              (order.download_enabled || order.status === 'PAID' || order.status === 'APPROVED')
+            ) {
+              unlockSet.add(order.asset.board_template.id);
+            }
           });
         }
       } catch (err) {

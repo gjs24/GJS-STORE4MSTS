@@ -250,6 +250,7 @@ class AssetListSerializer(serializers.ModelSerializer):
             "has_file",
             "board_template",
             "board_template_id",
+            "bundle_board_template_free",
             "download_count",
             "average_rating",
             "review_count",
@@ -379,6 +380,7 @@ class AssetListSerializer(serializers.ModelSerializer):
             "price": str(bt.price),
             "is_paid": bt.is_paid,
             "target_texture_name": getattr(bt, "target_texture_name", "") or "",
+            "is_bundled_free": getattr(obj, "bundle_board_template_free", False),
         }
 
 
@@ -535,6 +537,8 @@ class AssetWriteSerializer(serializers.ModelSerializer):
 class BoardTemplateSerializer(serializers.ModelSerializer):
     can_customize = serializers.SerializerMethodField()
     is_unlocked = serializers.SerializerMethodField()
+    unlocked_via_asset = serializers.SerializerMethodField()
+    bundled_with_assets = serializers.SerializerMethodField()
 
     class Meta:
         model = BoardTemplate
@@ -555,6 +559,8 @@ class BoardTemplateSerializer(serializers.ModelSerializer):
             "fixed_graphics",
             "can_customize",
             "is_unlocked",
+            "unlocked_via_asset",
+            "bundled_with_assets",
             "created_at",
             "updated_at",
         ]
@@ -565,15 +571,34 @@ class BoardTemplateSerializer(serializers.ModelSerializer):
         return obj.can_user_customize(user)
 
     def get_is_unlocked(self, obj):
-        if not obj.is_paid:
-            return True
         request = self.context.get("request")
         user = getattr(request, "user", None) if request else None
-        if not user or not user.is_authenticated:
-            return False
-        if user.is_staff or user.is_superuser:
-            return True
-        return UserBoardUnlock.objects.filter(user=user, template=obj).exists()
+        return obj.can_user_customize(user)
+
+    def get_unlocked_via_asset(self, obj):
+        request = self.context.get("request")
+        user = getattr(request, "user", None) if request else None
+        if not user or not user.is_authenticated or not obj.is_paid:
+            return None
+        from .models import Order
+        order = Order.objects.filter(
+            user=user,
+            asset__board_template=obj,
+            asset__bundle_board_template_free=True,
+            status__in=[Order.Status.APPROVED, Order.Status.PAID],
+            download_enabled=True,
+        ).select_related("asset").first()
+        if order and order.asset:
+            return {
+                "id": order.asset.id,
+                "title": order.asset.title,
+                "slug": order.asset.slug,
+            }
+        return None
+
+    def get_bundled_with_assets(self, obj):
+        assets = obj.assets.filter(is_published=True, bundle_board_template_free=True)
+        return [{"id": a.id, "title": a.title, "slug": a.slug, "price": str(a.price)} for a in assets]
 
 
 class UserCustomBoardSerializer(serializers.ModelSerializer):

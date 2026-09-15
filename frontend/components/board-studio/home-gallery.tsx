@@ -433,6 +433,25 @@ export const HomePage: React.FC<HomePageProps> = ({
                         </span>
                       </div>
 
+                      {template.unlockedViaAsset && (
+                        <div style={{ marginTop: 8, padding: '4px 8px', borderRadius: 6, background: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.3)', fontSize: 11, color: '#6ee7b7' }}>
+                          🎁 Included Free with <strong>{template.unlockedViaAsset.title}</strong>
+                        </div>
+                      )}
+
+                      {!isUnlocked && template.bundledWithAssets && template.bundledWithAssets.length > 0 && (
+                        <div style={{ marginTop: 8, padding: '4px 8px', borderRadius: 6, background: 'rgba(234, 179, 8, 0.12)', border: '1px solid rgba(234, 179, 8, 0.25)', fontSize: 11, color: '#fde047' }}>
+                          🎁 Included FREE when you purchase{' '}
+                          <a
+                            href={`/assets/${template.bundledWithAssets[0].slug}`}
+                            onClick={(e) => e.stopPropagation()}
+                            style={{ textDecoration: 'underline', fontWeight: 600 }}
+                          >
+                            {template.bundledWithAssets[0].title}
+                          </a>
+                        </div>
+                      )}
+
                       {/* Easy Access Action Buttons */}
                       <div className="store-card-actions">
                         {isUnlocked ? (

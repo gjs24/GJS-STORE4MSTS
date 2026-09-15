@@ -254,6 +254,8 @@ export const storageService = {
           currency: item.currency || 'INR',
           isUnlocked: item.is_unlocked !== undefined ? item.is_unlocked : (!item.is_paid),
           canCustomize: item.can_customize !== undefined ? item.can_customize : (!item.is_paid),
+          unlockedViaAsset: item.unlocked_via_asset || null,
+          bundledWithAssets: item.bundled_with_assets || [],
           createdAt: item.created_at || new Date().toISOString(),
           updatedAt: item.updated_at || new Date().toISOString(),
           author: item.author || 'Admin'

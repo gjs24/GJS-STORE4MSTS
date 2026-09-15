@@ -90,8 +90,10 @@ export type Asset = {
     price?: string | number;
     is_paid?: boolean;
     target_texture_name?: string;
+    is_bundled_free?: boolean;
   } | null;
   board_template_id?: string | null;
+  bundle_board_template_free?: boolean;
   created_at?: string;
   images?: Array<{ id: number; image?: string | null; alt_text: string; sort_order: number }>;
   updates?: Array<{ id: number; version: string; changelog: string; created_at: string }>;
