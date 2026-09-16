@@ -3,6 +3,8 @@ from decimal import Decimal
 from django.conf import settings
 from django.core.validators import FileExtensionValidator, MinValueValidator, MaxValueValidator
 from django.db import models
+from django.db.models.signals import post_save
+from django.dispatch import receiver
 from django.utils.text import slugify
 
 from .storage import RawAssetStorage
@@ -555,4 +557,32 @@ class UserSpecialAccess(models.Model):
             if timezone.now() > self.expires_at:
                 return False
         return True
+
+
+class UserProfile(models.Model):
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        related_name="profile",
+        on_delete=models.CASCADE,
+    )
+    phone_number = models.CharField(
+        max_length=20,
+        blank=True,
+        default="",
+        help_text="10-digit mobile number for order delivery, SMS notifications, and Cashfree gateway.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "User Profile"
+        verbose_name_plural = "User Profiles"
+
+    def __str__(self):
+        return f"{self.user.username} Profile ({self.phone_number or 'No Phone'})"
+
+
+@receiver(post_save, sender=settings.AUTH_USER_MODEL)
+def ensure_user_profile(sender, instance, created, **kwargs):
+    UserProfile.objects.get_or_create(user=instance)
 

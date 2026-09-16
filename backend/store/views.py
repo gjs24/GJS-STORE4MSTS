@@ -19,7 +19,7 @@ from django.db.models import Avg, Count, Q, Sum
 from django.db.models.deletion import ProtectedError
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from rest_framework import generics, permissions, status, viewsets
+from rest_framework import generics, permissions, serializers, status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes, throttle_classes
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
@@ -33,7 +33,6 @@ from rest_framework.exceptions import PermissionDenied
 from .throttles import DownloadRateThrottle
 
 from .early_access import get_cached_early_access_status
-from .models import AdminActivityLog, Asset, Category, DownloadLog, EmailOTP, NotifyRequest, Order, Payment, Review, SiteSetting, UserSpecialAccess, Wishlist
 from .models import (
     AdminActivityLog,
     Asset,
@@ -48,6 +47,7 @@ from .models import (
     SiteSetting,
     UserBoardUnlock,
     UserCustomBoard,
+    UserProfile,
     UserSpecialAccess,
     Wishlist,
 )
@@ -127,6 +127,8 @@ def create_cashfree_order(order, request):
     raw_phone = getattr(order, "customer_phone", "") or ""
     if not raw_phone and request and getattr(request, "data", None):
         raw_phone = request.data.get("customer_phone") or request.data.get("phone") or ""
+    if not raw_phone and hasattr(user, "profile") and user.profile.phone_number:
+        raw_phone = user.profile.phone_number
     if not raw_phone:
         prev = Order.objects.filter(user=user).exclude(customer_phone="").order_by("-id").first()
         if prev:
@@ -139,9 +141,13 @@ def create_cashfree_order(order, request):
     else:
         customer_phone = "9999999999"
 
-    if customer_phone != "9999999999" and not getattr(order, "customer_phone", ""):
-        order.customer_phone = customer_phone
-        order.save(update_fields=["customer_phone"])
+    if customer_phone != "9999999999":
+        if not getattr(order, "customer_phone", ""):
+            order.customer_phone = customer_phone
+            order.save(update_fields=["customer_phone"])
+        if hasattr(user, "profile") and not user.profile.phone_number:
+            user.profile.phone_number = customer_phone
+            user.profile.save(update_fields=["phone_number"])
 
     payload = {
         "order_id": order.provider_order_id,
@@ -746,11 +752,20 @@ class VerifyOTPView(APIView):
                 last_name=last_name,
                 is_active=True,
             )
+            phone_number = serializer.validated_data.get("phone_number", "").strip()
+
             if password:
                 user.set_password(password)
             else:
                 user.set_unusable_password()
             user.save()
+
+            if phone_number:
+                digits = re.sub(r"\D", "", phone_number)
+                clean_phone = digits[-10:] if len(digits) >= 10 else digits
+                profile, _ = UserProfile.objects.get_or_create(user=user)
+                profile.phone_number = clean_phone
+                profile.save(update_fields=["phone_number"])
         elif purpose == "reset":
             password = serializer.validated_data.get("password", "").strip()
             if not password:
@@ -841,7 +856,16 @@ def current_user(request):
             request.user.email = new_email
         request.user.save(update_fields=["first_name", "last_name", "email"])
 
-    return Response(UserSerializer(request.user).data)
+        if "phone_number" in request.data:
+            new_phone = str(request.data.get("phone_number", "")).strip()
+            digits = re.sub(r"\D", "", new_phone)
+            clean_phone = digits[-10:] if len(digits) >= 10 else digits
+            profile, _ = UserProfile.objects.get_or_create(user=request.user)
+            profile.phone_number = clean_phone
+            profile.save(update_fields=["phone_number"])
+            request.user.profile = profile
+
+    return Response(UserSerializer(request.user, context={"request": request}).data)
 
 
 class CategoryViewSet(viewsets.ModelViewSet):
@@ -1001,6 +1025,8 @@ class OrderCreateView(generics.CreateAPIView):
                 return Response(OrderSerializer(existing_order, context={"request": request}).data, status=status.HTTP_200_OK)
 
             phone_input = request.data.get("customer_phone") or request.data.get("phone") or ""
+            if not phone_input and hasattr(request.user, "profile") and request.user.profile.phone_number:
+                phone_input = request.user.profile.phone_number
             if not phone_input:
                 prev = Order.objects.filter(user=request.user).exclude(customer_phone="").order_by("-id").first()
                 if prev:
@@ -1107,6 +1133,8 @@ class OrderCreateView(generics.CreateAPIView):
         status_value = Order.Status.APPROVED if is_free_purchase else Order.Status.PENDING
 
         phone_input = self.request.data.get("customer_phone") or self.request.data.get("phone") or ""
+        if not phone_input and hasattr(self.request.user, "profile") and self.request.user.profile.phone_number:
+            phone_input = self.request.user.profile.phone_number
         if not phone_input:
             prev = Order.objects.filter(user=self.request.user).exclude(customer_phone="").order_by("-id").first()
             if prev:
@@ -1706,24 +1734,31 @@ class AdminUserViewSet(viewsets.ModelViewSet):
 
         previous_active = user.is_active
         previous_staff = user.is_staff
+        previous_username = user.username
+        previous_email = user.email
         updated_user = serializer.save()
 
+        changes = []
         if previous_active != updated_user.is_active:
-            log_admin_activity(
-                self.request,
-                "User activated" if updated_user.is_active else "User deactivated",
-                "User",
-                updated_user.id,
-                f"{'Activated' if updated_user.is_active else 'Deactivated'} user {updated_user.username}"
-            )
+            changes.append("Activated" if updated_user.is_active else "Deactivated")
         if previous_staff != updated_user.is_staff:
-            log_admin_activity(
-                self.request,
-                "Staff granted" if updated_user.is_staff else "Staff revoked",
-                "User",
-                updated_user.id,
-                f"{'Granted' if updated_user.is_staff else 'Revoked'} staff status for {updated_user.username}"
-            )
+            changes.append("Granted staff" if updated_user.is_staff else "Revoked staff")
+        if previous_username != updated_user.username:
+            changes.append(f"Username changed to '{updated_user.username}'")
+        if previous_email != updated_user.email:
+            changes.append(f"Email changed to '{updated_user.email}'")
+        if "phone_number" in serializer.validated_data:
+            changes.append("Phone number updated")
+        if "new_password" in serializer.validated_data and serializer.validated_data["new_password"]:
+            changes.append("Password reset by admin")
+
+        log_admin_activity(
+            self.request,
+            "User profile edited",
+            "User",
+            updated_user.id,
+            f"Admin edited user {updated_user.username}: {', '.join(changes) if changes else 'Details updated'}",
+        )
 
     @action(detail=True, methods=["get", "patch"], url_path="special-access")
     def special_access(self, request, pk=None):

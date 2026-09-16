@@ -1,12 +1,12 @@
+import re
+from urllib.parse import quote
 from django.contrib.auth.models import User
 from django.conf import settings
 from django.db.models import Avg, Q
 from django.utils import timezone
-from urllib.parse import quote
 from rest_framework import serializers
 
 from .early_access import get_cached_early_access_status
-from .models import AdminActivityLog, Asset, AssetImage, Category, DownloadLog, EmailOTP, NotifyRequest, Order, Payment, Review, SiteSetting, UpdateLog, UserSpecialAccess, Wishlist
 from .models import (
     AdminActivityLog,
     Asset,
@@ -23,6 +23,7 @@ from .models import (
     UpdateLog,
     UserBoardUnlock,
     UserCustomBoard,
+    UserProfile,
     UserSpecialAccess,
     Wishlist,
 )
@@ -56,6 +57,8 @@ class UserSerializer(serializers.ModelSerializer):
     date_joined = serializers.DateTimeField(read_only=True)
     paid_orders_count = serializers.IntegerField(read_only=True, default=0)
     special_access = serializers.SerializerMethodField()
+    phone_number = serializers.CharField(required=False, allow_blank=True, max_length=20)
+    new_password = serializers.CharField(required=False, allow_blank=True, write_only=True, min_length=8)
 
     class Meta:
         model = User
@@ -65,12 +68,63 @@ class UserSerializer(serializers.ModelSerializer):
             "email",
             "first_name",
             "last_name",
+            "phone_number",
             "is_staff",
             "is_active",
             "date_joined",
             "paid_orders_count",
             "special_access",
+            "new_password",
         ]
+
+    def validate_email(self, value):
+        if value:
+            norm_email = value.strip().lower()
+            qs = User.objects.filter(email__iexact=norm_email)
+            if self.instance:
+                qs = qs.exclude(id=self.instance.id)
+            if qs.exists():
+                raise serializers.ValidationError("An account with this email address already exists.")
+            return norm_email
+        return value
+
+    def to_representation(self, instance):
+        ret = super().to_representation(instance)
+        phone = ""
+        try:
+            profile = getattr(instance, "profile", None) or UserProfile.objects.filter(user=instance).first()
+            if profile and profile.phone_number:
+                phone = profile.phone_number
+        except Exception:
+            pass
+        if not phone:
+            try:
+                prev = instance.orders.exclude(customer_phone="").order_by("-id").first()
+                if prev and prev.customer_phone:
+                    phone = prev.customer_phone
+            except Exception:
+                pass
+        ret["phone_number"] = phone
+        return ret
+
+    def update(self, instance, validated_data):
+        phone_number = validated_data.pop("phone_number", None)
+        new_password = validated_data.pop("new_password", None)
+
+        user = super().update(instance, validated_data)
+
+        if new_password:
+            user.set_password(new_password)
+            user.save(update_fields=["password"])
+
+        if phone_number is not None:
+            clean_digits = re.sub(r"\D", "", str(phone_number))
+            clean_phone = clean_digits[-10:] if len(clean_digits) >= 10 else clean_digits
+            profile, _ = UserProfile.objects.get_or_create(user=user)
+            profile.phone_number = clean_phone
+            profile.save(update_fields=["phone_number"])
+
+        return user
 
     def get_special_access(self, obj):
         # Only staff administrators or the user themselves gets special_access in serialized output
@@ -91,16 +145,24 @@ class UserSerializer(serializers.ModelSerializer):
 
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=8)
+    phone_number = serializers.CharField(required=False, allow_blank=True, max_length=20)
 
     class Meta:
         model = User
-        fields = ["id", "username", "email", "password", "first_name", "last_name"]
+        fields = ["id", "username", "email", "password", "phone_number", "first_name", "last_name"]
 
     def create(self, validated_data):
         password = validated_data.pop("password")
+        phone_number = validated_data.pop("phone_number", "")
         user = User(**validated_data)
         user.set_password(password)
         user.save()
+        if phone_number:
+            clean_digits = re.sub(r"\D", "", str(phone_number))
+            clean_phone = clean_digits[-10:] if len(clean_digits) >= 10 else clean_digits
+            profile, _ = UserProfile.objects.get_or_create(user=user)
+            profile.phone_number = clean_phone
+            profile.save(update_fields=["phone_number"])
         return user
 
 
@@ -115,6 +177,7 @@ class VerifyOTPSerializer(serializers.Serializer):
     purpose = serializers.CharField(max_length=32, required=False, default="login")
     username = serializers.CharField(max_length=150, required=False, allow_blank=True)
     password = serializers.CharField(min_length=8, required=False, allow_blank=True, write_only=True)
+    phone_number = serializers.CharField(max_length=20, required=False, allow_blank=True)
     first_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
     last_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
 

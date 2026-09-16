@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { load } from "@cashfreepayments/cashfree-js";
 import { CheckCircle2, Download, Lock, ShoppingCart, Sparkles } from "lucide-react";
-import { priceLabel, type Asset } from "@/lib/api";
+import { getStoredUser, priceLabel, type Asset } from "@/lib/api";
 import { WishlistButton } from "@/components/wishlist-button";
 import { createOrder, downloadAsset, isLoggedIn, notifyMe, userGet, verifyPayment, type StoreOrder } from "@/lib/store-api";
 
@@ -150,7 +150,8 @@ export function AssetActions({ asset }: { asset: Asset }) {
     );
     try {
       if (!activeAsset.is_free && !activeAsset.can_download) {
-        let phone = typeof window !== "undefined" ? (localStorage.getItem("gjs_customer_phone") || "") : "";
+        const storedUser = getStoredUser();
+        let phone = storedUser?.phone_number || (typeof window !== "undefined" ? (localStorage.getItem("gjs_customer_phone") || "") : "");
         if (!phone || phone.replace(/\D/g, "").length !== 10) {
           const userPhone = window.prompt(
             "Enter your 10-digit mobile number for Cashfree payment gateway & SMS receipt (Required by Cashfree):",

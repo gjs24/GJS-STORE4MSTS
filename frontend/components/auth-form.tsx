@@ -33,6 +33,7 @@ export function AuthForm({ mode, portal = "user" }: AuthFormProps) {
   // Register form state
   const [regUsername, setRegUsername] = useState("");
   const [regEmail, setRegEmail] = useState("");
+  const [regPhone, setRegPhone] = useState("");
   const [regPassword, setRegPassword] = useState("");
 
   const googleEnabled = Boolean(process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID);
@@ -222,6 +223,7 @@ export function AuthForm({ mode, portal = "user" }: AuthFormProps) {
           purpose: "signup",
           username: regUsername.trim(),
           password: regPassword,
+          phone_number: regPhone.trim(),
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -649,6 +651,24 @@ export function AuthForm({ mode, portal = "user" }: AuthFormProps) {
                 />
               </div>
               <div>
+                <div className="flex items-center justify-between">
+                  <label className="mb-1 block text-xs font-medium text-slate-400">Mobile Number (10 Digits)</label>
+                  <span className="text-[11px] text-rail-amber">Required for orders & Cashfree</span>
+                </div>
+                <div className="relative flex items-center">
+                  <span className="absolute left-3 text-sm font-bold text-slate-400 select-none">+91</span>
+                  <input
+                    type="tel"
+                    required
+                    maxLength={10}
+                    placeholder="9876543210"
+                    value={regPhone}
+                    onChange={(e) => setRegPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                    className="w-full rounded border border-white/10 bg-black/40 py-3 pl-12 pr-3 text-sm text-white placeholder-slate-500 focus:border-rail-red focus:outline-none"
+                  />
+                </div>
+              </div>
+              <div>
                 <label className="mb-1 block text-xs font-medium text-slate-400">Password</label>
                 <input
                   required
@@ -662,7 +682,7 @@ export function AuthForm({ mode, portal = "user" }: AuthFormProps) {
               </div>
               <button
                 type="button"
-                disabled={loading || !regUsername || !regEmail || regPassword.length < 8}
+                disabled={loading || !regUsername || !regEmail || regPhone.length !== 10 || regPassword.length < 8}
                 onClick={() => handleSendOtp("signup", regEmail)}
                 className="flex w-full items-center justify-center gap-2 rounded bg-rail-red px-4 py-3 font-semibold text-white shadow-glow hover:bg-rail-red/90 disabled:opacity-50"
               >

@@ -5,12 +5,19 @@ import { useSearchParams, useRouter } from "next/navigation";
 import {
   AlertCircle,
   CheckCircle2,
+  Edit,
+  Eye,
+  EyeOff,
   Gift,
+  KeyRound,
   Lock,
+  Mail,
+  Phone,
   Search,
   ShieldCheck,
   ShoppingBag,
   Sparkles,
+  User,
   UserCheck,
   Users,
   X
@@ -52,6 +59,20 @@ function UsersManagementContent() {
   const [availableAssets, setAvailableAssets] = useState<Asset[]>([]);
   const [savingSpecial, setSavingSpecial] = useState(false);
   const [specialFeedback, setSpecialFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+
+  // Edit User Details Modal State
+  const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
+  const [editUsername, setEditUsername] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+  const [editFirstName, setEditFirstName] = useState("");
+  const [editLastName, setEditLastName] = useState("");
+  const [editIsActive, setEditIsActive] = useState(true);
+  const [editIsStaff, setEditIsStaff] = useState(false);
+  const [editNewPassword, setEditNewPassword] = useState("");
+  const [showEditPassword, setShowEditPassword] = useState(false);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editFeedback, setEditFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   useEffect(() => {
     setCurrentUser(getStoredUser());
@@ -191,6 +212,81 @@ function UsersManagementContent() {
       });
     } finally {
       setSavingSpecial(false);
+    }
+  }
+
+  function openEditModal(user: AdminUser) {
+    setEditingUser(user);
+    setEditUsername(user.username || "");
+    setEditEmail(user.email || "");
+    setEditPhone(user.phone_number || "");
+    setEditFirstName(user.first_name || "");
+    setEditLastName(user.last_name || "");
+    setEditIsActive(Boolean(user.is_active));
+    setEditIsStaff(Boolean(user.is_staff));
+    setEditNewPassword("");
+    setShowEditPassword(false);
+    setEditFeedback(null);
+  }
+
+  async function handleSaveUserEdit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingUser) return;
+
+    if (!editUsername.trim()) {
+      setEditFeedback({ type: "error", message: "Username cannot be empty." });
+      return;
+    }
+
+    if (editPhone.trim() && editPhone.replace(/\D/g, "").length !== 10) {
+      setEditFeedback({ type: "error", message: "Mobile number must be exactly 10 digits (or leave blank)." });
+      return;
+    }
+
+    if (editNewPassword.trim() && editNewPassword.trim().length < 8) {
+      setEditFeedback({ type: "error", message: "New password must be at least 8 characters long." });
+      return;
+    }
+
+    if (currentUser && currentUser.username === editingUser.username) {
+      if (!editIsActive) {
+        setEditFeedback({ type: "error", message: "Safety restriction: You cannot deactivate your own admin account." });
+        return;
+      }
+      if (!editIsStaff) {
+        setEditFeedback({ type: "error", message: "Safety restriction: You cannot remove staff status from your own account." });
+        return;
+      }
+    }
+
+    setSavingEdit(true);
+    setEditFeedback(null);
+
+    const payload: Record<string, any> = {
+      username: editUsername.trim(),
+      email: editEmail.trim().toLowerCase(),
+      first_name: editFirstName.trim(),
+      last_name: editLastName.trim(),
+      phone_number: editPhone.replace(/\D/g, "").slice(-10),
+      is_active: editIsActive,
+      is_staff: editIsStaff,
+    };
+
+    if (editNewPassword.trim()) {
+      payload.new_password = editNewPassword.trim();
+    }
+
+    try {
+      const updated = await adminPatch<AdminUser>(`/admin/users/${editingUser.id}/`, payload);
+      setUsers((prev) => prev.map((u) => (u.id === editingUser.id ? { ...u, ...updated } : u)));
+      setEditFeedback({ type: "success", message: `Account details for "${updated.username}" updated successfully!` });
+      setFeedback({ type: "success", message: `User "${updated.username}" updated successfully.` });
+      setEditingUser(updated);
+      setEditNewPassword("");
+    } catch (err: any) {
+      setEditFeedback({ type: "error", message: err?.message || "Failed to update user details." });
+    } finally {
+      setSavingEdit(false);
     }
   }
 
@@ -392,9 +488,9 @@ function UsersManagementContent() {
 
       {/* Users Table */}
       <div className="overflow-hidden rounded-lg border border-white/10 bg-white/[0.02]">
-        <div className="grid gap-2 bg-white/10 p-3 text-xs uppercase tracking-wider text-slate-400 md:grid-cols-[1.4fr_1.2fr_130px_90px_90px_240px]">
+        <div className="grid gap-2 bg-white/10 p-3 text-xs uppercase tracking-wider text-slate-400 md:grid-cols-[1.4fr_1.3fr_130px_90px_90px_290px]">
           <span>User Details</span>
-          <span>Contact Email</span>
+          <span>Contact & Phone</span>
           <span>Role & VIP Pass</span>
           <span>Purchases</span>
           <span>Status</span>
@@ -418,7 +514,7 @@ function UsersManagementContent() {
             return (
               <div
                 key={user.id}
-                className={`grid items-center gap-3 border-t border-white/10 p-4 text-sm transition md:grid-cols-[1.4fr_1.2fr_130px_90px_90px_240px] ${
+                className={`grid items-center gap-3 border-t border-white/10 p-4 text-sm transition md:grid-cols-[1.4fr_1.3fr_130px_90px_90px_290px] ${
                   isSelf ? "bg-rail-red/[0.05]" : "hover:bg-white/[0.03]"
                 }`}
               >
@@ -431,7 +527,7 @@ function UsersManagementContent() {
                       <span className="font-bold text-white truncate">{user.username}</span>
                       {isSelf ? <span className="rounded bg-rail-red px-1.5 py-0.2 text-[10px] font-bold text-white">YOU</span> : null}
                     </div>
-                    <span className="block text-xs text-slate-400">
+                    <span className="block text-xs text-slate-400 truncate">
                       {user.first_name || user.last_name
                         ? `${user.first_name} ${user.last_name}`.trim()
                         : "No full name"}
@@ -442,8 +538,19 @@ function UsersManagementContent() {
                   </div>
                 </div>
 
-                <div className="truncate">
-                  <span className="text-slate-200">{user.email || "No email on file"}</span>
+                <div className="min-w-0 space-y-1">
+                  <div className="flex items-center gap-1.5 text-slate-200 truncate" title={user.email || "No email"}>
+                    <Mail size={12} className="shrink-0 text-slate-400" />
+                    <span className="truncate">{user.email || "No email on file"}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-xs">
+                    <Phone size={11} className="shrink-0 text-rail-amber" />
+                    {user.phone_number ? (
+                      <span className="font-mono text-slate-300 font-semibold">+91 {user.phone_number}</span>
+                    ) : (
+                      <span className="text-slate-500 italic text-[11px]">No mobile on file</span>
+                    )}
+                  </div>
                 </div>
 
                 <div className="space-y-1">
@@ -479,6 +586,17 @@ function UsersManagementContent() {
                 <div className="flex flex-wrap items-center gap-1.5">
                   <Button
                     size="sm"
+                    variant="secondary"
+                    onClick={() => openEditModal(user)}
+                    className="h-8 text-xs font-semibold hover:border-rail-amber/60 hover:text-rail-amber transition-colors"
+                    title="Edit user details (username, email, phone, status, password)"
+                  >
+                    <Edit size={13} className="mr-1 text-rail-amber" />
+                    <span>Edit</span>
+                  </Button>
+
+                  <Button
+                    size="sm"
                     variant={hasSpecial ? "default" : "secondary"}
                     onClick={() => openSpecialModal(user)}
                     className={`h-8 text-xs font-semibold ${
@@ -489,7 +607,7 @@ function UsersManagementContent() {
                     title="Grant or configure special free download permissions"
                   >
                     <Gift size={13} className="mr-1 text-purple-300" />
-                    <span>{hasSpecial ? "VIP Pass" : "Special Access"}</span>
+                    <span>{hasSpecial ? "VIP Pass" : "Special"}</span>
                   </Button>
 
                   <Button
@@ -751,6 +869,266 @@ function UsersManagementContent() {
                 {savingSpecial ? "Saving Permissions..." : "Save Special Access"}
               </Button>
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Edit User Account Modal */}
+      {editingUser ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm overflow-y-auto">
+          <div className="relative w-full max-w-xl rounded-2xl border border-white/15 bg-rail-black p-6 shadow-2xl space-y-5 my-8">
+            {/* Modal Header */}
+            <div className="flex items-start justify-between border-b border-white/10 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-rail-red/20 text-rail-red border border-rail-red/30 shadow-inner">
+                  <Edit size={22} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base font-bold text-white">Edit User Account</h3>
+                    <span className="rounded bg-white/10 px-2 py-0.5 text-[11px] font-mono font-bold text-slate-300">
+                      ID: {editingUser.id}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Modify profile details, fix signup typos, or reset passwords directly for customer support.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingUser(null)}
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-white/10 hover:text-white transition"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Edit Feedback Message */}
+            {editFeedback ? (
+              <div
+                className={`flex items-start gap-2.5 rounded-xl border p-3.5 text-xs leading-relaxed ${
+                  editFeedback.type === "success"
+                    ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
+                    : "border-red-500/30 bg-red-500/10 text-red-200"
+                }`}
+              >
+                {editFeedback.type === "success" ? (
+                  <CheckCircle2 size={16} className="text-emerald-400 shrink-0 mt-0.5" />
+                ) : (
+                  <AlertCircle size={16} className="text-red-400 shrink-0 mt-0.5" />
+                )}
+                <span>{editFeedback.message}</span>
+              </div>
+            ) : null}
+
+            {/* Edit Form */}
+            <form onSubmit={handleSaveUserEdit} className="space-y-4">
+              {/* Username & Email */}
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-300 mb-1">
+                    Username <span className="text-rail-red">*</span>
+                  </label>
+                  <div className="relative flex items-center">
+                    <User size={14} className="absolute left-3 text-slate-500" />
+                    <input
+                      type="text"
+                      required
+                      value={editUsername}
+                      onChange={(e) => setEditUsername(e.target.value)}
+                      placeholder="Username"
+                      className="w-full rounded-lg border border-white/10 bg-black/60 pl-9 pr-3 py-2 text-xs text-white placeholder:text-slate-600 outline-none focus:border-rail-red"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-300 mb-1">
+                    Email Address
+                  </label>
+                  <div className="relative flex items-center">
+                    <Mail size={14} className="absolute left-3 text-slate-500" />
+                    <input
+                      type="email"
+                      value={editEmail}
+                      onChange={(e) => setEditEmail(e.target.value)}
+                      placeholder="user@example.com"
+                      className="w-full rounded-lg border border-white/10 bg-black/60 pl-9 pr-3 py-2 text-xs text-white placeholder:text-slate-600 outline-none focus:border-rail-red"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Mobile Number Field */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-300">
+                    Mobile Number (10 Digits)
+                  </label>
+                  <span className="text-[10px] text-emerald-400 font-medium">Cashfree Checkout & SMS Gateway</span>
+                </div>
+                <div className="relative flex items-center">
+                  <div className="absolute left-3 flex items-center gap-1 text-slate-400 select-none">
+                    <Phone size={13} className="text-rail-amber" />
+                    <span className="text-xs font-bold">+91</span>
+                  </div>
+                  <input
+                    type="tel"
+                    maxLength={10}
+                    value={editPhone}
+                    onChange={(e) => setEditPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                    placeholder="9876543210"
+                    className="w-full rounded-lg border border-white/10 bg-black/60 pl-16 pr-3 py-2 text-xs text-white placeholder:text-slate-600 outline-none focus:border-rail-red font-mono"
+                  />
+                </div>
+              </div>
+
+              {/* First Name & Last Name */}
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-300 mb-1">
+                    First Name
+                  </label>
+                  <input
+                    type="text"
+                    value={editFirstName}
+                    onChange={(e) => setEditFirstName(e.target.value)}
+                    placeholder="First Name"
+                    className="w-full rounded-lg border border-white/10 bg-black/60 px-3 py-2 text-xs text-white placeholder:text-slate-600 outline-none focus:border-rail-red"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-300 mb-1">
+                    Last Name
+                  </label>
+                  <input
+                    type="text"
+                    value={editLastName}
+                    onChange={(e) => setEditLastName(e.target.value)}
+                    placeholder="Last Name"
+                    className="w-full rounded-lg border border-white/10 bg-black/60 px-3 py-2 text-xs text-white placeholder:text-slate-600 outline-none focus:border-rail-red"
+                  />
+                </div>
+              </div>
+
+              {/* Status & Role Controls */}
+              <div className="grid gap-3 sm:grid-cols-2 rounded-xl border border-white/10 bg-white/[0.03] p-3.5">
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-300 mb-1.5">
+                    Account Status
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setEditIsActive(true)}
+                      className={`flex-1 rounded-lg py-1.5 text-xs font-bold transition ${
+                        editIsActive
+                          ? "bg-emerald-500/20 text-emerald-300 border border-emerald-400/40"
+                          : "bg-black/40 text-slate-400 border border-white/10 hover:text-white"
+                      }`}
+                    >
+                      Active
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditIsActive(false)}
+                      className={`flex-1 rounded-lg py-1.5 text-xs font-bold transition ${
+                        !editIsActive
+                          ? "bg-red-500/20 text-red-300 border border-red-400/40"
+                          : "bg-black/40 text-slate-400 border border-white/10 hover:text-white"
+                      }`}
+                    >
+                      Disabled
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-300 mb-1.5">
+                    User Role
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setEditIsStaff(false)}
+                      className={`flex-1 rounded-lg py-1.5 text-xs font-bold transition ${
+                        !editIsStaff
+                          ? "bg-sky-500/20 text-sky-300 border border-sky-400/40"
+                          : "bg-black/40 text-slate-400 border border-white/10 hover:text-white"
+                      }`}
+                    >
+                      Customer
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditIsStaff(true)}
+                      className={`flex-1 rounded-lg py-1.5 text-xs font-bold transition ${
+                        editIsStaff
+                          ? "bg-rail-amber/20 text-rail-amber border border-rail-amber/40"
+                          : "bg-black/40 text-slate-400 border border-white/10 hover:text-white"
+                      }`}
+                    >
+                      Staff Admin
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Set New Password (Optional) */}
+              <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3.5 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <KeyRound size={13} className="text-rail-amber" />
+                    <label className="text-[11px] font-bold uppercase tracking-wider text-slate-300">
+                      Reset Password (Optional)
+                    </label>
+                  </div>
+                  <span className="text-[10px] text-slate-500">Leave blank to keep unchanged</span>
+                </div>
+                <div className="relative flex items-center">
+                  <input
+                    type={showEditPassword ? "text" : "password"}
+                    minLength={8}
+                    value={editNewPassword}
+                    onChange={(e) => setEditNewPassword(e.target.value)}
+                    placeholder="Enter new password (min. 8 characters)"
+                    className="w-full rounded-lg border border-white/10 bg-black/60 pl-3 pr-10 py-2 text-xs text-white placeholder:text-slate-600 outline-none focus:border-rail-red"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowEditPassword(!showEditPassword)}
+                    className="absolute right-3 text-slate-400 hover:text-white"
+                  >
+                    {showEditPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </button>
+                </div>
+                <p className="text-[10px] text-slate-400">
+                  💡 Useful if the customer mistyped or forgot their credentials and asks you for support.
+                </p>
+              </div>
+
+              {/* Footer Controls */}
+              <div className="flex items-center justify-end gap-3 border-t border-white/10 pt-4">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setEditingUser(null)}
+                  disabled={savingEdit}
+                  className="h-9 px-4 text-xs font-semibold text-slate-300 hover:text-white"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={savingEdit}
+                  className="h-9 px-5 text-xs font-bold bg-rail-red text-white shadow-glow hover:bg-rail-red/90"
+                >
+                  {savingEdit ? "Saving Changes..." : "Save User Changes"}
+                </Button>
+              </div>
+            </form>
           </div>
         </div>
       ) : null}

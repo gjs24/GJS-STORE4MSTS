@@ -49,7 +49,8 @@ export const PurchaseTemplateModal: React.FC<PurchaseTemplateModalProps> = ({
   const [manualSubmitted, setManualSubmitted] = useState(false);
   const [customerPhone, setCustomerPhone] = useState<string>(() => {
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('gjs_customer_phone') || '';
+      const u = getStoredUser();
+      return u?.phone_number || localStorage.getItem('gjs_customer_phone') || '';
     }
     return '';
   });

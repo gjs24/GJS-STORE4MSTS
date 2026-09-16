@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { CheckCircle2, KeyRound, Mail, RefreshCw, Save, ShieldAlert, ShieldCheck, UserCircle } from "lucide-react";
+import { CheckCircle2, KeyRound, Mail, Phone, RefreshCw, Save, ShieldAlert, ShieldCheck, UserCircle } from "lucide-react";
 import { API_URL, clearAuth, getStoredUser, setStoredUser, type CurrentUser } from "@/lib/api";
 import { authHeaders, userGet, userPatch } from "@/lib/store-api";
 
@@ -11,6 +11,7 @@ export function ProfileEditForm() {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
 
   const [otpCode, setOtpCode] = useState("");
   const [otpSent, setOtpSent] = useState(false);
@@ -28,6 +29,7 @@ export function ProfileEditForm() {
       setFirstName(storedUser.first_name || "");
       setLastName(storedUser.last_name || "");
       setEmail(storedUser.email || "");
+      setPhone(storedUser.phone_number || "");
     }
 
     userGet<CurrentUser>("/auth/me/")
@@ -37,6 +39,7 @@ export function ProfileEditForm() {
         setFirstName(freshUser.first_name || "");
         setLastName(freshUser.last_name || "");
         setEmail(freshUser.email || "");
+        setPhone(freshUser.phone_number || "");
         setMessage("");
       })
       .catch((error) => {
@@ -110,6 +113,13 @@ export function ProfileEditForm() {
       return;
     }
 
+    const cleanPhone = phone.replace(/\D/g, "");
+    if (phone.trim() && cleanPhone.length !== 10) {
+      setMessage("Please enter a valid 10-digit mobile number or leave blank.");
+      setIsSuccess(false);
+      return;
+    }
+
     setSaving(true);
     setMessage("Verifying code and updating profile...");
     setIsSuccess(false);
@@ -119,11 +129,13 @@ export function ProfileEditForm() {
         first_name: firstName.trim(),
         last_name: lastName.trim(),
         email: email.trim().toLowerCase(),
+        phone_number: cleanPhone ? cleanPhone.slice(-10) : "",
         otp: otpCode.trim(),
       });
 
       setStoredUser(updated);
       setUser(updated);
+      setPhone(updated.phone_number || "");
       setOtpCode("");
       setOtpSent(false);
       setIsSuccess(true);
@@ -229,6 +241,31 @@ export function ProfileEditForm() {
               onChange={(e) => setEmail(e.target.value)}
               placeholder="name@example.com"
               className="w-full rounded-xl border border-white/10 bg-black/40 pl-10 pr-4 py-2.5 text-sm text-white placeholder:text-slate-600 focus:border-rail-red focus:outline-none focus:ring-1 focus:ring-rail-red transition-all"
+            />
+          </div>
+        </div>
+
+        {/* Mobile Number Field */}
+        <div>
+          <div className="flex items-center justify-between">
+            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400">
+              Mobile Number (10 Digits)
+            </label>
+            <span className="text-[11px] text-emerald-400 font-medium">Used for Cashfree checkout & SMS delivery</span>
+          </div>
+          <div className="relative mt-1.5 flex items-center">
+            <div className="absolute left-3.5 flex items-center gap-1.5 text-slate-400 select-none">
+              <Phone size={15} />
+              <span className="text-xs font-bold">+91</span>
+            </div>
+            <input
+              name="phone_number"
+              type="tel"
+              maxLength={10}
+              value={phone}
+              onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
+              placeholder="9876543210"
+              className="w-full rounded-xl border border-white/10 bg-black/40 pl-16 pr-4 py-2.5 text-sm text-white placeholder:text-slate-600 focus:border-rail-red focus:outline-none focus:ring-1 focus:ring-rail-red transition-all"
             />
           </div>
         </div>
