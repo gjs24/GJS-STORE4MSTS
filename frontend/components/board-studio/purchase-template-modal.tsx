@@ -103,7 +103,8 @@ export const PurchaseTemplateModal: React.FC<PurchaseTemplateModalProps> = ({
 
       // Cashfree checkout
       if (nextOrder.status === 'PENDING' && nextOrder.payment_session_id) {
-        const cashfree = await load({ mode: cashfreeMode });
+        const targetMode = nextOrder.cashfree_mode || cashfreeMode;
+        const cashfree = await load({ mode: targetMode });
         const result = await cashfree.checkout({
           paymentSessionId: nextOrder.payment_session_id,
           redirectTarget: '_self'

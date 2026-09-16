@@ -18,8 +18,9 @@ from django.db import transaction
 from django.db.models import Avg, Count, Q, Sum
 from django.db.models.deletion import ProtectedError
 from django.shortcuts import get_object_or_404
+from django.urls import reverse
 from django.utils import timezone
-from rest_framework import generics, permissions, status, viewsets
+from django.views.decorators.csrf import csrf_exempt
 from rest_framework import generics, permissions, serializers, status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes, throttle_classes
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
@@ -113,17 +114,39 @@ def cashfree_order_missing_error(error):
     return any(marker in message for marker in CASHFREE_ORDER_MISSING_MARKERS)
 
 
-def cashfree_return_url(order):
-    separator = "&" if "?" in settings.CASHFREE_RETURN_URL else "?"
-    return f"{settings.CASHFREE_RETURN_URL}{separator}order_id={order.id}"
+def cashfree_return_url(order, request=None):
+    if request and getattr(request, "data", None):
+        custom_return = request.data.get("return_url")
+        if custom_return and isinstance(custom_return, str) and custom_return.startswith(("http://", "https://", "/")):
+            separator = "&" if "?" in custom_return else "?"
+            return f"{custom_return}{separator}order_id={order.id}"
+
+    base_return = getattr(settings, "CASHFREE_RETURN_URL", "http://localhost:3000/dashboard/purchases")
+    if order.board_template and "/dashboard/purchases" in base_return:
+        board_url = base_return.replace("/dashboard/purchases", "/board-studio")
+        separator = "&" if "?" in board_url else "?"
+        return f"{board_url}{separator}order_id={order.id}&template={order.board_template.id}"
+
+    separator = "&" if "?" in base_return else "?"
+    return f"{base_return}{separator}order_id={order.id}"
 
 
 def create_cashfree_order(order, request):
     if not cashfree_is_configured():
         return None, "Cashfree is not configured."
 
+    if float(order.amount) <= 0:
+        order.status = Order.Status.APPROVED
+        order.download_enabled = True
+        order.save(update_fields=["status", "download_enabled"])
+        grant_board_unlock_if_applicable(order)
+        return {"order_status": "PAID"}, ""
+
     user = order.user
-    customer_name = user.get_full_name() or user.username or f"Customer {user.id}"
+    customer_name = (user.get_full_name() or user.username or f"Customer {user.id}").strip()
+    if len(customer_name) < 3:
+        customer_name = f"Customer {user.id}"
+    customer_name = customer_name[:100]
 
     # Determine customer's actual phone number
     raw_phone = getattr(order, "customer_phone", "") or ""
@@ -138,21 +161,32 @@ def create_cashfree_order(order, request):
 
     import re
     digits = re.sub(r"\D", "", str(raw_phone or ""))
-    if len(digits) >= 10:
+    fallback_phone = str(getattr(settings, "CASHFREE_CUSTOMER_PHONE_FALLBACK", "9999999999") or "9999999999")
+    if len(digits) >= 10 and digits[-10] in "6789":
         customer_phone = digits[-10:]
     else:
-        customer_phone = "9999999999"
+        customer_phone = fallback_phone if len(fallback_phone) == 10 and fallback_phone[0] in "6789" else "9999999999"
 
-    if customer_phone != "9999999999" and not getattr(order, "customer_phone", ""):
+    if customer_phone != fallback_phone and not getattr(order, "customer_phone", ""):
         order.customer_phone = customer_phone
         order.save(update_fields=["customer_phone"])
-    if customer_phone != "9999999999":
-        if not getattr(order, "customer_phone", ""):
-            order.customer_phone = customer_phone
-            order.save(update_fields=["customer_phone"])
+    if customer_phone != fallback_phone:
         if hasattr(user, "profile") and not user.profile.phone_number:
             user.profile.phone_number = customer_phone
             user.profile.save(update_fields=["phone_number"])
+
+    order_meta = {
+        "return_url": cashfree_return_url(order, request),
+    }
+    if request:
+        try:
+            webhook_url = request.build_absolute_uri(reverse("cashfree-webhook"))
+            if webhook_url.startswith("https://"):
+                order_meta["notify_url"] = webhook_url
+        except Exception:
+            pass
+
+    note = f"{(order.asset.title if order.asset else order.board_template.name if order.board_template else 'Store Item')} digital download"
 
     payload = {
         "order_id": order.provider_order_id,
@@ -160,14 +194,12 @@ def create_cashfree_order(order, request):
         "order_currency": order.currency,
         "customer_details": {
             "customer_id": str(user.id),
-            "customer_name": customer_name[:100],
+            "customer_name": customer_name,
             "customer_email": user.email or f"user-{user.id}@example.com",
             "customer_phone": customer_phone,
         },
-        "order_meta": {
-            "return_url": cashfree_return_url(order),
-        },
-        "order_note": f"{(order.asset.title if order.asset else order.board_template.name if order.board_template else 'Store Item')} digital download",
+        "order_meta": order_meta,
+        "order_note": note[:100],
     }
     response = requests.post(
         f"{cashfree_base_url()}/orders",
@@ -266,7 +298,15 @@ def ensure_cashfree_payment(order, request):
         else:
             if order.status in [Order.Status.FAILED, Order.Status.REFUNDED, Order.Status.REJECTED]:
                 return False, "Cashfree reports this payment as failed or expired."
-            return True, ""
+            if order.status == Order.Status.PENDING and order.created_at and order.created_at < timezone.now() - timedelta(minutes=25):
+                order.status = Order.Status.EXPIRED
+                order.download_enabled = False
+                order.save(update_fields=["status", "download_enabled"])
+                payment.status = "expired"
+                payment.save(update_fields=["status"])
+                # Order expired, create a fresh Cashfree session below
+            else:
+                return True, ""
     data, error = create_cashfree_order(order, request)
     if not data:
         logger.warning("Cashfree checkout unavailable for order %s: %s", order.id, error)
@@ -999,7 +1039,10 @@ class OrderCreateView(generics.CreateAPIView):
                 status__in=[Order.Status.PENDING, Order.Status.VERIFICATION_PENDING, Order.Status.APPROVED, Order.Status.PAID],
             ).order_by("-id").first()
 
-            if existing_order and existing_order.status == Order.Status.PENDING and existing_order.amount != target_amount:
+            if existing_order and existing_order.status == Order.Status.PENDING and (
+                existing_order.amount != target_amount
+                or (existing_order.created_at and existing_order.created_at < timezone.now() - timedelta(minutes=25))
+            ):
                 existing_order.status = Order.Status.EXPIRED
                 existing_order.download_enabled = False
                 existing_order.save(update_fields=["status", "download_enabled"])
@@ -1076,7 +1119,10 @@ class OrderCreateView(generics.CreateAPIView):
         if (
             existing_order
             and existing_order.status == Order.Status.PENDING
-            and existing_order.amount != target_amount
+            and (
+                existing_order.amount != target_amount
+                or (existing_order.created_at and existing_order.created_at < timezone.now() - timedelta(minutes=25))
+            )
         ):
             existing_order.status = Order.Status.EXPIRED
             existing_order.download_enabled = False
@@ -1236,7 +1282,15 @@ class PaymentVerifyView(generics.GenericAPIView):
     def post(self, request):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        order = get_object_or_404(Order, id=serializer.validated_data["order_id"], user=request.user)
+        raw_order_id = str(serializer.validated_data["order_id"]).strip()
+        order = None
+        if raw_order_id.isdigit():
+            order = Order.objects.filter(id=int(raw_order_id), user=request.user).first()
+        if not order:
+            order = Order.objects.filter(provider_order_id__iexact=raw_order_id, user=request.user).first()
+        if not order:
+            return Response({"detail": "Order not found."}, status=status.HTTP_404_NOT_FOUND)
+
         if order.status == Order.Status.PAID:
             sync_order_download_access(order)
             return Response(OrderSerializer(order, context={"request": request}).data)
@@ -1252,7 +1306,7 @@ class PaymentVerifyView(generics.GenericAPIView):
                 return Response(OrderSerializer(order, context={"request": request}).data)
             if order.status == Order.Status.FAILED:
                 return Response({"detail": "Cashfree reports this payment as failed or expired."}, status=status.HTTP_400_BAD_REQUEST)
-            return Response({"detail": "Cashfree payment is not complete yet."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(OrderSerializer(order, context={"request": request}).data, status=status.HTTP_200_OK)
         if order.utr:
             return Response({"detail": "A UTR was already submitted for this order."}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -1524,7 +1578,8 @@ class AdminOrderViewSet(viewsets.ModelViewSet):
     queryset = Order.objects.select_related(
         "user",
         "asset",
-        "asset__category"
+        "asset__category",
+        "board_template",
     ).order_by("-id")
 
     serializer_class = AdminOrderSerializer
@@ -1538,7 +1593,8 @@ class AdminOrderViewSet(viewsets.ModelViewSet):
         qs = Order.objects.select_related(
             "user",
             "asset",
-            "asset__category"
+            "asset__category",
+            "board_template",
         ).order_by("-id")
 
         status_param = self.request.query_params.get("status")
@@ -1581,6 +1637,7 @@ class AdminOrderViewSet(viewsets.ModelViewSet):
                 order.blocked_at = timezone.now()
             order.save(update_fields=["download_enabled", "blocked_at"])
             Payment.objects.filter(order=order).update(status="blocked")
+            UserBoardUnlock.objects.filter(order=order).delete()
 
         elif order.status in [Order.Status.PAID, Order.Status.APPROVED]:
             if "download_enabled" not in serializer.validated_data:
@@ -1599,6 +1656,7 @@ class AdminOrderViewSet(viewsets.ModelViewSet):
             order.blocked_at = None
             order.save(update_fields=["download_enabled", "blocked_at"])
             Payment.objects.filter(order=order).update(status=order.status.lower())
+            UserBoardUnlock.objects.filter(order=order).delete()
 
         user_label = order.user.username if order.user else "User"
         asset_title = order.asset.title if order.asset else (order.board_template.name if order.board_template else "Item")
@@ -2392,6 +2450,7 @@ def admin_settings(request):
     )
 
 
+@csrf_exempt
 @api_view(["POST"])
 @permission_classes([permissions.AllowAny])
 def cashfree_webhook(request):

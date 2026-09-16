@@ -64,7 +64,8 @@ export function AssetActions({ asset }: { asset: Asset }) {
       return false;
     }
     setMessage("Redirecting to secure Cashfree checkout...");
-    const cashfree = await load({ mode: cashfreeMode });
+    const targetMode = nextOrder.cashfree_mode || cashfreeMode;
+    const cashfree = await load({ mode: targetMode });
     const result = await cashfree.checkout({
       paymentSessionId: nextOrder.payment_session_id,
       redirectTarget: "_self"

@@ -149,7 +149,8 @@ export function StudioEditor({
         throw new Error("Cashfree payment session could not be created.");
       }
 
-      const cashfree = await load({ mode: cashfreeMode });
+      const targetMode = orderData.cashfree_mode || cashfreeMode;
+      const cashfree = await load({ mode: targetMode });
       const result = await cashfree.checkout({
         paymentSessionId: orderData.payment_session_id,
         redirectTarget: "_self",

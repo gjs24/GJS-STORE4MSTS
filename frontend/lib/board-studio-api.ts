@@ -178,15 +178,18 @@ export async function deleteUserCustomBoard(id: number): Promise<void> {
   }
 }
 
-export async function createBoardOrder(templateId: string): Promise<any> {
+export async function createBoardOrder(templateId: string, customerPhone?: string): Promise<any> {
   const token = getAccessToken();
   if (!token) {
     throw new Error("Please log in to purchase or customize this board template.");
   }
+  const phone = customerPhone || (typeof window !== "undefined" ? localStorage.getItem("gjs_customer_phone") || undefined : undefined);
+  const payload: Record<string, any> = { board_template_id: templateId };
+  if (phone) payload.customer_phone = phone;
   const res = await fetch(`${API_URL}/create-order/`, {
     method: "POST",
     headers: authHeaders(),
-    body: JSON.stringify({ board_template_id: templateId }),
+    body: JSON.stringify(payload),
   });
   return parseResponseJson(res, "Could not initiate checkout for this board template.");
 }

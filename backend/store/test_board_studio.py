@@ -277,4 +277,54 @@ class BoardStudioTests(APITestCase):
         self.assertEqual(res.status_code, 403)
         self.assertTrue(Order.objects.filter(id=pending_order.id).exists())
 
+    def test_verify_payment_with_provider_order_id_string(self):
+        order = Order.objects.create(
+            user=self.user1,
+            board_template=self.paid_template,
+            amount=Decimal("49.00"),
+            currency="INR",
+            status=Order.Status.PAID,
+            download_enabled=True,
+            provider_order_id="GJS-B00999",
+        )
+        self.client.force_authenticate(user=self.user1)
+        res = self.client.post("/api/verify-payment/", {"order_id": "GJS-B00999"})
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.data["id"], order.id)
+        self.assertIn("cashfree_mode", res.data)
+
+    def test_verify_payment_with_numeric_order_id(self):
+        order = Order.objects.create(
+            user=self.user1,
+            board_template=self.paid_template,
+            amount=Decimal("49.00"),
+            currency="INR",
+            status=Order.Status.PAID,
+            download_enabled=True,
+            provider_order_id="GJS-B00998",
+        )
+        self.client.force_authenticate(user=self.user1)
+        res = self.client.post("/api/verify-payment/", {"order_id": order.id})
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.data["id"], order.id)
+
+    def test_admin_order_block_revokes_board_unlock(self):
+        order = Order.objects.create(
+            user=self.user1,
+            board_template=self.paid_template,
+            amount=Decimal("49.00"),
+            currency="INR",
+            status=Order.Status.APPROVED,
+            download_enabled=True,
+            provider_order_id="GJS-B00997",
+        )
+        UserBoardUnlock.objects.get_or_create(user=self.user1, template=self.paid_template, defaults={"order": order})
+        self.assertTrue(UserBoardUnlock.objects.filter(user=self.user1, template=self.paid_template).exists())
+
+        self.client.force_authenticate(user=self.admin)
+        res = self.client.patch(f"/api/admin/orders/{order.id}/", {"status": Order.Status.BLOCKED})
+        self.assertEqual(res.status_code, 200)
+        self.assertFalse(UserBoardUnlock.objects.filter(user=self.user1, template=self.paid_template).exists())
+
+
 

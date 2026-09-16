@@ -76,11 +76,11 @@ export function AccountList({ type }: AccountListProps) {
       .catch((error) => setMessage(error instanceof Error ? error.message : "Please login to view this page."));
     const verifyReturnedOrder = async () => {
       if (type !== "purchases") return;
-      const orderId = Number(new URLSearchParams(window.location.search).get("order_id") || "");
-      if (!orderId) return;
+      const rawOrderId = new URLSearchParams(window.location.search).get("order_id")?.trim() || "";
+      if (!rawOrderId) return;
       setMessage("Confirming Cashfree payment...");
       try {
-        const order = await verifyPayment(orderId);
+        const order = await verifyPayment(rawOrderId);
         setMessage(order.download_enabled ? "Payment confirmed. Download access is ready." : "Payment is not confirmed yet. Please refresh in a moment.");
         window.history.replaceState(null, "", window.location.pathname);
       } catch (error) {

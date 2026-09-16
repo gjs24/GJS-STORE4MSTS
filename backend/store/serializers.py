@@ -701,6 +701,7 @@ class OrderSerializer(serializers.ModelSerializer):
     manual_payment = serializers.SerializerMethodField()
     payment_session_id = serializers.SerializerMethodField()
     payment_provider = serializers.SerializerMethodField()
+    cashfree_mode = serializers.SerializerMethodField()
 
     class Meta:
         model = Order
@@ -724,9 +725,10 @@ class OrderSerializer(serializers.ModelSerializer):
             "manual_payment",
             "payment_session_id",
             "payment_provider",
+            "cashfree_mode",
             "created_at",
         ]
-        read_only_fields = ["amount", "status", "provider_order_id", "utr", "payer_name", "payment_submitted_at", "download_enabled", "manual_payment", "payment_session_id", "payment_provider", "created_at"]
+        read_only_fields = ["amount", "status", "provider_order_id", "utr", "payer_name", "payment_submitted_at", "download_enabled", "manual_payment", "payment_session_id", "payment_provider", "cashfree_mode", "created_at"]
 
     def get_download_enabled(self, obj):
         if obj.status == Order.Status.BLOCKED or not obj.download_enabled:
@@ -767,6 +769,9 @@ class OrderSerializer(serializers.ModelSerializer):
     def get_payment_provider(self, obj):
         payment = getattr(obj, "payment", None)
         return payment.provider if payment else ""
+
+    def get_cashfree_mode(self, obj):
+        return getattr(settings, "CASHFREE_ENVIRONMENT", "sandbox").lower()
 
 
 class AdminOrderSerializer(serializers.ModelSerializer):
@@ -821,7 +826,7 @@ class AdminOrderSerializer(serializers.ModelSerializer):
 
 
 class PaymentVerifySerializer(serializers.Serializer):
-    order_id = serializers.IntegerField()
+    order_id = serializers.CharField(max_length=64)
     utr = serializers.CharField(required=False, allow_blank=True, min_length=6, max_length=80)
     payer_name = serializers.CharField(required=False, allow_blank=True, max_length=160)
 

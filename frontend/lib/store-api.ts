@@ -24,6 +24,7 @@ export type StoreOrder = {
   download_enabled?: boolean;
   payment_session_id?: string;
   payment_provider?: "CASHFREE" | "MANUAL" | "";
+  cashfree_mode?: "production" | "sandbox";
   manual_payment?: {
     upi_id: string;
     payee_name: string;
@@ -190,7 +191,7 @@ export async function createBoardTemplateOrder(templateId: string, customerPhone
 }
 
 export async function verifyPayment(
-  orderId: number,
+  orderId: number | string,
   payment?: {
     utr: string;
     payer_name?: string;
@@ -198,7 +199,7 @@ export async function verifyPayment(
 ): Promise<StoreOrder> {
   await validAccessToken();
   const payload = {
-    order_id: orderId,
+    order_id: String(orderId).trim(),
     utr: payment?.utr || "",
     payer_name: payment?.payer_name || ""
   };

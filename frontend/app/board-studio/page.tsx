@@ -129,36 +129,34 @@ export default function BoardStudioPage() {
     }
 
     if (orderIdParam) {
-      const orderId = Number(orderIdParam);
-      if (!isNaN(orderId) && orderId > 0) {
-        verifyPayment(orderId)
-          .then((verifiedOrder) => {
-            if (
-              verifiedOrder.download_enabled ||
-              verifiedOrder.status === 'PAID' ||
-              verifiedOrder.status === 'APPROVED'
-            ) {
-              const targetTpl = verifiedOrder.board_template?.id || templateParam;
-              if (targetTpl) {
-                const currentUnlocks: string[] = JSON.parse(
-                  localStorage.getItem('gjs_unlocked_templates') || '[]'
-                );
-                if (!currentUnlocks.includes(targetTpl)) {
-                  currentUnlocks.push(targetTpl);
-                  localStorage.setItem('gjs_unlocked_templates', JSON.stringify(currentUnlocks));
-                  setUnlockedIds(currentUnlocks);
-                }
+      verifyPayment(orderIdParam)
+        .then((verifiedOrder) => {
+          if (
+            verifiedOrder.download_enabled ||
+            verifiedOrder.status === 'PAID' ||
+            verifiedOrder.status === 'APPROVED'
+          ) {
+            const targetTpl = verifiedOrder.board_template?.id || templateParam;
+            if (targetTpl) {
+              const currentUnlocks: string[] = JSON.parse(
+                localStorage.getItem('gjs_unlocked_templates') || '[]'
+              );
+              if (!currentUnlocks.includes(targetTpl)) {
+                currentUnlocks.push(targetTpl);
+                localStorage.setItem('gjs_unlocked_templates', JSON.stringify(currentUnlocks));
+                setUnlockedIds(currentUnlocks);
               }
             }
-          })
-          .catch((err) => {
-            console.warn('Cashfree payment verification notice:', err);
-          })
-          .finally(() => {
-            const cleanUrl = templateParam ? `/board-studio?template=${templateParam}` : '/board-studio';
-            window.history.replaceState(null, '', cleanUrl);
-          });
-      }
+            syncUserPurchases();
+          }
+        })
+        .catch((err) => {
+          console.warn('Cashfree payment verification notice:', err);
+        })
+        .finally(() => {
+          const cleanUrl = templateParam ? `/board-studio?template=${templateParam}` : '/board-studio';
+          window.history.replaceState(null, '', cleanUrl);
+        });
     }
   }, []);
 
