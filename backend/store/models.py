@@ -267,6 +267,12 @@ class Order(models.Model):
     provider_order_id = models.CharField(max_length=160, blank=True)
     utr = models.CharField(max_length=80, blank=True, null=True, unique=True)
     payer_name = models.CharField(max_length=160, blank=True)
+    customer_phone = models.CharField(
+        max_length=20,
+        blank=True,
+        default="",
+        help_text="Customer 10-digit mobile number for Cashfree payment gateway & invoice"
+    )
     payment_submitted_at = models.DateTimeField(blank=True, null=True)
     download_enabled = models.BooleanField(default=False)
     block_reason = models.CharField(max_length=255, blank=True, default="")
@@ -413,6 +419,10 @@ class SiteSetting(models.Model):
     desktop_app_enabled = models.BooleanField(
         default=False,
         help_text="Toggle public visibility of desktop app download links and page"
+    )
+    board_studio_enabled = models.BooleanField(
+        default=True,
+        help_text="Toggle public visibility of Railway Board Studio on the website"
     )
     # Festival & Anniversary Theme Settings
     festival_theme_enabled = models.BooleanField(default=False)

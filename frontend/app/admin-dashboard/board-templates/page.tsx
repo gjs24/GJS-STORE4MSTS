@@ -30,6 +30,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { storageService } from "@/lib/board-studio/storage-service";
 import { BoardTemplate, BoardCategory } from "@/lib/board-studio/types";
 import { AdminTemplateStudio } from "@/components/board-studio/admin-template-studio";
+import { adminGet, adminPatch, type AdminSettings } from "@/lib/admin-api";
 import "@/styles/board-studio.css";
 
 type TemplateFilter = "all" | "published" | "hidden" | "free" | "paid";
@@ -40,6 +41,8 @@ export default function AdminBoardTemplatesPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filter, setFilter] = useState<TemplateFilter>("all");
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [boardStudioEnabled, setBoardStudioEnabled] = useState(true);
+  const [togglingStudio, setTogglingStudio] = useState(false);
 
   // Visual studio active template
   const [visualStudioTemplate, setVisualStudioTemplate] = useState<BoardTemplate | null>(null);
@@ -78,6 +81,13 @@ export default function AdminBoardTemplatesPage() {
 
   useEffect(() => {
     loadData();
+    adminGet<AdminSettings>("/admin/settings/", { site: { board_studio_enabled: true } } as any)
+      .then((data) => {
+        if (data?.site) {
+          setBoardStudioEnabled(data.site.board_studio_enabled !== false);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   const stats = useMemo(() => {
@@ -109,6 +119,26 @@ export default function AdminBoardTemplatesPage() {
   const showFeedback = (type: "success" | "error", message: string) => {
     setFeedback({ type, message });
     setTimeout(() => setFeedback(null), 3500);
+  };
+
+  // Toggle global public visibility of Board Studio
+  const handleToggleStudioVisibility = async () => {
+    setTogglingStudio(true);
+    try {
+      const nextVal = !boardStudioEnabled;
+      await adminPatch<AdminSettings>("/admin/settings/", { site: { board_studio_enabled: nextVal } });
+      setBoardStudioEnabled(nextVal);
+      showFeedback(
+        "success",
+        nextVal
+          ? "🟢 Railway Board Studio is now LIVE to all public visitors."
+          : "🚨 Railway Board Studio is now HIDDEN from public visitors (Maintenance Mode)."
+      );
+    } catch (err) {
+      showFeedback("error", "Failed to update Board Studio visibility.");
+    } finally {
+      setTogglingStudio(false);
+    }
   };
 
   // Toggle publish status
@@ -345,10 +375,25 @@ export default function AdminBoardTemplatesPage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-3 w-full sm:w-auto">
+          <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+            <button
+              type="button"
+              disabled={togglingStudio}
+              onClick={handleToggleStudioVisibility}
+              className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-bold transition shadow-sm ${
+                boardStudioEnabled
+                  ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20"
+                  : "border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20"
+              }`}
+              title="Click to toggle public visibility of Board Studio"
+            >
+              <span className={`h-2 w-2 rounded-full ${boardStudioEnabled ? "bg-emerald-400 animate-pulse" : "bg-red-400"}`} />
+              <span>Public Studio: {boardStudioEnabled ? "LIVE (Visible)" : "OFFLINE (Hidden)"}</span>
+            </button>
+
             <Link href="/board-studio" target="_blank" className="w-full sm:w-auto">
               <Button variant="secondary" className="w-full border-white/10 bg-white/5 hover:bg-white/10 text-white gap-2">
-                <Eye className="h-4 w-4" /> Preview User Studio
+                <Eye className="h-4 w-4" /> Preview Studio
               </Button>
             </Link>
 

@@ -122,6 +122,27 @@ def create_cashfree_order(order, request):
 
     user = order.user
     customer_name = user.get_full_name() or user.username or f"Customer {user.id}"
+
+    # Determine customer's actual phone number
+    raw_phone = getattr(order, "customer_phone", "") or ""
+    if not raw_phone and request and getattr(request, "data", None):
+        raw_phone = request.data.get("customer_phone") or request.data.get("phone") or ""
+    if not raw_phone:
+        prev = Order.objects.filter(user=user).exclude(customer_phone="").order_by("-id").first()
+        if prev:
+            raw_phone = prev.customer_phone
+
+    import re
+    digits = re.sub(r"\D", "", str(raw_phone or ""))
+    if len(digits) >= 10:
+        customer_phone = digits[-10:]
+    else:
+        customer_phone = "9999999999"
+
+    if customer_phone != "9999999999" and not getattr(order, "customer_phone", ""):
+        order.customer_phone = customer_phone
+        order.save(update_fields=["customer_phone"])
+
     payload = {
         "order_id": order.provider_order_id,
         "order_amount": float(order.amount),
@@ -130,7 +151,7 @@ def create_cashfree_order(order, request):
             "customer_id": str(user.id),
             "customer_name": customer_name[:100],
             "customer_email": user.email or f"user-{user.id}@example.com",
-            "customer_phone": settings.CASHFREE_CUSTOMER_PHONE_FALLBACK,
+            "customer_phone": customer_phone,
         },
         "order_meta": {
             "return_url": cashfree_return_url(order),
@@ -966,15 +987,31 @@ class OrderCreateView(generics.CreateAPIView):
                     if existing_order.status == Order.Status.FAILED:
                         existing_order = None
             if existing_order:
+                req_phone = request.data.get("customer_phone") or request.data.get("phone")
+                if req_phone:
+                    import re
+                    digits = re.sub(r"\D", "", str(req_phone))[-10:]
+                    if len(digits) == 10 and existing_order.customer_phone != digits:
+                        existing_order.customer_phone = digits
+                        existing_order.save(update_fields=["customer_phone"])
                 if not order_has_download_access(existing_order):
                     cashfree_ready, cashfree_error = ensure_cashfree_payment(existing_order, request)
                     if not cashfree_ready:
                         return Response({"detail": cashfree_error or "Cashfree checkout is not available."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
                 return Response(OrderSerializer(existing_order, context={"request": request}).data, status=status.HTTP_200_OK)
 
+            phone_input = request.data.get("customer_phone") or request.data.get("phone") or ""
+            if not phone_input:
+                prev = Order.objects.filter(user=request.user).exclude(customer_phone="").order_by("-id").first()
+                if prev:
+                    phone_input = prev.customer_phone
+            import re
+            cleaned_phone = re.sub(r"\D", "", str(phone_input))[-10:] if len(re.sub(r"\D", "", str(phone_input))) >= 10 else ""
+
             order = Order.objects.create(
                 user=request.user,
                 board_template=template,
+                customer_phone=cleaned_phone,
                 amount=target_amount,
                 currency="INR",
                 status=Order.Status.PENDING,
@@ -1027,6 +1064,13 @@ class OrderCreateView(generics.CreateAPIView):
                 if existing_order.status == Order.Status.FAILED:
                     existing_order = None
         if existing_order:
+            req_phone = request.data.get("customer_phone") or request.data.get("phone")
+            if req_phone:
+                import re
+                digits = re.sub(r"\D", "", str(req_phone))[-10:]
+                if len(digits) == 10 and existing_order.customer_phone != digits:
+                    existing_order.customer_phone = digits
+                    existing_order.save(update_fields=["customer_phone"])
             if not order_has_download_access(existing_order) and not user_has_special_access(request.user, asset):
                 cashfree_ready, cashfree_error = ensure_cashfree_payment(existing_order, request)
                 if not cashfree_ready:
@@ -1047,7 +1091,6 @@ class OrderCreateView(generics.CreateAPIView):
         return Response(data, status=status.HTTP_201_CREATED, headers=headers)
 
     def perform_create(self, serializer):
-        asset = serializer.validated_data["asset"]
         asset = serializer.validated_data.get("asset")
         if not asset:
             order = serializer.save(user=self.request.user)
@@ -1062,10 +1105,20 @@ class OrderCreateView(generics.CreateAPIView):
             final_amount = Decimal("0.00")
         is_free_purchase = asset.is_free or final_amount <= Decimal("0.00") or has_special
         status_value = Order.Status.APPROVED if is_free_purchase else Order.Status.PENDING
+
+        phone_input = self.request.data.get("customer_phone") or self.request.data.get("phone") or ""
+        if not phone_input:
+            prev = Order.objects.filter(user=self.request.user).exclude(customer_phone="").order_by("-id").first()
+            if prev:
+                phone_input = prev.customer_phone
+        import re
+        cleaned_phone = re.sub(r"\D", "", str(phone_input))[-10:] if len(re.sub(r"\D", "", str(phone_input))) >= 10 else ""
+
         order = serializer.save(
             user=self.request.user,
             amount=final_amount,
             currency="INR",
+            customer_phone=cleaned_phone,
             status=status_value,
             download_enabled=is_free_purchase,
         )

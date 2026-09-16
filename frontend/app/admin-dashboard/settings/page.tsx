@@ -2,7 +2,7 @@
 
 import { type FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
-import { Check, Clock, Copy, CreditCard, Database, ExternalLink, Eye, Image, Megaphone, MonitorDown, ShieldCheck, Wrench } from "lucide-react";
+import { Check, Clock, Copy, CreditCard, Database, ExternalLink, Eye, Image, Megaphone, MonitorDown, ShieldCheck, Tv, Wrench } from "lucide-react";
 import { AdminLoginNote } from "@/components/admin-login-note";
 import { AdminLayout } from "@/components/admin-table";
 import { adminGet, adminPatch, type AdminSettings } from "@/lib/admin-api";
@@ -517,6 +517,67 @@ export default function AdminSettingsPage() {
             <span className="mt-1 block text-xs text-slate-500">
               Shown on the download badge (e.g. 1.0.0).
             </span>
+          </label>
+        </div>
+
+        {/* Railway Board Studio Distribution */}
+        <div className="border-t border-white/10 pt-5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-rail-amber">
+              <Tv size={20} />
+              <h2 className="font-semibold text-white">Railway Board Studio (LED & Nameboards)</h2>
+            </div>
+            <div className="flex items-center gap-3">
+              <Link
+                href="/admin-dashboard/board-templates"
+                className="inline-flex items-center gap-1 text-xs text-slate-300 hover:text-rail-amber transition"
+              >
+                <span>Manage Templates</span>
+                <ExternalLink size={13} />
+              </Link>
+              <Link
+                href="/board-studio"
+                target="_blank"
+                className="inline-flex items-center gap-1 text-xs text-slate-300 hover:text-rail-amber transition"
+              >
+                <span>Preview Studio</span>
+                <ExternalLink size={13} />
+              </Link>
+            </div>
+          </div>
+          <p className="mt-2 text-sm text-slate-400">
+            Control public access to the interactive LED Matrix and train coach destination board studio across your site.
+          </p>
+        </div>
+
+        {/* Board Studio Visibility Switch */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-xl border border-white/10 bg-black/40 p-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-bold text-white">Public Board Studio Access</span>
+              <span
+                className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
+                  siteForm.board_studio_enabled !== false
+                    ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                    : "bg-red-500/20 text-red-400 border border-red-500/30"
+                }`}
+              >
+                {siteForm.board_studio_enabled !== false ? "Visible (Active)" : "Hidden (Offline)"}
+              </span>
+            </div>
+            <p className="mt-1 text-xs text-slate-400">
+              When disabled, the &quot;Board Studio&quot; link is hidden from the header/mobile menu for visitors, and public users see a depot maintenance message. Staff administrators can always access and edit templates.
+            </p>
+          </div>
+
+          <label className="relative inline-flex cursor-pointer items-center">
+            <input
+              type="checkbox"
+              checked={siteForm.board_studio_enabled !== false}
+              onChange={(e) => updateSiteForm("board_studio_enabled", e.target.checked)}
+              className="peer sr-only"
+            />
+            <div className="h-6 w-11 rounded-full bg-neutral-800 peer-focus:outline-none peer-checked:bg-rail-red after:absolute after:top-[2px] after:left-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
           </label>
         </div>
 

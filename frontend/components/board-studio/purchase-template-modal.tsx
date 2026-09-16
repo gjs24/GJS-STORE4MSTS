@@ -47,6 +47,12 @@ export const PurchaseTemplateModal: React.FC<PurchaseTemplateModalProps> = ({
   const [utr, setUtr] = useState('');
   const [payerName, setPayerName] = useState('');
   const [manualSubmitted, setManualSubmitted] = useState(false);
+  const [customerPhone, setCustomerPhone] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('gjs_customer_phone') || '';
+    }
+    return '';
+  });
 
   if (!isOpen || !template) return null;
 
@@ -65,7 +71,17 @@ export const PurchaseTemplateModal: React.FC<PurchaseTemplateModalProps> = ({
         return;
       }
 
-      const nextOrder = await createBoardTemplateOrder(template.id);
+      const cleanedPhone = customerPhone.replace(/\D/g, '');
+      if (cleanedPhone.length > 0 && cleanedPhone.length !== 10) {
+        setError('Please enter a valid 10-digit mobile number for Cashfree checkout.');
+        setIsProcessing(false);
+        return;
+      }
+      if (cleanedPhone.length === 10) {
+        localStorage.setItem('gjs_customer_phone', cleanedPhone);
+      }
+
+      const nextOrder = await createBoardTemplateOrder(template.id, cleanedPhone || undefined);
       setOrder(nextOrder);
 
       // If already approved / free / unlocked
@@ -319,6 +335,41 @@ export const PurchaseTemplateModal: React.FC<PurchaseTemplateModalProps> = ({
                 </li>
               </ul>
             </div>
+
+            {/* Mobile Number for Cashfree / Invoice */}
+            {loggedIn && (
+              <div style={{ margin: '0 24px 16px 24px' }}>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#fb923c', textTransform: 'uppercase', marginBottom: 4 }}>
+                  📱 Your 10-Digit Mobile Number (Required for Cashfree Gateway & SMS Receipt):
+                </label>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <span style={{ padding: '8px 10px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 6, fontSize: 12, color: '#94a3b8' }}>
+                    +91
+                  </span>
+                  <input
+                    type="tel"
+                    maxLength={10}
+                    value={customerPhone}
+                    onChange={(e) => setCustomerPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                    placeholder="Enter your 10-digit number (e.g. 9876543210)"
+                    style={{
+                      flex: 1,
+                      padding: '8px 12px',
+                      background: 'rgba(0,0,0,0.4)',
+                      border: '1px solid rgba(255,255,255,0.15)',
+                      borderRadius: 6,
+                      color: '#fff',
+                      fontSize: 13,
+                      letterSpacing: '1px',
+                      fontFamily: 'monospace'
+                    }}
+                  />
+                </div>
+                <small style={{ fontSize: 10, color: '#94a3b8', marginTop: 4, display: 'block' }}>
+                  Cashfree will send the payment OTP and receipt directly to your mobile number.
+                </small>
+              </div>
+            )}
 
             {/* Action Footer */}
             <div style={{ padding: '16px 24px', borderTop: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>

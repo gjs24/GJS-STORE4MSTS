@@ -149,36 +149,40 @@ export async function userPatch<T>(path: string, body: Record<string, unknown>):
   return res.json();
 }
 
-export async function createOrder(assetId: number): Promise<StoreOrder> {
+export async function createOrder(assetId: number, customerPhone?: string): Promise<StoreOrder> {
   await validAccessToken();
+  const payload: Record<string, any> = { asset_id: assetId };
+  if (customerPhone) payload.customer_phone = customerPhone;
   let res = await fetch(`${API_URL}/orders/create/`, {
     method: "POST",
     headers: { ...authHeaders(), "Content-Type": "application/json" },
-    body: JSON.stringify({ asset_id: assetId })
+    body: JSON.stringify(payload)
   });
   if (res.status === 401 && await refreshAccessToken()) {
     res = await fetch(`${API_URL}/orders/create/`, {
       method: "POST",
       headers: { ...authHeaders(), "Content-Type": "application/json" },
-      body: JSON.stringify({ asset_id: assetId })
+      body: JSON.stringify(payload)
     });
   }
   if (!res.ok) throw new Error(await parseError(res, "Could not create order."));
   return res.json();
 }
 
-export async function createBoardTemplateOrder(templateId: string): Promise<StoreOrder> {
+export async function createBoardTemplateOrder(templateId: string, customerPhone?: string): Promise<StoreOrder> {
   await validAccessToken();
+  const payload: Record<string, any> = { board_template_id: templateId };
+  if (customerPhone) payload.customer_phone = customerPhone;
   let res = await fetch(`${API_URL}/orders/create/`, {
     method: "POST",
     headers: { ...authHeaders(), "Content-Type": "application/json" },
-    body: JSON.stringify({ board_template_id: templateId })
+    body: JSON.stringify(payload)
   });
   if (res.status === 401 && await refreshAccessToken()) {
     res = await fetch(`${API_URL}/orders/create/`, {
       method: "POST",
       headers: { ...authHeaders(), "Content-Type": "application/json" },
-      body: JSON.stringify({ board_template_id: templateId })
+      body: JSON.stringify(payload)
     });
   }
   if (!res.ok) throw new Error(await parseError(res, "Could not create order for this board template."));

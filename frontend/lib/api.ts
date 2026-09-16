@@ -130,6 +130,7 @@ export type SiteSettings = {
   desktop_app_download_url?: string;
   desktop_app_version?: string;
   desktop_app_enabled?: boolean;
+  board_studio_enabled?: boolean;
   festival_theme_enabled?: boolean;
   festival_theme_type?: "ANNIVERSARY" | "DIWALI" | "PONGAL" | "CHRISTMAS" | "NEW_YEAR" | "INDEPENDENCE_DAY" | "CUSTOM";
   festival_title?: string;
@@ -164,6 +165,7 @@ export const fallbackSiteSettings: SiteSettings = {
   desktop_app_download_url: "https://github.com/gjs24/msts-gjs-desktop-releases/releases/download/v1.0.0/MSTS-GJS.Production.Store.Setup.1.0.0.exe",
   desktop_app_version: "1.0.0",
   desktop_app_enabled: false,
+  board_studio_enabled: true,
   festival_theme_enabled: false,
   festival_theme_type: "ANNIVERSARY",
   festival_title: "🎉 Celebrating 1 Year of MSTS-GJS Production Store!",

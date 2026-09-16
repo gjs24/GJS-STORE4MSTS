@@ -4,8 +4,9 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { BoardTemplate, UserBoardValues } from '@/lib/board-studio/types';
 import { storageService } from '@/lib/board-studio/storage-service';
 import { fontManager } from '@/lib/board-studio/font-manager';
-import { getStoredUser, setStoredUser, clearAuth, AUTH_CHANGE_EVENT, CurrentUser } from '@/lib/api';
+import { getStoredUser, setStoredUser, clearAuth, AUTH_CHANGE_EVENT, CurrentUser, getSiteSettings } from '@/lib/api';
 import { userGet, verifyPayment, type StoreOrder } from '@/lib/store-api';
+import { Tv } from 'lucide-react';
 
 import { HomePage } from '@/components/board-studio/home-gallery';
 import { UserBoardEditor } from '@/components/board-studio/user-board-editor';
@@ -25,6 +26,7 @@ export default function BoardStudioPage() {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [unlockedIds, setUnlockedIds] = useState<string[]>([]);
   const [savedCount, setSavedCount] = useState<number>(0);
+  const [studioEnabled, setStudioEnabled] = useState<boolean | null>(null);
 
   // Modals
   const [isHelpOpen, setIsHelpOpen] = useState(false);
@@ -101,6 +103,10 @@ export default function BoardStudioPage() {
 
     syncUserAuth();
     syncUserPurchases();
+
+    getSiteSettings()
+      .then((s) => setStudioEnabled(s?.board_studio_enabled !== false))
+      .catch(() => setStudioEnabled(true));
 
     window.addEventListener(AUTH_CHANGE_EVENT, syncUserAuth);
     window.addEventListener('storage', syncUserAuth);
@@ -231,6 +237,63 @@ export default function BoardStudioPage() {
 
   const publishedTemplates = templates.filter((t) => t.published !== false);
 
+  // If Board Studio is disabled by admin and user is not staff, show offline maintenance screen
+  if (studioEnabled === false && !currentUser?.is_staff) {
+    return (
+      <div className="gjs-board-studio-root" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '80vh', padding: '24px' }}>
+        <div style={{ maxWidth: '520px', width: '100%', textAlign: 'center', background: 'rgba(15, 23, 42, 0.9)', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '16px', padding: '40px 24px', backdropFilter: 'blur(16px)', boxShadow: '0 20px 50px rgba(0,0,0,0.5)' }}>
+          <div style={{ width: '64px', height: '64px', borderRadius: '16px', background: 'rgba(239, 59, 45, 0.12)', border: '1px solid rgba(239, 59, 45, 0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px auto', color: '#ef3b2d' }}>
+            <Tv size={32} />
+          </div>
+          <h2 style={{ fontSize: '1.4rem', fontWeight: 800, color: '#fff', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Depot Maintenance in Progress
+          </h2>
+          <p style={{ fontSize: '0.9rem', color: '#94a3b8', lineHeight: 1.6, marginBottom: '24px' }}>
+            The Railway Nameboard & LED Texture Studio is currently undergoing depot upgrades and maintenance. Check back soon for new train templates and features!
+          </p>
+          <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
+            <a
+              href="/assets"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                background: 'linear-gradient(135deg, #ef3b2d, #ff8a1f)',
+                color: '#fff',
+                fontWeight: 700,
+                fontSize: '0.85rem',
+                padding: '10px 22px',
+                borderRadius: '8px',
+                textDecoration: 'none',
+                boxShadow: '0 4px 15px rgba(239, 59, 45, 0.4)'
+              }}
+            >
+              Browse Store Assets →
+            </a>
+            <a
+              href="/"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                background: 'rgba(255, 255, 255, 0.08)',
+                color: '#cbd5e1',
+                fontWeight: 600,
+                fontSize: '0.85rem',
+                padding: '10px 20px',
+                borderRadius: '8px',
+                border: '1px solid rgba(255, 255, 255, 0.15)',
+                textDecoration: 'none'
+              }}
+            >
+              Return to Home
+            </a>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (!activeTemplate && templates.length === 0) {
     return (
       <div className="gjs-board-studio-root" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '80vh' }}>
@@ -249,18 +312,22 @@ export default function BoardStudioPage() {
         {currentUser?.is_staff && (
           <div
             style={{
-              background: 'linear-gradient(90deg, rgba(239, 59, 45, 0.15), rgba(255, 138, 31, 0.15))',
-              borderBottom: '1px solid rgba(239, 59, 45, 0.3)',
+              background: studioEnabled === false
+                ? 'linear-gradient(90deg, rgba(239, 68, 68, 0.2), rgba(185, 28, 28, 0.2))'
+                : 'linear-gradient(90deg, rgba(239, 59, 45, 0.15), rgba(255, 138, 31, 0.15))',
+              borderBottom: studioEnabled === false ? '1px solid rgba(239, 68, 68, 0.4)' : '1px solid rgba(239, 59, 45, 0.3)',
               padding: '8px 16px',
               fontSize: '0.8rem',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              color: '#f8fafc'
+              color: '#f8fafc',
+              flexWrap: 'wrap',
+              gap: '8px'
             }}
           >
             <span>
-              🛡️ <strong>Store Admin Session Active:</strong> Manage board templates, pricing, and visual UV layouts securely in Admin Panel.
+              🛡️ <strong>Admin Session Active</strong> · Public Studio Status: <strong style={{ color: studioEnabled === false ? '#f87171' : '#4ade80' }}>{studioEnabled === false ? 'HIDDEN / OFFLINE' : 'LIVE / VISIBLE'}</strong> (Manage board templates and visibility in Admin Panel)
             </span>
             <a
               href="/admin-dashboard/board-templates"

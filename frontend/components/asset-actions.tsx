@@ -150,7 +150,18 @@ export function AssetActions({ asset }: { asset: Asset }) {
     );
     try {
       if (!activeAsset.is_free && !activeAsset.can_download) {
-        const nextOrder = await createOrder(activeAsset.id);
+        let phone = typeof window !== "undefined" ? (localStorage.getItem("gjs_customer_phone") || "") : "";
+        if (!phone || phone.replace(/\D/g, "").length !== 10) {
+          const userPhone = window.prompt(
+            "Enter your 10-digit mobile number for Cashfree payment gateway & SMS receipt (Required by Cashfree):",
+            phone
+          );
+          if (userPhone && userPhone.replace(/\D/g, "").length >= 10) {
+            phone = userPhone.replace(/\D/g, "").slice(-10);
+            localStorage.setItem("gjs_customer_phone", phone);
+          }
+        }
+        const nextOrder = await createOrder(activeAsset.id, phone || undefined);
         setOrder(nextOrder);
         if (nextOrder.status === "PENDING" && nextOrder.payment_session_id) {
           await startCashfreeCheckout(nextOrder);

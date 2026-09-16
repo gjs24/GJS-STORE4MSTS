@@ -20,7 +20,7 @@ import {
 import { AuthNav } from "@/components/auth-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { AdminNotification } from "@/components/admin-notification";
-import { getSiteSettings } from "@/lib/api";
+import { AUTH_CHANGE_EVENT, getSiteSettings, getStoredUser } from "@/lib/api";
 
 const navItems = [
   { label: "Home", href: "/", icon: Home },
@@ -35,17 +35,40 @@ const navItems = [
 export function SiteHeader() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [desktopAppEnabled, setDesktopAppEnabled] = useState(false);
+  const [boardStudioEnabled, setBoardStudioEnabled] = useState(true);
+  const [isStaff, setIsStaff] = useState(false);
   const pathname = usePathname();
 
   useEffect(() => {
-    getSiteSettings()
-      .then((data) => setDesktopAppEnabled(Boolean(data?.desktop_app_enabled)))
-      .catch(() => setDesktopAppEnabled(false));
+    const syncSettingsAndUser = () => {
+      const user = getStoredUser();
+      setIsStaff(Boolean(user?.is_staff));
+      getSiteSettings()
+        .then((data) => {
+          setDesktopAppEnabled(Boolean(data?.desktop_app_enabled));
+          setBoardStudioEnabled(data?.board_studio_enabled !== false);
+        })
+        .catch(() => {
+          setDesktopAppEnabled(false);
+          setBoardStudioEnabled(true);
+        });
+    };
+
+    syncSettingsAndUser();
+    window.addEventListener(AUTH_CHANGE_EVENT, syncSettingsAndUser);
+    window.addEventListener("storage", syncSettingsAndUser);
+
+    return () => {
+      window.removeEventListener(AUTH_CHANGE_EVENT, syncSettingsAndUser);
+      window.removeEventListener("storage", syncSettingsAndUser);
+    };
   }, []);
 
-  const visibleNavItems = navItems.filter(
-    (item) => item.href !== "/download-app" || desktopAppEnabled
-  );
+  const visibleNavItems = navItems.filter((item) => {
+    if (item.href === "/download-app" && !desktopAppEnabled) return false;
+    if (item.href === "/board-studio" && !boardStudioEnabled && !isStaff) return false;
+    return true;
+  });
 
   return (
     <header className="sticky top-0 z-50 border-b border-white/10 bg-rail-black/85 backdrop-blur-xl transition-colors">
