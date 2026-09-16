@@ -1529,7 +1529,7 @@ class AdminOrderViewSet(viewsets.ModelViewSet):
 
     serializer_class = AdminOrderSerializer
     permission_classes = [permissions.IsAdminUser]
-    http_method_names = ["get", "patch", "post", "head", "options"]
+    http_method_names = ["get", "patch", "post", "delete", "head", "options"]
 
     # Pagination
     pagination_class = AdminOrderPagination
@@ -1618,6 +1618,46 @@ class AdminOrderViewSet(viewsets.ModelViewSet):
                 order.id,
                 detail_msg,
             )
+
+    def destroy(self, request, *args, **kwargs):
+        order = self.get_object()
+        deletable_statuses = [
+            Order.Status.PENDING,
+            Order.Status.VERIFICATION_PENDING,
+            Order.Status.FAILED,
+            Order.Status.EXPIRED,
+            Order.Status.REJECTED,
+        ]
+        if order.status not in deletable_statuses:
+            return Response(
+                {
+                    "detail": f"Cannot delete order #{order.id} with status '{order.status}'. Only PENDING or unverified orders can be deleted."
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        order_id = order.id
+        user_label = order.user.username if order.user else "User"
+        asset_title = (
+            order.asset.title
+            if order.asset
+            else (order.board_template.name if order.board_template else "Item")
+        )
+        order_status = order.status
+
+        order.delete()
+
+        log_admin_activity(
+            request,
+            "Deleted pending order",
+            "Order",
+            order_id,
+            f"Deleted {order_status} order #{order_id} for {user_label} ({asset_title})",
+        )
+        return Response(
+            {"message": f"Order #{order_id} ({order_status}) deleted successfully."},
+            status=status.HTTP_200_OK,
+        )
 
     @action(detail=True, methods=["post"], url_path="set-access")
     def set_access(self, request, pk=None):

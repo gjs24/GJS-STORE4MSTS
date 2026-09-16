@@ -15,6 +15,7 @@ import {
   Shield,
   ShieldAlert,
   ShieldCheck,
+  Trash2,
   Unlock,
   X
 } from "lucide-react";
@@ -23,6 +24,7 @@ import { AdminLayout } from "@/components/admin-table";
 import { Button } from "@/components/ui/button";
 import {
   adminGet,
+  deleteAdminOrder,
   downloadAdminInvoice,
   setAdminOrderAccess,
   type AdminOrder
@@ -53,9 +55,10 @@ type OrderAccessModalProps = {
   initialMode?: "MANAGE" | "APPROVE" | "BLOCK";
   onClose: () => void;
   onSave: (updated: AdminOrder) => void;
+  onDelete?: (orderId: number) => void;
 };
 
-function OrderAccessModal({ order, initialMode = "MANAGE", onClose, onSave }: OrderAccessModalProps) {
+function OrderAccessModal({ order, initialMode = "MANAGE", onClose, onSave, onDelete }: OrderAccessModalProps) {
   const [status, setStatus] = useState<AdminOrder["status"]>(
     initialMode === "APPROVE"
       ? "PAID"
@@ -73,7 +76,24 @@ function OrderAccessModal({ order, initialMode = "MANAGE", onClose, onSave }: Or
   const [blockReason, setBlockReason] = useState<string>(order.block_reason || "");
   const [adminNotes, setAdminNotes] = useState<string>(order.admin_notes || "");
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  async function handleDelete() {
+    if (!window.confirm(`Permanently delete ${order.status} Order #${order.id} for ${order.user?.username || "customer"} (${order.currency} ${order.amount})?`)) {
+      return;
+    }
+    setDeleting(true);
+    setError(null);
+    try {
+      await deleteAdminOrder(order.id);
+      if (onDelete) onDelete(order.id);
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete order.");
+      setDeleting(false);
+    }
+  }
 
   const quickReasons = [
     "Unauthorized file sharing / leaked package",
@@ -399,39 +419,56 @@ function OrderAccessModal({ order, initialMode = "MANAGE", onClose, onSave }: Or
         </div>
 
         {/* Modal Footer Actions */}
-        <div className="flex items-center justify-end gap-3 pt-4 border-t border-white/10">
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={onClose}
-            disabled={saving}
-            className="text-xs font-semibold text-slate-400 hover:text-white"
-          >
-            Cancel
-          </Button>
+        <div className="flex items-center justify-between gap-3 pt-4 border-t border-white/10">
+          <div>
+            {(order.status === "PENDING" || order.status === "VERIFICATION_PENDING" || order.status === "FAILED" || order.status === "REJECTED") ? (
+              <Button
+                type="button"
+                variant="danger"
+                onClick={handleDelete}
+                disabled={saving || deleting}
+                className="text-xs font-bold gap-1.5 bg-red-600 hover:bg-red-500 text-white"
+              >
+                <Trash2 size={14} />
+                {deleting ? "Deleting..." : "Delete Order"}
+              </Button>
+            ) : null}
+          </div>
 
-          <Button
-            type="button"
-            onClick={handleConfirm}
-            disabled={saving}
-            className={`font-black text-xs uppercase tracking-wider px-5 py-2 transition shadow-lg ${
-              isBlocking
-                ? "bg-red-600 hover:bg-red-500 text-white shadow-red-600/20"
-                : "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20"
-            }`}
-          >
-            {saving ? (
-              "Saving Changes..."
-            ) : isBlocking ? (
-              <span className="flex items-center gap-1.5">
-                <Ban size={14} /> Confirm & Block Access
-              </span>
-            ) : (
-              <span className="flex items-center gap-1.5">
-                <Check size={14} /> Confirm & Save Access
-              </span>
-            )}
-          </Button>
+          <div className="flex items-center gap-3">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={onClose}
+              disabled={saving || deleting}
+              className="text-xs font-semibold text-slate-400 hover:text-white"
+            >
+              Cancel
+            </Button>
+
+            <Button
+              type="button"
+              onClick={handleConfirm}
+              disabled={saving || deleting}
+              className={`font-black text-xs uppercase tracking-wider px-5 py-2 transition shadow-lg ${
+                isBlocking
+                  ? "bg-red-600 hover:bg-red-500 text-white shadow-red-600/20"
+                  : "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20"
+              }`}
+            >
+              {saving ? (
+                "Saving Changes..."
+              ) : isBlocking ? (
+                <span className="flex items-center gap-1.5">
+                  <Ban size={14} /> Confirm & Block Access
+                </span>
+              ) : (
+                <span className="flex items-center gap-1.5">
+                  <Check size={14} /> Confirm & Save Access
+                </span>
+              )}
+            </Button>
+          </div>
         </div>
       </div>
     </div>
@@ -455,6 +492,7 @@ function OrdersContent() {
   const [activeSearch, setActiveSearch] = useState(searchParams.get("search") || "");
   const [copiedUtr, setCopiedUtr] = useState<string | null>(null);
   const [downloadingInvoiceId, setDownloadingInvoiceId] = useState<number | null>(null);
+  const [deletingOrderId, setDeletingOrderId] = useState<number | null>(null);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -556,6 +594,39 @@ function OrdersContent() {
       message: `Order #${updated.id} successfully updated: Status=${updated.status} | Downloads=${
         isBlocked ? "BLOCKED / REVOKED" : "UNLOCKED / ACTIVE"
       }${updated.block_reason ? ` (Reason: ${updated.block_reason})` : ""}.`,
+    });
+  }
+
+  async function handleDeleteOrder(order: AdminOrder) {
+    if (!window.confirm(`Are you sure you want to permanently delete ${order.status} Order #${order.id} for ${order.user?.username || "customer"} (${order.currency} ${order.amount})?`)) {
+      return;
+    }
+
+    setDeletingOrderId(order.id);
+    try {
+      await deleteAdminOrder(order.id);
+      setOrders((current) => current.filter((item) => item.id !== order.id));
+      setCount((c) => Math.max(0, c - 1));
+      setFeedback({
+        type: "success",
+        message: `Deleted ${order.status} Order #${order.id} successfully.`
+      });
+    } catch (err) {
+      setFeedback({
+        type: "error",
+        message: err instanceof Error ? err.message : "Failed to delete order."
+      });
+    } finally {
+      setDeletingOrderId(null);
+    }
+  }
+
+  function handleModalDelete(orderId: number) {
+    setOrders((current) => current.filter((item) => item.id !== orderId));
+    setCount((c) => Math.max(0, c - 1));
+    setFeedback({
+      type: "success",
+      message: `Deleted Order #${orderId} successfully.`
     });
   }
 
@@ -741,7 +812,7 @@ function OrdersContent() {
 
       {/* Orders Table */}
       <div className="overflow-hidden rounded-lg border border-white/10 bg-white/[0.02]">
-        <div className="grid gap-2 bg-white/10 p-3 text-xs uppercase tracking-wider text-slate-400 md:grid-cols-[80px_1.5fr_1.3fr_110px_150px_190px]">
+        <div className="grid gap-2 bg-white/10 p-3 text-xs uppercase tracking-wider text-slate-400 md:grid-cols-[80px_1.5fr_1.3fr_110px_150px_210px]">
           <span>ID</span>
           <span>Asset / Customer</span>
           <span>Payment Details</span>
@@ -764,7 +835,7 @@ function OrdersContent() {
             return (
               <div
                 key={order.id}
-                className={`grid items-center gap-3 border-t border-white/10 p-4 text-sm transition md:grid-cols-[80px_1.5fr_1.3fr_110px_150px_190px] ${
+                className={`grid items-center gap-3 border-t border-white/10 p-4 text-sm transition md:grid-cols-[80px_1.5fr_1.3fr_110px_150px_210px] ${
                   order.status === "VERIFICATION_PENDING"
                     ? "bg-amber-500/[0.06] hover:bg-amber-500/[0.09]"
                     : order.status === "BLOCKED"
@@ -885,6 +956,18 @@ function OrdersContent() {
                       <FileText size={14} />
                     </button>
                   ) : null}
+
+                  {(order.status === "PENDING" || order.status === "VERIFICATION_PENDING" || order.status === "FAILED" || order.status === "REJECTED") ? (
+                    <button
+                      type="button"
+                      disabled={deletingOrderId === order.id}
+                      onClick={() => handleDeleteOrder(order)}
+                      className="rounded border border-red-500/30 bg-red-500/10 p-1.5 text-red-400 hover:bg-red-500/25 hover:text-red-200 transition disabled:opacity-40"
+                      title={`Delete ${order.status} Order #${order.id}`}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  ) : null}
                 </div>
               </div>
             );
@@ -938,6 +1021,7 @@ function OrdersContent() {
           initialMode={modalMode}
           onClose={() => setModalOrder(null)}
           onSave={handleModalSave}
+          onDelete={handleModalDelete}
         />
       ) : null}
     </div>

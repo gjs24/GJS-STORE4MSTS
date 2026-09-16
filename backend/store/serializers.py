@@ -618,6 +618,7 @@ class BoardTemplateSerializer(serializers.ModelSerializer):
             "background_image",
             "background_image_url",
             "target_texture_name",
+            "allow_user_edit_texture_name",
             "is_paid",
             "price",
             "published",

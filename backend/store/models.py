@@ -184,6 +184,10 @@ class BoardTemplate(models.Model):
         default="",
         help_text="Target texture filename required by MSTS/Open Rails 3D model, e.g. VB_NAME.dds",
     )
+    allow_user_edit_texture_name = models.BooleanField(
+        default=False,
+        help_text="Allow regular users to customize/rename the export texture filename in editor",
+    )
     is_paid = models.BooleanField(default=False)
     price = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
     published = models.BooleanField(default=True)

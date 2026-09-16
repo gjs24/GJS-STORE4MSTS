@@ -92,6 +92,10 @@ export const UserBoardEditor: React.FC<UserBoardEditorProps> = ({
           : activeTemplate.backgroundImageUrl,
       backgroundColor: variation.backgroundColor || activeTemplate.backgroundColor,
       targetTextureName: variation.targetTextureName || activeTemplate.targetTextureName,
+      allowUserEditTextureName:
+        variation.allowUserEditTextureName !== undefined
+          ? variation.allowUserEditTextureName
+          : activeTemplate.allowUserEditTextureName,
       fields: mergedFields,
       fixedGraphics:
         variation.fixedGraphics && Array.isArray(variation.fixedGraphics)
@@ -623,67 +627,88 @@ export const UserBoardEditor: React.FC<UserBoardEditorProps> = ({
           </div>
         </div>
 
-        {/* Custom Target Texture Export Filename */}
+        {/* Custom Target Texture Export Filename (Locked by admin by default) */}
         <div className="dds-options-box" style={{ marginTop: 8 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-            <label className="picker-label" style={{ margin: 0 }}>
-              <FileCode size={14} /> Export Filename (MSTS 3D Texture Name)
-            </label>
-            <span style={{ fontSize: 11, color: 'var(--rail-amber)', fontWeight: 700, fontFamily: 'monospace' }}>
-              {exportFilename ? `${exportFilename}.dds` : `${activeTemplate.name}.dds`}
-            </span>
-          </div>
-          <input
-            type="text"
-            value={exportFilename}
-            onChange={(e) => setExportFilename(e.target.value)}
-            placeholder="e.g. VB_NAME or AMRIT_LED"
-            style={{
-              width: '100%',
-              padding: '7px 10px',
-              fontSize: 12,
-              background: 'rgba(0,0,0,0.4)',
-              color: '#fff',
-              border: '1px solid rgba(255,255,255,0.15)',
-              borderRadius: 4
-            }}
-          />
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
-            <span style={{ fontSize: 10, color: '#94a3b8', alignSelf: 'center', marginRight: 2 }}>Presets:</span>
-            {['VB_NAME', 'AMRIT_LED', 'COACH_LED', 'STATION_BOARD'].map((preset) => (
-              <button
-                key={preset}
-                type="button"
-                onClick={() => setExportFilename(preset)}
+          {effectiveTemplate.allowUserEditTextureName ? (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                <label className="picker-label" style={{ margin: 0 }}>
+                  <FileCode size={14} /> Export Filename (MSTS 3D Texture Name)
+                </label>
+                <span style={{ fontSize: 11, color: 'var(--rail-amber)', fontWeight: 700, fontFamily: 'monospace' }}>
+                  {exportFilename ? `${exportFilename}.dds` : `${effectiveTemplate.name}.dds`}
+                </span>
+              </div>
+              <input
+                type="text"
+                value={exportFilename}
+                onChange={(e) => setExportFilename(e.target.value)}
+                placeholder="e.g. nameboard_BaseColor or VB_NAME"
                 style={{
-                  padding: '2px 6px',
-                  fontSize: 10,
-                  background: exportFilename === preset ? 'var(--rail-amber)' : 'rgba(255,255,255,0.08)',
+                  width: '100%',
+                  padding: '7px 10px',
+                  fontSize: 12,
+                  background: 'rgba(0,0,0,0.4)',
                   color: '#fff',
                   border: '1px solid rgba(255,255,255,0.15)',
-                  borderRadius: 3,
-                  cursor: 'pointer'
+                  borderRadius: 4
                 }}
-              >
-                {preset}
-              </button>
-            ))}
-            <button
-              type="button"
-              onClick={() => setExportFilename(activeTemplate.targetTextureName || activeTemplate.name)}
-              style={{
-                padding: '2px 6px',
-                fontSize: 10,
-                background: 'transparent',
-                color: '#94a3b8',
-                border: '1px dashed rgba(255,255,255,0.2)',
-                borderRadius: 3,
-                cursor: 'pointer'
-              }}
-            >
-              Reset
-            </button>
-          </div>
+              />
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
+                <span style={{ fontSize: 10, color: '#94a3b8', alignSelf: 'center', marginRight: 2 }}>Presets:</span>
+                {['nameboard_BaseColor', 'VB_NAME', 'AMRIT_LED', 'COACH_LED', 'STATION_BOARD'].map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setExportFilename(preset)}
+                    style={{
+                      padding: '2px 6px',
+                      fontSize: 10,
+                      background: exportFilename === preset ? 'var(--rail-amber)' : 'rgba(255,255,255,0.08)',
+                      color: '#fff',
+                      border: '1px solid rgba(255,255,255,0.15)',
+                      borderRadius: 3,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {preset}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setExportFilename(effectiveTemplate.targetTextureName || effectiveTemplate.name)}
+                  style={{
+                    padding: '2px 6px',
+                    fontSize: 10,
+                    background: 'transparent',
+                    color: '#94a3b8',
+                    border: '1px dashed rgba(255,255,255,0.2)',
+                    borderRadius: 3,
+                    cursor: 'pointer'
+                  }}
+                >
+                  Reset
+                </button>
+              </div>
+            </>
+          ) : (
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Lock size={13} style={{ color: '#94a3b8' }} />
+                  <label className="picker-label" style={{ margin: 0, fontSize: 11, fontWeight: 700 }}>
+                    Export Filename (MSTS 3D Model):
+                  </label>
+                </div>
+                <span style={{ fontSize: 11, color: 'var(--rail-amber)', fontWeight: 800, fontFamily: 'monospace', background: 'rgba(245, 158, 11, 0.1)', padding: '2px 8px', borderRadius: 4, border: '1px solid rgba(245, 158, 11, 0.25)' }}>
+                  {exportFilename ? `${exportFilename}.dds` : `${effectiveTemplate.targetTextureName || effectiveTemplate.name}.dds`}
+                </span>
+              </div>
+              <p style={{ color: '#94a3b8', fontSize: 11, margin: '5px 0 0 0', lineHeight: 1.4 }}>
+                Fixed to 3D train model specification so your board texture maps accurately inside simulator without manual renaming.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Quick Presets */}

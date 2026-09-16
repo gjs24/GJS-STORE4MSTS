@@ -91,6 +91,9 @@ export interface BoardTemplate {
   // Admin permission: Can users customize the background?
   allowUserCustomBackground?: boolean; // default false (locked)
 
+  // Admin permission: Can users customize the export texture filename?
+  allowUserEditTextureName?: boolean; // default false (locked to 3D model specification)
+
   borderColor: string;
   borderWidth: number;
   borderRadius: number;
@@ -124,6 +127,7 @@ export interface BoardVariation {
   backgroundColor?: string;
   backgroundSecondaryColor?: string;
   targetTextureName?: string;
+  allowUserEditTextureName?: boolean;
   fields?: EditableField[];
   fixedGraphics?: FixedGraphicElement[];
 }

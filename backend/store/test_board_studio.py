@@ -237,3 +237,44 @@ class BoardStudioTests(APITestCase):
         self.assertFalse(self.paid_template.can_user_customize(self.user2))
         self.assertFalse(UserBoardUnlock.objects.filter(user=self.user2, template=self.paid_template).exists())
 
+    def test_admin_can_delete_pending_order(self):
+        pending_order = Order.objects.create(
+            user=self.user1,
+            board_template=self.paid_template,
+            amount=Decimal("49.00"),
+            currency="INR",
+            status=Order.Status.PENDING,
+        )
+        self.client.force_authenticate(user=self.admin)
+        res = self.client.delete(f"/api/admin/orders/{pending_order.id}/")
+        self.assertEqual(res.status_code, 200)
+        self.assertFalse(Order.objects.filter(id=pending_order.id).exists())
+
+    def test_admin_cannot_delete_paid_order(self):
+        paid_order = Order.objects.create(
+            user=self.user1,
+            board_template=self.paid_template,
+            amount=Decimal("49.00"),
+            currency="INR",
+            status=Order.Status.PAID,
+            download_enabled=True,
+        )
+        self.client.force_authenticate(user=self.admin)
+        res = self.client.delete(f"/api/admin/orders/{paid_order.id}/")
+        self.assertEqual(res.status_code, 400)
+        self.assertTrue(Order.objects.filter(id=paid_order.id).exists())
+
+    def test_regular_user_cannot_delete_order(self):
+        pending_order = Order.objects.create(
+            user=self.user1,
+            board_template=self.paid_template,
+            amount=Decimal("49.00"),
+            currency="INR",
+            status=Order.Status.PENDING,
+        )
+        self.client.force_authenticate(user=self.user1)
+        res = self.client.delete(f"/api/admin/orders/{pending_order.id}/")
+        self.assertEqual(res.status_code, 403)
+        self.assertTrue(Order.objects.filter(id=pending_order.id).exists())
+
+

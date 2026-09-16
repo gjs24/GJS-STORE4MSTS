@@ -84,6 +84,7 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({
     backgroundImageUrl?: string;
     backgroundColor: string;
     targetTextureName?: string;
+    allowUserEditTextureName?: boolean;
     fixedGraphics?: FixedGraphicElement[];
   } | null>(null);
 
@@ -353,6 +354,7 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({
         backgroundImageUrl: template.backgroundImageUrl,
         backgroundColor: template.backgroundColor,
         targetTextureName: template.targetTextureName,
+        allowUserEditTextureName: template.allowUserEditTextureName,
         fixedGraphics: template.fixedGraphics ? template.fixedGraphics.map((g) => ({ ...g })) : []
       };
     }
@@ -363,6 +365,9 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({
       : template.backgroundImageUrl;
     const sourceBgColor = baseTemplateBackupRef.current?.backgroundColor || template.backgroundColor;
     const sourceTex = baseTemplateBackupRef.current?.targetTextureName || template.targetTextureName;
+    const sourceAllowUserEdit = baseTemplateBackupRef.current?.allowUserEditTextureName !== undefined
+      ? baseTemplateBackupRef.current.allowUserEditTextureName
+      : template.allowUserEditTextureName;
     const sourceGfx = baseTemplateBackupRef.current?.fixedGraphics || template.fixedGraphics || [];
 
     const newVariation: BoardVariation = {
@@ -370,6 +375,7 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({
       name,
       description: 'Alternate standalone layout or styling (bundled in single pack)',
       targetTextureName: sourceTex,
+      allowUserEditTextureName: sourceAllowUserEdit,
       backgroundImageUrl: sourceBg,
       backgroundColor: sourceBgColor,
       fields: sourceFields.map((f) => ({ ...f })),
@@ -432,6 +438,7 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({
           backgroundImageUrl: baseTemplateBackupRef.current!.backgroundImageUrl,
           backgroundColor: baseTemplateBackupRef.current!.backgroundColor || prev.backgroundColor,
           targetTextureName: baseTemplateBackupRef.current!.targetTextureName,
+          allowUserEditTextureName: baseTemplateBackupRef.current!.allowUserEditTextureName,
           fixedGraphics: baseTemplateBackupRef.current!.fixedGraphics || [],
           variations: updated
         }));
@@ -478,6 +485,7 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({
         backgroundImageUrl: template.backgroundImageUrl,
         backgroundColor: template.backgroundColor,
         targetTextureName: template.targetTextureName,
+        allowUserEditTextureName: template.allowUserEditTextureName,
         fixedGraphics: template.fixedGraphics ? template.fixedGraphics.map((g) => ({ ...g })) : []
       };
     }
@@ -578,6 +586,7 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({
           backgroundImageUrl: baseSnapshot.backgroundImageUrl,
           backgroundColor: baseSnapshot.backgroundColor || template.backgroundColor,
           targetTextureName: baseSnapshot.targetTextureName,
+          allowUserEditTextureName: baseSnapshot.allowUserEditTextureName,
           fixedGraphics: baseSnapshot.fixedGraphics ? baseSnapshot.fixedGraphics.map((g) => ({ ...g })) : [],
           variations: updatedVars,
           updatedAt: new Date().toISOString()
@@ -1160,7 +1169,7 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({
             {/* Target Texture Filename (MSTS / Open Rails 3D Model Mapping) */}
             <div className="prop-row" style={{ marginTop: 10 }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                <label style={{ margin: 0 }}>Target Texture Name (MSTS 3D Model Filename):</label>
+                <label style={{ margin: 0, fontWeight: 600 }}>Target Texture Name (MSTS 3D Model Filename):</label>
                 <span style={{ fontSize: 11, color: 'var(--rail-amber)', fontWeight: 700, fontFamily: 'monospace' }}>
                   {template.targetTextureName ? `${template.targetTextureName}.dds` : 'Standard Name'}
                 </span>
@@ -1168,12 +1177,72 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({
               <input
                 type="text"
                 value={template.targetTextureName || ''}
-                placeholder="e.g. VB_NAME or AMRIT_LED"
+                placeholder="e.g. nameboard_BaseColor or VB_NAME"
                 onChange={(e) => updateTemplate({ targetTextureName: e.target.value })}
               />
-              <span className="field-help" style={{ fontSize: 11, marginTop: 4, display: 'block', color: '#94a3b8' }}>
-                Required by train models (e.g. setting <code>VB_NAME</code> exports texture as <code>VB_NAME.dds</code> directly so users don&apos;t have to rename).
+
+              {/* Quick Presets for Admin */}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 6, alignItems: 'center' }}>
+                <span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 600 }}>Presets:</span>
+                {['nameboard_BaseColor', 'VB_NAME', 'AMRIT_LED', 'COACH_LED', 'STATION_BOARD'].map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => updateTemplate({ targetTextureName: preset })}
+                    style={{
+                      padding: '3px 7px',
+                      fontSize: 10,
+                      fontWeight: 600,
+                      fontFamily: 'monospace',
+                      background: template.targetTextureName === preset ? 'var(--rail-amber)' : 'rgba(255,255,255,0.08)',
+                      color: template.targetTextureName === preset ? '#000' : '#fff',
+                      border: '1px solid ' + (template.targetTextureName === preset ? 'var(--rail-amber)' : 'rgba(255,255,255,0.15)'),
+                      borderRadius: 3,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {preset}
+                  </button>
+                ))}
+                {template.targetTextureName && (
+                  <button
+                    type="button"
+                    onClick={() => updateTemplate({ targetTextureName: '' })}
+                    style={{
+                      padding: '3px 7px',
+                      fontSize: 10,
+                      background: 'transparent',
+                      color: '#f87171',
+                      border: '1px dashed rgba(248, 113, 113, 0.4)',
+                      borderRadius: 3,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+
+              <span className="field-help" style={{ fontSize: 11, marginTop: 5, display: 'block', color: '#94a3b8' }}>
+                Simulator 3D models require exact filename (e.g. <code>nameboard_BaseColor</code> exports directly as <code>nameboard_BaseColor.dds</code>).
               </span>
+
+              {/* Admin Toggle: Can Users Edit Export Filename? */}
+              <div style={{ marginTop: 8, padding: '8px 10px', background: 'rgba(0,0,0,0.3)', borderRadius: 5, border: '1px solid rgba(255,255,255,0.08)' }}>
+                <label className="checkbox-label" style={{ fontWeight: 600, fontSize: 12, display: 'flex', alignItems: 'center', gap: 7, margin: 0, cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={template.allowUserEditTextureName === true}
+                    onChange={(e) => updateTemplate({ allowUserEditTextureName: e.target.checked })}
+                  />
+                  <span>Allow Regular Users to Edit Export Texture Filename</span>
+                </label>
+                <span style={{ fontSize: 10, color: template.allowUserEditTextureName ? '#fcd34d' : '#94a3b8', display: 'block', marginTop: 4, marginLeft: 21, lineHeight: 1.35 }}>
+                  {template.allowUserEditTextureName
+                    ? '⚠️ Unlocked: Regular users can edit the filename and choose presets in their board editor.'
+                    : '🔒 Locked (Recommended): Filename is strictly locked for regular users to guarantee perfect simulator 3D model mapping.'}
+                </span>
+              </div>
             </div>
 
             {/* Site Details & Watermark Branding at Template End */}
@@ -2735,13 +2804,61 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({
                         <label style={{ fontSize: 10, color: '#94a3b8', textTransform: 'uppercase', fontWeight: 700 }}>
                           Target Texture Filename (.dds override):
                         </label>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
+                          <label style={{ fontSize: 10, color: '#94a3b8', textTransform: 'uppercase', fontWeight: 700 }}>
+                            Target Texture Filename (.dds override):
+                          </label>
+                          <span style={{ fontSize: 10, color: 'var(--rail-amber)', fontWeight: 700, fontFamily: 'monospace' }}>
+                            {v.targetTextureName ? `${v.targetTextureName}.dds` : 'Inherit Base'}
+                          </span>
+                        </div>
                         <input
                           type="text"
                           value={v.targetTextureName || ''}
-                          placeholder="e.g. AMRIT_LED or VB_AMRIT_ORANGE"
+                          placeholder="e.g. nameboard_BaseColor or VB_NAME"
                           onChange={(e) => handleUpdateVariation(v.id, { targetTextureName: e.target.value })}
                           style={{ width: '100%', fontSize: 11, padding: '5px 8px', marginTop: 2 }}
                         />
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4, alignItems: 'center' }}>
+                          <span style={{ fontSize: 9, color: '#94a3b8', fontWeight: 600 }}>Presets:</span>
+                          {['nameboard_BaseColor', 'VB_NAME', 'AMRIT_LED', 'COACH_LED', 'STATION_BOARD'].map((preset) => (
+                            <button
+                              key={preset}
+                              type="button"
+                              onClick={() => handleUpdateVariation(v.id, { targetTextureName: preset })}
+                              style={{
+                                padding: '2px 6px',
+                                fontSize: 9,
+                                fontFamily: 'monospace',
+                                fontWeight: 600,
+                                background: v.targetTextureName === preset ? 'var(--rail-amber)' : 'rgba(255,255,255,0.08)',
+                                color: v.targetTextureName === preset ? '#000' : '#fff',
+                                border: '1px solid ' + (v.targetTextureName === preset ? 'var(--rail-amber)' : 'rgba(255,255,255,0.15)'),
+                                borderRadius: 3,
+                                cursor: 'pointer'
+                              }}
+                            >
+                              {preset}
+                            </button>
+                          ))}
+                          {v.targetTextureName && (
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateVariation(v.id, { targetTextureName: '' })}
+                              style={{
+                                padding: '2px 6px',
+                                fontSize: 9,
+                                background: 'transparent',
+                                color: '#f87171',
+                                border: '1px dashed rgba(248, 113, 113, 0.4)',
+                                borderRadius: 3,
+                                cursor: 'pointer'
+                              }}
+                            >
+                              Reset
+                            </button>
+                          )}
+                        </div>
                       </div>
 
                       {/* Background Color & Image for Variation */}

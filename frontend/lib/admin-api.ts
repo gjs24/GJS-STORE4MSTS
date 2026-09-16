@@ -291,6 +291,10 @@ export async function adminDelete<T = void>(path: string, body?: unknown): Promi
   return undefined as T;
 }
 
+export async function deleteAdminOrder(orderId: number): Promise<{ message?: string } | void> {
+  return adminDelete<{ message?: string }>(`/admin/orders/${orderId}/`);
+}
+
 export async function downloadAdminInvoice(orderId: number): Promise<{ url: string; filename: string; revoke: () => void }> {
   if (!hasAdminToken()) throw new Error("Admin login required.");
   await validAccessToken();

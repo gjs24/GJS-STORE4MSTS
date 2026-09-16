@@ -61,6 +61,7 @@ export default function AdminBoardTemplatesPage() {
   const [formWidth, setFormWidth] = useState(1024);
   const [formHeight, setFormHeight] = useState(1024);
   const [formTargetTextureName, setFormTargetTextureName] = useState("");
+  const [formAllowUserEditTextureName, setFormAllowUserEditTextureName] = useState(false);
   const [formBackgroundImageUrl, setFormBackgroundImageUrl] = useState("");
 
   const loadData = async () => {
@@ -175,6 +176,7 @@ export default function AdminBoardTemplatesPage() {
     setFormWidth(1024);
     setFormHeight(1024);
     setFormTargetTextureName("");
+    setFormAllowUserEditTextureName(false);
     setFormBackgroundImageUrl("");
     setIsEditModalOpen(true);
   };
@@ -192,6 +194,7 @@ export default function AdminBoardTemplatesPage() {
     setFormWidth(tpl.baseWidth || 1024);
     setFormHeight(tpl.baseHeight || 1024);
     setFormTargetTextureName(tpl.targetTextureName || "");
+    setFormAllowUserEditTextureName(tpl.allowUserEditTextureName === true);
     setFormBackgroundImageUrl(tpl.backgroundImageUrl || "");
     setIsEditModalOpen(true);
   };
@@ -217,6 +220,7 @@ export default function AdminBoardTemplatesPage() {
         category: formCategory,
         description: formDescription.trim(),
         targetTextureName: formTargetTextureName.trim(),
+        allowUserEditTextureName: formAllowUserEditTextureName,
         backgroundImageUrl: cleanBg,
         isPaid: formIsPaid,
         price: cleanPrice,
@@ -232,6 +236,7 @@ export default function AdminBoardTemplatesPage() {
         category: formCategory,
         description: formDescription.trim(),
         targetTextureName: formTargetTextureName.trim(),
+        allowUserEditTextureName: formAllowUserEditTextureName,
         backgroundImageUrl: cleanBg,
         aspectRatio: `${formWidth}:${formHeight}`,
         baseWidth: formWidth,
@@ -699,14 +704,63 @@ export default function AdminBoardTemplatesPage() {
                     </div>
                     <input
                       type="text"
-                      placeholder="e.g. VB_NAME or AMRIT_LED (saves as VB_NAME.dds)"
+                      placeholder="e.g. nameboard_BaseColor or VB_NAME (saves as nameboard_BaseColor.dds)"
                       value={formTargetTextureName}
                       onChange={(e) => setFormTargetTextureName(e.target.value)}
                       className="w-full px-3.5 py-2 rounded-lg bg-slate-950 border border-white/10 text-sm font-mono text-white focus:outline-none focus:border-rail-red"
                     />
-                    <p className="text-[11px] text-muted-foreground mt-1">
-                      Simulator models map to this filename (e.g. VB_NAME downloads directly as VB_NAME.dds).
+
+                    {/* Quick Presets for Admin */}
+                    <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                      <span className="text-[11px] text-slate-400 font-semibold mr-1">Presets:</span>
+                      {['nameboard_BaseColor', 'VB_NAME', 'AMRIT_LED', 'COACH_LED', 'STATION_BOARD'].map((preset) => (
+                        <button
+                          key={preset}
+                          type="button"
+                          onClick={() => setFormTargetTextureName(preset)}
+                          className={`px-2 py-0.5 rounded text-[11px] font-mono transition-colors ${
+                            formTargetTextureName === preset
+                              ? 'bg-rail-amber text-slate-950 font-bold border border-rail-amber'
+                              : 'bg-white/5 text-slate-300 hover:bg-white/10 border border-white/10'
+                          }`}
+                        >
+                          {preset}
+                        </button>
+                      ))}
+                      {formTargetTextureName && (
+                        <button
+                          type="button"
+                          onClick={() => setFormTargetTextureName('')}
+                          className="px-2 py-0.5 rounded text-[11px] text-red-400 hover:text-red-300 border border-dashed border-red-500/30"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+
+                    <p className="text-[11px] text-muted-foreground mt-1.5">
+                      Simulator models map to this filename (e.g. <code>nameboard_BaseColor</code> exports directly as <code>nameboard_BaseColor.dds</code>).
                     </p>
+
+                    {/* Permission Toggle */}
+                    <div className="mt-2.5 p-2.5 rounded-lg bg-slate-950/60 border border-white/10">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={formAllowUserEditTextureName}
+                          onChange={(e) => setFormAllowUserEditTextureName(e.target.checked)}
+                          className="rounded border-white/20 bg-slate-900 text-rail-red focus:ring-0"
+                        />
+                        <span className="text-xs font-semibold text-white">
+                          Allow Regular Users to Edit Export Texture Filename
+                        </span>
+                      </label>
+                      <p className="text-[10px] text-slate-400 ml-5 mt-1 leading-normal">
+                        {formAllowUserEditTextureName
+                          ? '⚠️ Unlocked: Users can edit the filename and choose presets in their board editor.'
+                          : '🔒 Locked (Recommended): Filename is fixed to the 3D model specification so train textures work automatically.'}
+                      </p>
+                    </div>
                   </div>
 
                   <div>
