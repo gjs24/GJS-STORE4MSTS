@@ -77,7 +77,7 @@ export const UserBoardEditor: React.FC<UserBoardEditorProps> = ({
     if (!variation) return activeTemplate;
 
     let mergedFields = activeTemplate.fields;
-    if (variation.fields && variation.fields.length > 0) {
+    if (variation.fields && Array.isArray(variation.fields)) {
       mergedFields = variation.fields.map((vf) => {
         const base = activeTemplate.fields.find((f) => f.id === vf.id);
         return base ? { ...base, ...vf } : vf;
@@ -94,7 +94,7 @@ export const UserBoardEditor: React.FC<UserBoardEditorProps> = ({
       targetTextureName: variation.targetTextureName || activeTemplate.targetTextureName,
       fields: mergedFields,
       fixedGraphics:
-        variation.fixedGraphics && variation.fixedGraphics.length > 0
+        variation.fixedGraphics && Array.isArray(variation.fixedGraphics)
           ? variation.fixedGraphics
           : activeTemplate.fixedGraphics
     };
