@@ -619,9 +619,9 @@ export default function AdminBoardTemplatesPage() {
 
         {/* Create / Edit Template Modal */}
         {isEditModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-            <div className="w-full max-w-xl bg-slate-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in-0 zoom-in-95">
-              <div className="flex items-center justify-between p-5 border-b border-white/10">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
+            <div className="w-full max-w-xl max-h-[90vh] my-auto bg-slate-900 border border-white/10 rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in-0 zoom-in-95">
+              <div className="flex items-center justify-between p-4 sm:p-5 border-b border-white/10 shrink-0 bg-slate-900">
                 <div className="flex items-center gap-2.5">
                   <div className="p-2 rounded-lg bg-rail-red/10 text-rail-red">
                     <TrainFront className="h-5 w-5" />
@@ -644,164 +644,168 @@ export default function AdminBoardTemplatesPage() {
                 </button>
               </div>
 
-              <form onSubmit={handleSaveModal} className="p-5 space-y-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">Template Name *</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Amrit Bharat LED Destination Board (1024×1024)"
-                    value={formName}
-                    onChange={(e) => setFormName(e.target.value)}
-                    className="w-full px-3.5 py-2 rounded-lg bg-slate-950 border border-white/10 text-sm text-white focus:outline-none focus:border-rail-red"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
+              <form onSubmit={handleSaveModal} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+                {/* Scrollable form body */}
+                <div className="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1 overscroll-contain">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1">Unique Slug ID *</label>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1">Template Name *</label>
                     <input
                       type="text"
                       required
-                      disabled={!!editingTemplate}
-                      placeholder="e.g. amrit-bharat-led"
-                      value={formId}
-                      onChange={(e) => setFormId(e.target.value)}
-                      className="w-full px-3.5 py-2 rounded-lg bg-slate-950 border border-white/10 text-sm font-mono text-white focus:outline-none focus:border-rail-red disabled:opacity-50"
+                      placeholder="e.g. Amrit Bharat LED Destination Board (1024×1024)"
+                      value={formName}
+                      onChange={(e) => setFormName(e.target.value)}
+                      className="w-full px-3.5 py-2 rounded-lg bg-slate-950 border border-white/10 text-sm text-white focus:outline-none focus:border-rail-red"
                     />
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1">Category</label>
-                    <select
-                      value={formCategory}
-                      onChange={(e) => setFormCategory(e.target.value as BoardCategory)}
-                      className="w-full px-3.5 py-2 rounded-lg bg-slate-950 border border-white/10 text-sm text-white focus:outline-none focus:border-rail-red"
-                    >
-                      <option value="LED Texture Sheet">LED Texture Sheet</option>
-                      <option value="Coach Board">Coach Board</option>
-                      <option value="Station Board">Station Board</option>
-                      <option value="SLR Board">SLR Board</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="block text-xs font-semibold text-slate-300">
-                      Target Texture Name (MSTS 3D Model Filename)
-                    </label>
-                    <span className="text-[11px] font-mono text-rail-amber font-bold">
-                      {formTargetTextureName ? `${formTargetTextureName}.dds` : 'Standard Name'}
-                    </span>
-                  </div>
-                  <input
-                    type="text"
-                    placeholder="e.g. VB_NAME or AMRIT_LED (saves as VB_NAME.dds)"
-                    value={formTargetTextureName}
-                    onChange={(e) => setFormTargetTextureName(e.target.value)}
-                    className="w-full px-3.5 py-2 rounded-lg bg-slate-950 border border-white/10 text-sm font-mono text-white focus:outline-none focus:border-rail-red"
-                  />
-                  <p className="text-[11px] text-muted-foreground mt-1">
-                    Simulator models map to this filename (e.g. VB_NAME downloads directly as VB_NAME.dds).
-                  </p>
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="block text-xs font-semibold text-slate-300">
-                      Background Texture URL (Google Drive / Web Link)
-                    </label>
-                    <span className="text-[10px] text-emerald-400 font-semibold bg-emerald-950/50 border border-emerald-800/40 px-1.5 py-0.5 rounded">
-                      0 KB Server Space Used
-                    </span>
-                  </div>
-                  <input
-                    type="text"
-                    placeholder="Paste Google Drive sharing link (drive.google.com/file/d/...) or web image URL"
-                    value={formBackgroundImageUrl}
-                    onChange={(e) => {
-                      const info = convertGoogleDriveUrl(e.target.value);
-                      setFormBackgroundImageUrl(info.url);
-                    }}
-                    className="w-full px-3.5 py-2 rounded-lg bg-slate-950 border border-white/10 text-sm font-mono text-white focus:outline-none focus:border-rail-red"
-                  />
-                  <p className="text-[11px] text-muted-foreground mt-1">
-                    Google Drive links are automatically converted to direct high-speed CDN URLs (0 KB database space).
-                  </p>
-                  {formBackgroundImageUrl && (
-                    <div className="mt-2 p-2 rounded-lg bg-slate-950/80 border border-white/10 flex items-center gap-3">
-                      <img
-                        src={formBackgroundImageUrl}
-                        alt="Preview"
-                        className="w-10 h-10 object-contain rounded bg-black/50 border border-white/10"
-                        onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
-                      />
-                      <div className="text-xs text-slate-300 overflow-hidden truncate">
-                        <div className="font-semibold text-emerald-400">✓ Texture URL Linked</div>
-                        <div className="text-[10px] text-muted-foreground font-mono truncate">{formBackgroundImageUrl}</div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">Description</label>
-                  <textarea
-                    rows={2}
-                    placeholder="Texture details, simulator compatibility..."
-                    value={formDescription}
-                    onChange={(e) => setFormDescription(e.target.value)}
-                    className="w-full px-3.5 py-2 rounded-lg bg-slate-950 border border-white/10 text-sm text-white focus:outline-none focus:border-rail-red resize-none"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4 p-3.5 rounded-xl bg-slate-950/60 border border-white/5">
-                  <div>
-                    <label className="flex items-center gap-2 text-xs font-semibold text-white cursor-pointer mb-2">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1">Unique Slug ID *</label>
                       <input
-                        type="checkbox"
-                        checked={formIsPaid}
-                        onChange={(e) => setFormIsPaid(e.target.checked)}
-                        className="rounded border-white/20 bg-slate-900 text-rail-red focus:ring-0"
+                        type="text"
+                        required
+                        disabled={!!editingTemplate}
+                        placeholder="e.g. amrit-bharat-led"
+                        value={formId}
+                        onChange={(e) => setFormId(e.target.value)}
+                        className="w-full px-3.5 py-2 rounded-lg bg-slate-950 border border-white/10 text-sm font-mono text-white focus:outline-none focus:border-rail-red disabled:opacity-50"
                       />
-                      <span>Paid Template (MSTS Checkout)</span>
-                    </label>
-                    {formIsPaid ? (
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground font-bold">₹</span>
-                        <input
-                          type="number"
-                          min="1"
-                          step="1"
-                          required
-                          value={formPrice}
-                          onChange={(e) => setFormPrice(e.target.value)}
-                          className="w-full pl-7 pr-3 py-1.5 rounded-lg bg-slate-900 border border-white/10 text-sm text-white focus:outline-none focus:border-rail-red"
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1">Category</label>
+                      <select
+                        value={formCategory}
+                        onChange={(e) => setFormCategory(e.target.value as BoardCategory)}
+                        className="w-full px-3.5 py-2 rounded-lg bg-slate-950 border border-white/10 text-sm text-white focus:outline-none focus:border-rail-red"
+                      >
+                        <option value="LED Texture Sheet">LED Texture Sheet</option>
+                        <option value="Coach Board">Coach Board</option>
+                        <option value="Station Board">Station Board</option>
+                        <option value="SLR Board">SLR Board</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-semibold text-slate-300">
+                        Target Texture Name (MSTS 3D Model Filename)
+                      </label>
+                      <span className="text-[11px] font-mono text-rail-amber font-bold">
+                        {formTargetTextureName ? `${formTargetTextureName}.dds` : 'Standard Name'}
+                      </span>
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="e.g. VB_NAME or AMRIT_LED (saves as VB_NAME.dds)"
+                      value={formTargetTextureName}
+                      onChange={(e) => setFormTargetTextureName(e.target.value)}
+                      className="w-full px-3.5 py-2 rounded-lg bg-slate-950 border border-white/10 text-sm font-mono text-white focus:outline-none focus:border-rail-red"
+                    />
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      Simulator models map to this filename (e.g. VB_NAME downloads directly as VB_NAME.dds).
+                    </p>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-semibold text-slate-300">
+                        Background Texture URL (Google Drive / Web Link)
+                      </label>
+                      <span className="text-[10px] text-emerald-400 font-semibold bg-emerald-950/50 border border-emerald-800/40 px-1.5 py-0.5 rounded">
+                        0 KB Server Space Used
+                      </span>
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="Paste Google Drive sharing link (drive.google.com/file/d/...) or web image URL"
+                      value={formBackgroundImageUrl}
+                      onChange={(e) => {
+                        const info = convertGoogleDriveUrl(e.target.value);
+                        setFormBackgroundImageUrl(info.url);
+                      }}
+                      className="w-full px-3.5 py-2 rounded-lg bg-slate-950 border border-white/10 text-sm font-mono text-white focus:outline-none focus:border-rail-red"
+                    />
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      Google Drive links are automatically converted to direct high-speed CDN URLs (0 KB database space).
+                    </p>
+                    {formBackgroundImageUrl && (
+                      <div className="mt-2 p-2 rounded-lg bg-slate-950/80 border border-white/10 flex items-center gap-3">
+                        <img
+                          src={formBackgroundImageUrl}
+                          alt="Preview"
+                          className="w-10 h-10 object-contain rounded bg-black/50 border border-white/10"
+                          onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
                         />
+                        <div className="text-xs text-slate-300 overflow-hidden truncate">
+                          <div className="font-semibold text-emerald-400">✓ Texture URL Linked</div>
+                          <div className="text-[10px] text-muted-foreground font-mono truncate">{formBackgroundImageUrl}</div>
+                        </div>
                       </div>
-                    ) : (
-                      <p className="text-xs text-muted-foreground">Free for all store visitors</p>
                     )}
                   </div>
 
                   <div>
-                    <label className="flex items-center gap-2 text-xs font-semibold text-white cursor-pointer mb-2">
-                      <input
-                        type="checkbox"
-                        checked={formPublished}
-                        onChange={(e) => setFormPublished(e.target.checked)}
-                        className="rounded border-white/20 bg-slate-900 text-rail-red focus:ring-0"
-                      />
-                      <span>Published to Public Store</span>
-                    </label>
-                    <p className="text-xs text-muted-foreground">
-                      {formPublished ? "Visible to users immediately" : "Hidden from public gallery"}
-                    </p>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1">Description</label>
+                    <textarea
+                      rows={2}
+                      placeholder="Texture details, simulator compatibility..."
+                      value={formDescription}
+                      onChange={(e) => setFormDescription(e.target.value)}
+                      className="w-full px-3.5 py-2 rounded-lg bg-slate-950 border border-white/10 text-sm text-white focus:outline-none focus:border-rail-red resize-none"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 p-3.5 rounded-xl bg-slate-950/60 border border-white/5">
+                    <div>
+                      <label className="flex items-center gap-2 text-xs font-semibold text-white cursor-pointer mb-2">
+                        <input
+                          type="checkbox"
+                          checked={formIsPaid}
+                          onChange={(e) => setFormIsPaid(e.target.checked)}
+                          className="rounded border-white/20 bg-slate-900 text-rail-red focus:ring-0"
+                        />
+                        <span>Paid Template (MSTS Checkout)</span>
+                      </label>
+                      {formIsPaid ? (
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground font-bold">₹</span>
+                          <input
+                            type="number"
+                            min="1"
+                            step="1"
+                            required
+                            value={formPrice}
+                            onChange={(e) => setFormPrice(e.target.value)}
+                            className="w-full pl-7 pr-3 py-1.5 rounded-lg bg-slate-900 border border-white/10 text-sm text-white focus:outline-none focus:border-rail-red"
+                          />
+                        </div>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">Free for all store visitors</p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="flex items-center gap-2 text-xs font-semibold text-white cursor-pointer mb-2">
+                        <input
+                          type="checkbox"
+                          checked={formPublished}
+                          onChange={(e) => setFormPublished(e.target.checked)}
+                          className="rounded border-white/20 bg-slate-900 text-rail-red focus:ring-0"
+                        />
+                        <span>Published to Public Store</span>
+                      </label>
+                      <p className="text-xs text-muted-foreground">
+                        {formPublished ? "Visible to users immediately" : "Hidden from public gallery"}
+                      </p>
+                    </div>
                   </div>
                 </div>
 
-                <div className="flex items-center justify-end gap-3 pt-3 border-t border-white/10">
+                {/* Sticky Modal Action Footer */}
+                <div className="flex items-center justify-end gap-3 p-4 sm:px-5 sm:py-3.5 border-t border-white/10 bg-slate-950/80 shrink-0">
                   <Button
                     type="button"
                     variant="secondary"
@@ -812,7 +816,7 @@ export default function AdminBoardTemplatesPage() {
                   </Button>
                   <Button
                     type="submit"
-                    className="bg-rail-red hover:bg-rail-red/90 text-white font-semibold gap-2"
+                    className="bg-rail-red hover:bg-rail-red/90 text-white font-semibold gap-2 shadow-lg shadow-rail-red/20"
                   >
                     <Check className="h-4 w-4" /> Save Template
                   </Button>
