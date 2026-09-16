@@ -31,6 +31,7 @@ import { storageService } from "@/lib/board-studio/storage-service";
 import { BoardTemplate, BoardCategory } from "@/lib/board-studio/types";
 import { AdminTemplateStudio } from "@/components/board-studio/admin-template-studio";
 import { adminGet, adminPatch, type AdminSettings } from "@/lib/admin-api";
+import { convertGoogleDriveUrl } from "@/lib/board-studio/image-utils";
 import "@/styles/board-studio.css";
 
 type TemplateFilter = "all" | "published" | "hidden" | "free" | "paid";
@@ -60,6 +61,7 @@ export default function AdminBoardTemplatesPage() {
   const [formWidth, setFormWidth] = useState(1024);
   const [formHeight, setFormHeight] = useState(1024);
   const [formTargetTextureName, setFormTargetTextureName] = useState("");
+  const [formBackgroundImageUrl, setFormBackgroundImageUrl] = useState("");
 
   const loadData = async () => {
     setLoading(true);
@@ -173,6 +175,7 @@ export default function AdminBoardTemplatesPage() {
     setFormWidth(1024);
     setFormHeight(1024);
     setFormTargetTextureName("");
+    setFormBackgroundImageUrl("");
     setIsEditModalOpen(true);
   };
 
@@ -189,6 +192,7 @@ export default function AdminBoardTemplatesPage() {
     setFormWidth(tpl.baseWidth || 1024);
     setFormHeight(tpl.baseHeight || 1024);
     setFormTargetTextureName(tpl.targetTextureName || "");
+    setFormBackgroundImageUrl(tpl.backgroundImageUrl || "");
     setIsEditModalOpen(true);
   };
 
@@ -201,6 +205,9 @@ export default function AdminBoardTemplatesPage() {
     }
 
     const cleanPrice = formIsPaid ? Math.max(0, parseFloat(formPrice) || 0) : 0;
+    const cleanBg = formBackgroundImageUrl.trim()
+      ? convertGoogleDriveUrl(formBackgroundImageUrl.trim()).url
+      : undefined;
 
     let targetTemplate: BoardTemplate;
     if (editingTemplate) {
@@ -210,6 +217,7 @@ export default function AdminBoardTemplatesPage() {
         category: formCategory,
         description: formDescription.trim(),
         targetTextureName: formTargetTextureName.trim(),
+        backgroundImageUrl: cleanBg,
         isPaid: formIsPaid,
         price: cleanPrice,
         published: formPublished,
@@ -224,11 +232,12 @@ export default function AdminBoardTemplatesPage() {
         category: formCategory,
         description: formDescription.trim(),
         targetTextureName: formTargetTextureName.trim(),
+        backgroundImageUrl: cleanBg,
         aspectRatio: `${formWidth}:${formHeight}`,
         baseWidth: formWidth,
         baseHeight: formHeight,
         backgroundColor: "#0c0f12",
-        backgroundType: "transparent",
+        backgroundType: cleanBg ? "transparent" : "solid",
         borderColor: "#ef3b2d",
         borderWidth: 2,
         borderRadius: 0,
@@ -696,6 +705,44 @@ export default function AdminBoardTemplatesPage() {
                   <p className="text-[11px] text-muted-foreground mt-1">
                     Simulator models map to this filename (e.g. VB_NAME downloads directly as VB_NAME.dds).
                   </p>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-semibold text-slate-300">
+                      Background Texture URL (Google Drive / Web Link)
+                    </label>
+                    <span className="text-[10px] text-emerald-400 font-semibold bg-emerald-950/50 border border-emerald-800/40 px-1.5 py-0.5 rounded">
+                      0 KB Server Space Used
+                    </span>
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="Paste Google Drive sharing link (drive.google.com/file/d/...) or web image URL"
+                    value={formBackgroundImageUrl}
+                    onChange={(e) => {
+                      const info = convertGoogleDriveUrl(e.target.value);
+                      setFormBackgroundImageUrl(info.url);
+                    }}
+                    className="w-full px-3.5 py-2 rounded-lg bg-slate-950 border border-white/10 text-sm font-mono text-white focus:outline-none focus:border-rail-red"
+                  />
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    Google Drive links are automatically converted to direct high-speed CDN URLs (0 KB database space).
+                  </p>
+                  {formBackgroundImageUrl && (
+                    <div className="mt-2 p-2 rounded-lg bg-slate-950/80 border border-white/10 flex items-center gap-3">
+                      <img
+                        src={formBackgroundImageUrl}
+                        alt="Preview"
+                        className="w-10 h-10 object-contain rounded bg-black/50 border border-white/10"
+                        onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                      />
+                      <div className="text-xs text-slate-300 overflow-hidden truncate">
+                        <div className="font-semibold text-emerald-400">✓ Texture URL Linked</div>
+                        <div className="text-[10px] text-muted-foreground font-mono truncate">{formBackgroundImageUrl}</div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div>

@@ -6,6 +6,7 @@ import { BoardCanvas } from './board-canvas';
 import { CustomFontModal } from './custom-font-modal';
 import { fontManager } from '@/lib/board-studio/font-manager';
 import { storageService } from '@/lib/board-studio/storage-service';
+import { convertGoogleDriveUrl } from '@/lib/board-studio/image-utils';
 import {
   Plus,
   Trash2,
@@ -252,27 +253,10 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({
       };
       img.src = urlToUse;
     } catch (err) {
-      console.warn('Server upload failed, falling back to data URL:', err);
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const dataUrl = event.target?.result as string;
-        const img = new Image();
-        img.onload = () => {
-          updateTemplate({
-            backgroundImageUrl: dataUrl,
-            backgroundType: 'transparent',
-            baseWidth: img.naturalWidth || 1024,
-            baseHeight: img.naturalHeight || 1024,
-            isTextureSheet: img.naturalWidth === img.naturalHeight,
-            textureResolution: img.naturalWidth
-          });
-          setIsUploadingBg(false);
-          setSaveToast(`Background texture loaded locally (${img.naturalWidth}×${img.naturalHeight}px)`);
-          setTimeout(() => setSaveToast(null), 3000);
-        };
-        img.src = dataUrl;
-      };
-      reader.readAsDataURL(file);
+      console.warn('Server upload failed:', err);
+      setIsUploadingBg(false);
+      setSaveToast(err instanceof Error ? err.message : 'Server upload failed. Paste a Google Drive link below instead (0 KB storage)!');
+      setTimeout(() => setSaveToast(null), 5000);
     }
   };
 
@@ -293,13 +277,11 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({
       setSaveToast('Variation background texture uploaded & saved!');
       setTimeout(() => setSaveToast(null), 3000);
     } catch (err) {
-      console.warn('Failed variation image upload, falling back to data URL:', err);
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const dataUrl = event.target?.result as string;
-        handleUpdateVariation(uploadingForVariationId, { backgroundImageUrl: dataUrl });
-      };
-      reader.readAsDataURL(file);
+      console.warn('Failed variation image upload:', err);
+      setSaveToast(err instanceof Error ? err.message : 'Upload failed. Paste a Google Drive link instead!');
+      setTimeout(() => setSaveToast(null), 5000);
+    } finally {
+      setUploadingForVariationId(null);
     }
   };
 
@@ -1608,32 +1590,86 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({
                 )}
               </div>
 
-              {/* Direct URL input fallback */}
-              <div style={{ marginTop: 8 }}>
-                <label style={{ fontSize: 11, color: '#94a3b8' }}>Or Background Image URL / CDN Link:</label>
-                <input
-                  type="text"
-                  placeholder="https://... or /media/... or /textures/..."
-                  value={template.backgroundImageUrl || ''}
-                  onChange={(e) => updateTemplate({ backgroundImageUrl: e.target.value })}
-                  style={{ width: '100%', fontSize: 11, padding: '6px 8px', marginTop: 4 }}
-                />
-              </div>
-
-              {/* Thumbnail preview if set */}
-              {template.backgroundImageUrl && (
-                <div style={{ marginTop: 8, padding: 6, background: 'rgba(0,0,0,0.3)', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <img
-                    src={template.backgroundImageUrl}
-                    alt="Background Preview"
-                    style={{ width: 44, height: 44, objectFit: 'contain', borderRadius: 4, background: '#111', border: '1px solid rgba(255,255,255,0.1)' }}
-                  />
-                  <div style={{ fontSize: 11, color: '#cbd5e1', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    <div style={{ fontWeight: 600, color: '#4ade80' }}>✓ Active Background Saved</div>
-                    <div style={{ fontSize: 10, color: '#94a3b8' }}>{template.baseWidth} × {template.baseHeight} px</div>
-                  </div>
+              {/* Google Drive / Direct CDN URL (Recommended: 0 KB Database / Server Space) */}
+              <div style={{ marginTop: 10, padding: 10, background: 'rgba(255,255,255,0.03)', borderRadius: 8, border: '1px solid rgba(255,255,255,0.08)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: '#f1f5f9', display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <span>📁</span> Google Drive / Direct Image URL:
+                  </label>
+                  <span style={{ fontSize: 10, color: '#4ade80', fontWeight: 600, background: 'rgba(74, 222, 128, 0.1)', padding: '2px 6px', borderRadius: 4 }}>
+                    0 KB Server Space Used
+                  </span>
                 </div>
-              )}
+                <p style={{ fontSize: 10, color: '#94a3b8', margin: '0 0 6px 0', lineHeight: 1.4 }}>
+                  Paste a Google Drive sharing link or any web image link. Google Drive links are automatically converted to high-speed CDN URLs!
+                </p>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <input
+                    type="text"
+                    placeholder="Paste Google Drive link (e.g. drive.google.com/file/d/...) or CDN URL"
+                    value={template.backgroundImageUrl || ''}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      const info = convertGoogleDriveUrl(val);
+                      updateTemplate({
+                        backgroundImageUrl: info.url,
+                        backgroundType: 'transparent'
+                      });
+                      if (info.isGoogleDrive) {
+                        setSaveToast('Google Drive link converted to direct high-speed CDN URL!');
+                        setTimeout(() => setSaveToast(null), 3000);
+                      }
+                    }}
+                    style={{ width: '100%', fontSize: 11, padding: '7px 10px', background: '#090d12', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 6, color: '#fff' }}
+                  />
+                  {template.backgroundImageUrl && (
+                    <button
+                      type="button"
+                      className="btn-danger-outline"
+                      style={{ fontSize: 11, padding: '4px 8px', whiteSpace: 'nowrap' }}
+                      onClick={() => updateTemplate({ backgroundImageUrl: undefined })}
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+
+                {/* Thumbnail preview if set */}
+                {template.backgroundImageUrl && (
+                  <div style={{ marginTop: 8, padding: 8, background: 'rgba(0,0,0,0.4)', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 10, border: '1px solid rgba(255,255,255,0.06)' }}>
+                    <img
+                      src={template.backgroundImageUrl}
+                      alt="Background Preview"
+                      style={{ width: 48, height: 48, objectFit: 'contain', borderRadius: 4, background: '#111', border: '1px solid rgba(255,255,255,0.1)' }}
+                      onError={(e) => {
+                        (e.target as HTMLElement).style.display = 'none';
+                      }}
+                      onLoad={(e) => {
+                        const img = e.currentTarget;
+                        if (img.naturalWidth && img.naturalHeight && (template.baseWidth !== img.naturalWidth || template.baseHeight !== img.naturalHeight)) {
+                          updateTemplate({
+                            baseWidth: img.naturalWidth,
+                            baseHeight: img.naturalHeight,
+                            isTextureSheet: img.naturalWidth === img.naturalHeight,
+                            textureResolution: img.naturalWidth
+                          });
+                        }
+                      }}
+                    />
+                    <div style={{ fontSize: 11, color: '#cbd5e1', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0, flex: 1 }}>
+                      <div style={{ fontWeight: 600, color: '#4ade80', display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <CheckCircle size={12} /> Active Texture Loaded
+                      </div>
+                      <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>
+                        {template.baseWidth} × {template.baseHeight} px · {template.backgroundImageUrl.includes('googleusercontent.com') ? 'Google Drive CDN' : 'Web CDN Link'}
+                      </div>
+                      <div style={{ fontSize: 9, color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%', marginTop: 2 }}>
+                        {template.backgroundImageUrl}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="prop-row-double">
@@ -2302,7 +2338,7 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({
                               style={{ fontSize: 10, padding: '4px 6px', flex: 1 }}
                               onClick={() => triggerVariationBgUpload(v.id)}
                             >
-                              <Upload size={11} /> {v.backgroundImageUrl ? 'Replace' : 'Upload Texture'}
+                              <Upload size={11} /> {v.backgroundImageUrl ? 'Replace File' : 'Upload File'}
                             </button>
                             {v.backgroundImageUrl && (
                               <button
@@ -2314,6 +2350,18 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({
                                 Clear
                               </button>
                             )}
+                          </div>
+                          <div style={{ marginTop: 4 }}>
+                            <input
+                              type="text"
+                              placeholder="Or paste Google Drive / Image URL (0 KB server space)"
+                              value={v.backgroundImageUrl || ''}
+                              onChange={(e) => {
+                                const info = convertGoogleDriveUrl(e.target.value);
+                                handleUpdateVariation(v.id, { backgroundImageUrl: info.url });
+                              }}
+                              style={{ width: '100%', fontSize: 10, padding: '4px 6px', background: '#090d12', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 4, color: '#fff' }}
+                            />
                           </div>
                         </div>
                       </div>

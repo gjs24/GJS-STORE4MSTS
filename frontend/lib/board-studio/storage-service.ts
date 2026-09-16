@@ -1,6 +1,7 @@
 import { BoardTemplate, SavedUserBoard } from './types';
 import { DEFAULT_TEMPLATES } from './default-templates';
 import { API_URL, getStoredUser } from '@/lib/api';
+import { convertGoogleDriveUrl, isBase64DataUri } from './image-utils';
 
 const TEMPLATES_STORAGE_KEY = 'gjs_railway_templates_v3';
 const USER_BOARDS_STORAGE_KEY = 'gjs_user_saved_boards_v3';
@@ -43,28 +44,10 @@ export const storageService = {
       const stored = localStorage.getItem(TEMPLATES_STORAGE_KEY);
       if (stored) {
         const parsed: BoardTemplate[] = JSON.parse(stored);
-        if (Array.isArray(parsed)) {
-          const ids = new Set(parsed.map((t) => t.id));
-          const missingDefaults = DEFAULT_TEMPLATES.filter((d) => !ids.has(d.id) && !deletedIds.has(d.id));
-          
-          const synced = parsed.map((tpl) => {
-            const def = DEFAULT_TEMPLATES.find((d) => d.id === tpl.id);
-            let item = tpl;
-            if (def && tpl.isPaid === undefined && def.isPaid !== undefined) {
-              item = { ...item, isPaid: def.isPaid, price: def.price, currency: def.currency };
-            }
-            if (def && (!item.variations || item.variations.length === 0) && def.variations && def.variations.length > 0) {
-              item = { ...item, variations: def.variations };
-            }
-            return item;
-          });
-
-          if (missingDefaults.length > 0) {
-            const merged = [...missingDefaults, ...synced];
-            this.saveAllTemplates(merged);
-            return merged;
-          }
-          return synced;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          // Never re-inject deleted templates; respect current database/stored state
+          const valid = parsed.filter((t) => !deletedIds.has(t.id));
+          return valid;
         }
       }
     } catch (err) {
@@ -194,7 +177,7 @@ export const storageService = {
       const data = await res.json();
       const results = Array.isArray(data) ? data : data.results || [];
       if (results.length > 0) {
-        return results.map((item: any) => ({
+        const mapped: BoardTemplate[] = results.map((item: any) => ({
           id: item.id,
           name: item.name,
           category: item.category || 'LED Texture Sheet',
@@ -265,6 +248,9 @@ export const storageService = {
           updatedAt: item.updated_at || new Date().toISOString(),
           author: item.author || 'Admin'
         }));
+        // Update local cache so refresh immediately has the exact cloud templates
+        this.saveAllTemplates(mapped);
+        return mapped;
       }
     } catch (e) {
       console.warn('Could not fetch cloud board templates, using local fallback:', e);
@@ -290,22 +276,50 @@ export const storageService = {
       if (res.ok) {
         const data = await res.json();
         if (data.url) return data.url;
+      } else {
+        const errText = await res.text().catch(() => '');
+        console.warn('Image upload failed on server:', res.status, errText);
       }
     } catch (err) {
-      console.warn('Server image upload failed, will fallback to data URI:', err);
+      console.warn('Server image upload failed:', err);
     }
-    // Fallback to data URL
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onload = (e) => resolve((e.target?.result as string) || '');
-      reader.onerror = () => resolve('');
-      reader.readAsDataURL(file);
-    });
+    // Fallback: If under 200KB, allow small data URL; if larger, guide to Google Drive
+    if (file.size <= 200 * 1024) {
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve((e.target?.result as string) || '');
+        reader.onerror = () => resolve('');
+        reader.readAsDataURL(file);
+      });
+    }
+    throw new Error('Image file is large. Please paste a Google Drive link or external image URL instead (0 KB server storage used).');
   },
 
   // Push template create/update to Django API
   async syncCloudTemplate(template: BoardTemplate): Promise<boolean> {
     try {
+      // Auto-convert Google Drive links and clean URL
+      let cleanBgUrl = template.backgroundImageUrl || '';
+      if (cleanBgUrl) {
+        cleanBgUrl = convertGoogleDriveUrl(cleanBgUrl).url;
+      }
+      // Never send multi-megabyte base64 strings to prevent 400 Bad Request
+      if (isBase64DataUri(cleanBgUrl) && cleanBgUrl.length > 250000) {
+        console.warn('Base64 image exceeds 250KB limit for cloud sync. Use Google Drive link instead.');
+        cleanBgUrl = '';
+      }
+
+      const cleanVariations = (template.variations || []).map((v) => {
+        let vBg = v.backgroundImageUrl || '';
+        if (vBg) {
+          vBg = convertGoogleDriveUrl(vBg).url;
+        }
+        if (isBase64DataUri(vBg) && vBg.length > 250000) {
+          vBg = '';
+        }
+        return { ...v, backgroundImageUrl: vBg };
+      });
+
       const payload = {
         id: template.id,
         name: template.name,
@@ -313,14 +327,14 @@ export const storageService = {
         description: template.description || '',
         base_width: template.baseWidth || 1024,
         base_height: template.baseHeight || 1024,
-        background_image_url: template.backgroundImageUrl || '',
+        background_image_url: cleanBgUrl,
         target_texture_name: template.targetTextureName || '',
         is_paid: !!template.isPaid,
         price: template.price || 0,
         published: template.published !== false,
         fields: template.fields || [],
         fixed_graphics: template.fixedGraphics || [],
-        variations: template.variations || []
+        variations: cleanVariations
       };
 
       const checkRes = await fetch(`${API_URL}/board-templates/${template.id}/`, {
@@ -333,6 +347,10 @@ export const storageService = {
           headers: getAuthHeaders(),
           body: JSON.stringify(payload)
         });
+        if (!res.ok) {
+          const errText = await res.text().catch(() => '');
+          console.warn('Cloud template PATCH failed:', res.status, errText);
+        }
         return res.ok;
       } else {
         const res = await fetch(`${API_URL}/board-templates/`, {
@@ -340,6 +358,10 @@ export const storageService = {
           headers: getAuthHeaders(),
           body: JSON.stringify(payload)
         });
+        if (!res.ok) {
+          const errText = await res.text().catch(() => '');
+          console.warn('Cloud template POST failed:', res.status, errText);
+        }
         return res.ok;
       }
     } catch (err) {

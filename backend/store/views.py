@@ -1170,6 +1170,7 @@ class BoardTemplateViewSet(viewsets.ModelViewSet):
         import uuid
         ext = image.name.split(".")[-1] if "." in image.name else "png"
         filename = f"board_bg_{uuid.uuid4().hex[:10]}.{ext}"
+        saved_path = default_storage.save(f"assets/board_templates/{filename}", image)
         url = default_storage.url(saved_path)
         if not url.startswith("http"):
             url = request.build_absolute_uri(url)
