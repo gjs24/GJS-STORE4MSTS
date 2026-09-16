@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { BoardTemplate, EditableField, BoardCategory, FixedGraphicElement, BoardVariation } from '@/lib/board-studio/types';
 import { BoardCanvas } from './board-canvas';
 import { CustomFontModal } from './custom-font-modal';
@@ -717,6 +717,66 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({
     }
   };
 
+  // Duplicate / Copy Slot (Text or Picture Box)
+  const handleDuplicateField = (fieldId: string) => {
+    const orig = template.fields.find((f) => f.id === fieldId);
+    if (!orig) return;
+
+    const isImage = orig.type === 'image';
+    const newId = `${isImage ? 'pic' : 'field'}_${Date.now()}`;
+    const offsetX = Math.min(90, Math.max(2, Number((orig.x + 2.5).toFixed(1))));
+    const offsetY = Math.min(90, Math.max(2, Number((orig.y + 2.5).toFixed(1))));
+
+    const cloned: EditableField = {
+      ...orig,
+      id: newId,
+      label: `${orig.label} (Copy)`,
+      x: offsetX,
+      y: offsetY
+    };
+
+    updateTemplate({
+      fields: [...template.fields, cloned]
+    });
+    setSelectedFieldId(newId);
+    setSaveToast(`Duplicated ${isImage ? 'Picture Box' : 'Text Slot'}: "${cloned.label}"`);
+    setTimeout(() => setSaveToast(null), 2500);
+  };
+
+  // Duplicate / Copy Static Stamp / Logo
+  const handleDuplicateStamp = (stampId: string) => {
+    const orig = template.fixedGraphics.find((g) => g.id === stampId);
+    if (!orig) return;
+    const newId = `stamp_${Date.now()}`;
+    const cloned: FixedGraphicElement = {
+      ...orig,
+      id: newId,
+      x: Math.min(90, Math.max(2, orig.x + 2)),
+      y: Math.min(90, Math.max(2, orig.y + 2))
+    };
+    const updated = [...template.fixedGraphics, cloned];
+    updateTemplate({ fixedGraphics: updated });
+    setSelectedStampId(newId);
+    setSaveToast('Duplicated static stamp / watermark');
+    setTimeout(() => setSaveToast(null), 2500);
+  };
+
+  // Keyboard shortcut: Ctrl+D to duplicate selected slot
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') {
+        const target = e.target as HTMLElement | null;
+        const isEditingInput = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
+        if (!isEditingInput && selectedFieldId) {
+          e.preventDefault();
+          handleDuplicateField(selectedFieldId);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedFieldId, template.fields]);
+
   const currentField = template.fields.find((f) => f.id === selectedFieldId);
 
   // Preview values
@@ -1314,31 +1374,72 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({
         {activeTab === 'fields' && (
           <div className="tab-content">
             <div className="slots-header-actions">
-              <span className="sub-title">Content Slots & Boxes</span>
-              <div style={{ display: 'flex', gap: 6 }}>
+              <div>
+                <span className="sub-title">Content Slots & Boxes</span>
+                {selectedFieldId && (
+                  <div style={{ fontSize: 10, color: '#94a3b8' }}>
+                    Tip: Press <kbd style={{ background: 'rgba(255,255,255,0.1)', padding: '1px 4px', borderRadius: 3, color: '#fb923c' }}>Ctrl+D</kbd> to duplicate slot
+                  </div>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                 <button type="button" className="btn-add-small" onClick={handleAddTextField} title="Add Text Slot">
                   <Plus size={13} /> Text
                 </button>
                 <button type="button" className="btn-add-small" onClick={handleAddImageField} title="Add Picture / Logo Box">
                   <ImageIcon size={13} /> Picture
                 </button>
+                {selectedFieldId && (
+                  <button
+                    type="button"
+                    className="btn-add-small"
+                    style={{ background: 'rgba(234, 88, 12, 0.25)', border: '1px solid #ea580c', color: '#fed7aa', fontWeight: 700 }}
+                    onClick={() => handleDuplicateField(selectedFieldId)}
+                    title="Duplicate selected slot (Ctrl+D)"
+                  >
+                    <Copy size={13} /> Duplicate
+                  </button>
+                )}
               </div>
             </div>
 
             <div className="slots-chips-grid">
               {template.fields.map((f, i) => (
-                <button
+                <div
                   key={f.id}
-                  type="button"
                   className={`slot-chip ${selectedFieldId === f.id ? 'active' : ''}`}
                   onClick={() => setSelectedFieldId(f.id)}
+                  style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', gap: 6 }}
                 >
-                  <span className="chip-index">
-                    {f.type === 'image' ? '🖼️' : '📝'} #{i + 1}
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, minWidth: 0, overflow: 'hidden' }}>
+                    <span className="chip-index">
+                      {f.type === 'image' ? '🖼️' : '📝'} #{i + 1}
+                    </span>
+                    <span className="chip-label" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {f.label}
+                    </span>
+                    {f.allowUserEdit === false && <Lock size={10} style={{ color: '#ff758f', flexShrink: 0 }} />}
+                  </div>
+                  <span
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDuplicateField(f.id);
+                    }}
+                    title={`Duplicate "${f.label}" (Ctrl+D)`}
+                    style={{
+                      padding: '2px 4px',
+                      borderRadius: 3,
+                      opacity: 0.6,
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center'
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
+                    onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.6')}
+                  >
+                    <Copy size={11} />
                   </span>
-                  <span className="chip-label">{f.label}</span>
-                  {f.allowUserEdit === false && <Lock size={10} style={{ color: '#ff758f' }} />}
-                </button>
+                </div>
               ))}
             </div>
 
@@ -1348,14 +1449,37 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({
                   <strong>
                     {currentField.type === 'image' ? '🖼️ Picture Box' : '📝 Text Slot'} · {currentField.label}
                   </strong>
-                  <button
-                    type="button"
-                    className="btn-delete-slot"
-                    onClick={() => handleDeleteField(currentField.id)}
-                    title="Delete this slot"
-                  >
-                    <Trash2 size={13} />
-                  </button>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      style={{
+                        padding: '3px 8px',
+                        fontSize: 11,
+                        fontWeight: 700,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 4,
+                        background: 'rgba(234, 88, 12, 0.15)',
+                        color: '#fb923c',
+                        border: '1px solid rgba(234, 88, 12, 0.4)',
+                        borderRadius: 5,
+                        cursor: 'pointer'
+                      }}
+                      onClick={() => handleDuplicateField(currentField.id)}
+                      title={`Duplicate / Copy this ${currentField.type === 'image' ? 'picture box' : 'text slot'} (Ctrl+D)`}
+                    >
+                      <Copy size={12} /> Duplicate
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-delete-slot"
+                      onClick={() => handleDeleteField(currentField.id)}
+                      title="Delete this slot"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
                 </div>
 
                 {/* USER MODIFICATION PERMISSION TOGGLE */}
@@ -2171,19 +2295,30 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({
                     <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--rail-amber)' }}>
                       Editing: {activeStamp.type.toUpperCase()} ({activeStamp.id})
                     </span>
-                    <button
-                      type="button"
-                      className="btn-danger-outline"
-                      style={{ padding: '3px 8px', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}
-                      onClick={() => {
-                        const filtered = template.fixedGraphics.filter((g) => g.id !== activeStamp.id);
-                        updateTemplate({ fixedGraphics: filtered });
-                        setSelectedStampId(filtered[0]?.id || null);
-                      }}
-                      title="Delete this static element"
-                    >
-                      <Trash2 size={12} /> Delete
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <button
+                        type="button"
+                        className="btn-secondary"
+                        style={{ padding: '3px 8px', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}
+                        onClick={() => handleDuplicateStamp(activeStamp.id)}
+                        title="Duplicate this static element"
+                      >
+                        <Copy size={12} /> Duplicate
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-danger-outline"
+                        style={{ padding: '3px 8px', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}
+                        onClick={() => {
+                          const filtered = template.fixedGraphics.filter((g) => g.id !== activeStamp.id);
+                          updateTemplate({ fixedGraphics: filtered });
+                          setSelectedStampId(filtered[0]?.id || null);
+                        }}
+                        title="Delete this static element"
+                      >
+                        <Trash2 size={12} /> Delete
+                      </button>
+                    </div>
                   </div>
 
                   <div className="prop-row-double">
@@ -2924,6 +3059,99 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({
             </div>
             <span className="zoom-current-indicator">Zoom: {Math.round(zoomLevel * 100)}%</span>
           </div>
+
+          {/* Quick Active Slot Action Bar */}
+          {currentField && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '6px 14px',
+                background: 'rgba(15, 23, 42, 0.95)',
+                border: '1px solid rgba(234, 88, 12, 0.4)',
+                borderRadius: '8px',
+                marginBottom: '10px',
+                width: '100%',
+                maxWidth: '960px',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                flexWrap: 'wrap',
+                gap: 8
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 13 }}>{currentField.type === 'image' ? '🖼️' : '📝'}</span>
+                <span style={{ fontSize: 11, color: '#94a3b8', textTransform: 'uppercase', fontWeight: 700 }}>
+                  Selected:
+                </span>
+                <strong style={{ fontSize: 12, color: '#f8fafc' }}>{currentField.label}</strong>
+                <span style={{ fontSize: 11, color: '#fb923c', background: 'rgba(234, 88, 12, 0.15)', padding: '1px 6px', borderRadius: 4, fontFamily: 'monospace' }}>
+                  X: {currentField.x}% · Y: {currentField.y}% · {currentField.width}×{currentField.height}%
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <button
+                  type="button"
+                  onClick={() => handleDuplicateField(currentField.id)}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 5,
+                    padding: '4px 12px',
+                    fontSize: 11,
+                    fontWeight: 700,
+                    background: 'linear-gradient(135deg, #ea580c 0%, #f97316 100%)',
+                    color: '#ffffff',
+                    border: 'none',
+                    borderRadius: 5,
+                    cursor: 'pointer',
+                    boxShadow: '0 2px 6px rgba(234, 88, 12, 0.3)'
+                  }}
+                  title={`Duplicate / Copy this ${currentField.type === 'image' ? 'picture box' : 'text slot'} (Ctrl+D)`}
+                >
+                  <Copy size={12} /> Duplicate Slot
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('fields')}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    padding: '4px 9px',
+                    fontSize: 11,
+                    background: 'rgba(255,255,255,0.08)',
+                    color: '#cbd5e1',
+                    border: '1px solid rgba(255,255,255,0.15)',
+                    borderRadius: 5,
+                    cursor: 'pointer'
+                  }}
+                  title="Open Slot Properties in Sidebar"
+                >
+                  <Sliders size={12} /> Style Inspector
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDeleteField(currentField.id)}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    padding: '4px 8px',
+                    fontSize: 11,
+                    background: 'rgba(239, 68, 68, 0.12)',
+                    color: '#ef4444',
+                    border: '1px solid rgba(239, 68, 68, 0.3)',
+                    borderRadius: 5,
+                    cursor: 'pointer'
+                  }}
+                  title="Delete this slot"
+                >
+                  <Trash2 size={12} />
+                </button>
+              </div>
+            </div>
+          )}
 
           <BoardCanvas
             template={template}
