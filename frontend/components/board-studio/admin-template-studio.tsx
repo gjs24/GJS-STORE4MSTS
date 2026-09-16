@@ -79,6 +79,14 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({
   const slotImageInputRef = useRef<HTMLInputElement>(null);
   const stampImageInputRef = useRef<HTMLInputElement>(null);
   const variationBgInputRef = useRef<HTMLInputElement>(null);
+  const baseTemplateBackupRef = useRef<{
+    fields: EditableField[];
+    backgroundImageUrl?: string;
+    backgroundColor: string;
+    targetTextureName?: string;
+    fixedGraphics?: FixedGraphicElement[];
+  } | null>(null);
+
   const [selectedStampId, setSelectedStampId] = useState<string | null>(
     activeTemplate.fixedGraphics[0]?.id || null
   );
@@ -89,6 +97,8 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({
     setRenameText(activeTemplate.name);
     setIsRenaming(false);
     setZoomLevel(1.0);
+    setEditingVariationOnCanvas(null);
+    baseTemplateBackupRef.current = null;
     if (activeTemplate.fields.length > 0) {
       setSelectedFieldId(activeTemplate.fields[0].id);
     }
@@ -105,7 +115,28 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({
   const updateTemplate = (updates: Partial<BoardTemplate>) => {
     setTemplate((prev) => {
       const next = { ...prev, ...updates, updatedAt: new Date().toISOString() };
-      onSaveTemplate(next);
+      let toPersist = next;
+      if (editingVariationOnCanvas && baseTemplateBackupRef.current) {
+        const currentCanvasFields = next.fields.map((f) => ({ ...f }));
+        const updatedVariations = (next.variations || []).map((v) =>
+          v.id === editingVariationOnCanvas
+            ? {
+                ...v,
+                backgroundImageUrl: next.backgroundImageUrl,
+                backgroundColor: next.backgroundColor,
+                targetTextureName: next.targetTextureName,
+                fields: currentCanvasFields,
+                fixedGraphics: next.fixedGraphics ? next.fixedGraphics.map((g) => ({ ...g })) : []
+              }
+            : v
+        );
+        toPersist = {
+          ...next,
+          ...baseTemplateBackupRef.current,
+          variations: updatedVariations
+        };
+      }
+      onSaveTemplate(toPersist);
       return next;
     });
   };
@@ -131,11 +162,31 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({
   };
 
   const handleSaveOnly = () => {
-    const updated = {
-      ...template,
-      updatedAt: new Date().toISOString()
-    };
-    onSaveTemplate(updated);
+    let toSave: BoardTemplate = { ...template };
+    if (editingVariationOnCanvas && baseTemplateBackupRef.current) {
+      const fieldsSnapshot = template.fields.map((f) => ({ ...f }));
+      const updatedVars = (template.variations || []).map((v) =>
+        v.id === editingVariationOnCanvas
+          ? {
+              ...v,
+              backgroundImageUrl: template.backgroundImageUrl,
+              backgroundColor: template.backgroundColor,
+              targetTextureName: template.targetTextureName,
+              fields: fieldsSnapshot,
+              fixedGraphics: template.fixedGraphics ? template.fixedGraphics.map((g) => ({ ...g })) : []
+            }
+          : v
+      );
+      toSave = {
+        ...template,
+        ...baseTemplateBackupRef.current,
+        variations: updatedVars,
+        updatedAt: new Date().toISOString()
+      };
+    } else {
+      toSave.updatedAt = new Date().toISOString();
+    }
+    onSaveTemplate(toSave);
     setSaveToast('Template saved successfully!');
     setTimeout(() => setSaveToast(null), 3000);
   };
@@ -365,22 +416,34 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({
     const v = (template.variations || []).find((item) => item.id === varId);
     if (!v) return;
 
-    let mergedFields = template.fields;
+    // Snapshot base template if entering variation edit mode from base
+    if (!editingVariationOnCanvas) {
+      baseTemplateBackupRef.current = {
+        fields: template.fields.map((f) => ({ ...f })),
+        backgroundImageUrl: template.backgroundImageUrl,
+        backgroundColor: template.backgroundColor,
+        targetTextureName: template.targetTextureName,
+        fixedGraphics: template.fixedGraphics ? template.fixedGraphics.map((g) => ({ ...g })) : []
+      };
+    }
+
+    let mergedFields: EditableField[] = template.fields.map((f) => ({ ...f }));
     if (v.fields && v.fields.length > 0) {
-      mergedFields = template.fields.map((f) => {
-        const override = v.fields?.find((vf) => vf.id === f.id);
-        return override ? { ...f, ...override } : f;
+      mergedFields = v.fields.map((vf) => {
+        const base = (baseTemplateBackupRef.current?.fields || template.fields).find((f) => f.id === vf.id);
+        return base ? { ...base, ...vf } : { ...vf };
       });
     }
 
     setEditingVariationOnCanvas(varId);
-    updateTemplate({
-      backgroundImageUrl: v.backgroundImageUrl !== undefined ? v.backgroundImageUrl : template.backgroundImageUrl,
-      backgroundColor: v.backgroundColor || template.backgroundColor,
-      targetTextureName: v.targetTextureName || template.targetTextureName,
+    setTemplate((prev) => ({
+      ...prev,
+      backgroundImageUrl: v.backgroundImageUrl !== undefined ? v.backgroundImageUrl : prev.backgroundImageUrl,
+      backgroundColor: v.backgroundColor || prev.backgroundColor,
+      targetTextureName: v.targetTextureName || prev.targetTextureName,
       fields: mergedFields,
-      fixedGraphics: v.fixedGraphics && v.fixedGraphics.length > 0 ? v.fixedGraphics : template.fixedGraphics
-    });
+      fixedGraphics: v.fixedGraphics && v.fixedGraphics.length > 0 ? v.fixedGraphics : prev.fixedGraphics
+    }));
 
     setSaveToast(`Loaded "${v.name}" onto canvas. You can now tweak slots, colors, and background!`);
     setTimeout(() => setSaveToast(null), 3500);
@@ -393,22 +456,52 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({
 
     const fieldsSnapshot = template.fields.map((f) => ({ ...f }));
 
-    handleUpdateVariation(editingVariationOnCanvas, {
-      backgroundImageUrl: template.backgroundImageUrl,
-      backgroundColor: template.backgroundColor,
-      targetTextureName: template.targetTextureName,
-      fields: fieldsSnapshot,
-      fixedGraphics: template.fixedGraphics ? [...template.fixedGraphics] : []
-    });
+    const updatedVars = (template.variations || []).map((item) =>
+      item.id === editingVariationOnCanvas
+        ? {
+            ...item,
+            backgroundImageUrl: template.backgroundImageUrl,
+            backgroundColor: template.backgroundColor,
+            targetTextureName: template.targetTextureName,
+            fields: fieldsSnapshot,
+            fixedGraphics: template.fixedGraphics ? [...template.fixedGraphics] : []
+          }
+        : item
+    );
 
-    setSaveToast(`Updated variation "${v.name}" with current canvas settings!`);
+    // Persist to parent/cloud immediately
+    const toPersist: BoardTemplate = {
+      ...template,
+      ...(baseTemplateBackupRef.current || {}),
+      variations: updatedVars,
+      updatedAt: new Date().toISOString()
+    };
+    onSaveTemplate(toPersist);
+
+    setTemplate((prev) => ({
+      ...prev,
+      variations: updatedVars
+    }));
+
+    setSaveToast(`Saved changes to variation "${v.name}"!`);
     setTimeout(() => setSaveToast(null), 3000);
   };
 
   const handleFinishEditingVariation = () => {
+    if (baseTemplateBackupRef.current) {
+      setTemplate((prev) => ({
+        ...prev,
+        fields: baseTemplateBackupRef.current!.fields,
+        backgroundImageUrl: baseTemplateBackupRef.current!.backgroundImageUrl,
+        backgroundColor: baseTemplateBackupRef.current!.backgroundColor || prev.backgroundColor,
+        targetTextureName: baseTemplateBackupRef.current!.targetTextureName,
+        fixedGraphics: baseTemplateBackupRef.current!.fixedGraphics || []
+      }));
+      baseTemplateBackupRef.current = null;
+    }
     setEditingVariationOnCanvas(null);
-    setSaveToast('Exited variation canvas edit mode.');
-    setTimeout(() => setSaveToast(null), 2000);
+    setSaveToast('Exited variation canvas edit mode (returned to base template).');
+    setTimeout(() => setSaveToast(null), 2500);
   };
 
   // Image Upload handler for a specific slot/box
@@ -2562,8 +2655,9 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({
                     className="btn-secondary"
                     style={{ fontSize: '11px', padding: '4px 10px' }}
                     onClick={handleFinishEditingVariation}
+                    title="Exit variation editing and return canvas to base template"
                   >
-                    ✕ Done
+                    ✕ Done (Back to Base)
                   </button>
                 </div>
               </div>

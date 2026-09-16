@@ -19,6 +19,7 @@ from django.db.models import Avg, Count, Q, Sum
 from django.db.models.deletion import ProtectedError
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from rest_framework import generics, permissions, status, viewsets
 from rest_framework import generics, permissions, serializers, status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes, throttle_classes
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
@@ -33,6 +34,7 @@ from rest_framework.exceptions import PermissionDenied
 from .throttles import DownloadRateThrottle
 
 from .early_access import get_cached_early_access_status
+from .models import AdminActivityLog, Asset, Category, DownloadLog, EmailOTP, NotifyRequest, Order, Payment, Review, SiteSetting, UserSpecialAccess, Wishlist
 from .models import (
     AdminActivityLog,
     Asset,
@@ -141,6 +143,9 @@ def create_cashfree_order(order, request):
     else:
         customer_phone = "9999999999"
 
+    if customer_phone != "9999999999" and not getattr(order, "customer_phone", ""):
+        order.customer_phone = customer_phone
+        order.save(update_fields=["customer_phone"])
     if customer_phone != "9999999999":
         if not getattr(order, "customer_phone", ""):
             order.customer_phone = customer_phone
@@ -855,15 +860,14 @@ def current_user(request):
         if new_email:
             request.user.email = new_email
         request.user.save(update_fields=["first_name", "last_name", "email"])
-
-        if "phone_number" in request.data:
-            new_phone = str(request.data.get("phone_number", "")).strip()
-            digits = re.sub(r"\D", "", new_phone)
-            clean_phone = digits[-10:] if len(digits) >= 10 else digits
-            profile, _ = UserProfile.objects.get_or_create(user=request.user)
-            profile.phone_number = clean_phone
-            profile.save(update_fields=["phone_number"])
-            request.user.profile = profile
+    if "phone_number" in request.data:
+        new_phone = str(request.data.get("phone_number", "")).strip()
+        digits = re.sub(r"\D", "", new_phone)
+        clean_phone = digits[-10:] if len(digits) >= 10 else digits
+        profile, _ = UserProfile.objects.get_or_create(user=request.user)
+        profile.phone_number = clean_phone
+        profile.save(update_fields=["phone_number"])
+        request.user.profile = profile
 
     return Response(UserSerializer(request.user, context={"request": request}).data)
 
@@ -1740,8 +1744,22 @@ class AdminUserViewSet(viewsets.ModelViewSet):
 
         changes = []
         if previous_active != updated_user.is_active:
+            log_admin_activity(
+                self.request,
+                "User activated" if updated_user.is_active else "User deactivated",
+                "User",
+                updated_user.id,
+                f"{'Activated' if updated_user.is_active else 'Deactivated'} user {updated_user.username}"
+            )
             changes.append("Activated" if updated_user.is_active else "Deactivated")
         if previous_staff != updated_user.is_staff:
+            log_admin_activity(
+                self.request,
+                "Staff granted" if updated_user.is_staff else "Staff revoked",
+                "User",
+                updated_user.id,
+                f"{'Granted' if updated_user.is_staff else 'Revoked'} staff status for {updated_user.username}"
+            )
             changes.append("Granted staff" if updated_user.is_staff else "Revoked staff")
         if previous_username != updated_user.username:
             changes.append(f"Username changed to '{updated_user.username}'")

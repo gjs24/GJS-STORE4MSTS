@@ -16,6 +16,9 @@ export const BUILT_IN_FONTS = [
   { label: 'Chakra Petch (Futuristic / High-Tech)', value: "'Chakra Petch', sans-serif" },
   { label: 'Arial Black (Heavy Railway)', value: 'Arial Black, sans-serif' },
   { label: 'Roboto Condensed (Classic Board)', value: "'Roboto Condensed', Arial, sans-serif" },
+  { label: 'Hind / Devanagari (Hindi Railway Script)', value: "'Hind', 'Tiro Devanagari Hindi', 'Nirmala UI', sans-serif" },
+  { label: 'Noto Sans Tamil (Tamil Railway Script)', value: "'Noto Sans Tamil', 'Latha', sans-serif" },
+  { label: 'Mukta (Multilingual Indian Script)', value: "'Mukta', 'Nirmala UI', sans-serif" },
   { label: 'Nirmala UI (Hindi / Indian Scripts)', value: "'Nirmala UI', Mangal, Arial" },
   { label: 'Impact (Heavy Bold)', value: 'Impact, sans-serif' }
 ];

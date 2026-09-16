@@ -78,9 +78,9 @@ export const UserBoardEditor: React.FC<UserBoardEditorProps> = ({
 
     let mergedFields = activeTemplate.fields;
     if (variation.fields && variation.fields.length > 0) {
-      mergedFields = activeTemplate.fields.map((f) => {
-        const override = variation.fields?.find((vf) => vf.id === f.id);
-        return override ? { ...f, ...override } : f;
+      mergedFields = variation.fields.map((vf) => {
+        const base = activeTemplate.fields.find((f) => f.id === vf.id);
+        return base ? { ...base, ...vf } : vf;
       });
     }
 
@@ -126,6 +126,17 @@ export const UserBoardEditor: React.FC<UserBoardEditorProps> = ({
       const v = activeTemplate.variations?.find((item) => item.id === varId);
       if (v?.targetTextureName) {
         setExportFilename(v.targetTextureName);
+      }
+      if (v?.fields) {
+        setValues((prev) => {
+          const next = { ...prev };
+          v.fields?.forEach((f) => {
+            if (next[f.id] === undefined) {
+              next[f.id] = f.defaultValue || f.imageUrl || '';
+            }
+          });
+          return next;
+        });
       }
       setSavedStatus(`Switched style variation to: ${v?.name || 'Variation'}`);
     } else {

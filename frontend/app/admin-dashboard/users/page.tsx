@@ -607,7 +607,7 @@ function UsersManagementContent() {
                     title="Grant or configure special free download permissions"
                   >
                     <Gift size={13} className="mr-1 text-purple-300" />
-                    <span>{hasSpecial ? "VIP Pass" : "Special"}</span>
+                    <span>{hasSpecial ? "VIP Pass" : "Special Access"}</span>
                   </Button>
 
                   <Button
