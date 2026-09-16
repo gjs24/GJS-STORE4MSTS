@@ -49,10 +49,14 @@ export const storageService = {
           
           const synced = parsed.map((tpl) => {
             const def = DEFAULT_TEMPLATES.find((d) => d.id === tpl.id);
+            let item = tpl;
             if (def && tpl.isPaid === undefined && def.isPaid !== undefined) {
-              return { ...tpl, isPaid: def.isPaid, price: def.price, currency: def.currency };
+              item = { ...item, isPaid: def.isPaid, price: def.price, currency: def.currency };
             }
-            return tpl;
+            if (def && (!item.variations || item.variations.length === 0) && def.variations && def.variations.length > 0) {
+              item = { ...item, variations: def.variations };
+            }
+            return item;
           });
 
           if (missingDefaults.length > 0) {
@@ -256,6 +260,7 @@ export const storageService = {
           canCustomize: item.can_customize !== undefined ? item.can_customize : (!item.is_paid),
           unlockedViaAsset: item.unlocked_via_asset || null,
           bundledWithAssets: item.bundled_with_assets || [],
+          variations: item.variations || [],
           createdAt: item.created_at || new Date().toISOString(),
           updatedAt: item.updated_at || new Date().toISOString(),
           author: item.author || 'Admin'
@@ -265,6 +270,37 @@ export const storageService = {
       console.warn('Could not fetch cloud board templates, using local fallback:', e);
     }
     return [];
+  },
+
+  // Upload an image file to Django backend media storage
+  async uploadBoardImage(file: File): Promise<string> {
+    try {
+      const formData = new FormData();
+      formData.append('image', file);
+      const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetch(`${API_URL}/board-templates/upload-image/`, {
+        method: 'POST',
+        headers,
+        body: formData
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.url) return data.url;
+      }
+    } catch (err) {
+      console.warn('Server image upload failed, will fallback to data URI:', err);
+    }
+    // Fallback to data URL
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve((e.target?.result as string) || '');
+      reader.onerror = () => resolve('');
+      reader.readAsDataURL(file);
+    });
   },
 
   // Push template create/update to Django API
@@ -283,7 +319,8 @@ export const storageService = {
         price: template.price || 0,
         published: template.published !== false,
         fields: template.fields || [],
-        fixed_graphics: template.fixedGraphics || []
+        fixed_graphics: template.fixedGraphics || [],
+        variations: template.variations || []
       };
 
       const checkRes = await fetch(`${API_URL}/board-templates/${template.id}/`, {

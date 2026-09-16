@@ -56,6 +56,7 @@ export const UserBoardEditor: React.FC<UserBoardEditorProps> = ({
   const [values, setValues] = useState<UserBoardValues>({});
   const [customBackground, setCustomBackground] = useState<string | null>(null);
   const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
+  const [selectedVariationId, setSelectedVariationId] = useState<string | null>(null);
   const [activeCategory, setActiveCategory] = useState<string>('All');
   const [savedStatus, setSavedStatus] = useState<string | null>(null);
   const [isExportingDDS, setIsExportingDDS] = useState(false);
@@ -69,8 +70,39 @@ export const UserBoardEditor: React.FC<UserBoardEditorProps> = ({
   const userBgFileRef = useRef<HTMLInputElement>(null);
   const userSlotImgRef = useRef<HTMLInputElement>(null);
 
+  // Compute effective template with selected variation overrides applied
+  const effectiveTemplate = React.useMemo(() => {
+    if (!selectedVariationId) return activeTemplate;
+    const variation = activeTemplate.variations?.find((v) => v.id === selectedVariationId);
+    if (!variation) return activeTemplate;
+
+    let mergedFields = activeTemplate.fields;
+    if (variation.fields && variation.fields.length > 0) {
+      mergedFields = activeTemplate.fields.map((f) => {
+        const override = variation.fields?.find((vf) => vf.id === f.id);
+        return override ? { ...f, ...override } : f;
+      });
+    }
+
+    return {
+      ...activeTemplate,
+      backgroundImageUrl:
+        variation.backgroundImageUrl !== undefined && variation.backgroundImageUrl !== ''
+          ? variation.backgroundImageUrl
+          : activeTemplate.backgroundImageUrl,
+      backgroundColor: variation.backgroundColor || activeTemplate.backgroundColor,
+      targetTextureName: variation.targetTextureName || activeTemplate.targetTextureName,
+      fields: mergedFields,
+      fixedGraphics:
+        variation.fixedGraphics && variation.fixedGraphics.length > 0
+          ? variation.fixedGraphics
+          : activeTemplate.fixedGraphics
+    };
+  }, [activeTemplate, selectedVariationId]);
+
   // Automatically load fields when template or initialValues changes
   useEffect(() => {
+    setSelectedVariationId(null);
     setExportFilename(activeTemplate.targetTextureName || activeTemplate.name);
     if (initialValues) {
       setValues(initialValues);
@@ -87,6 +119,21 @@ export const UserBoardEditor: React.FC<UserBoardEditorProps> = ({
       setSelectedFieldId(activeTemplate.fields[0].id);
     }
   }, [activeTemplate.id, initialValues, initialCustomBackground]);
+
+  const handleSelectVariation = (varId: string | null) => {
+    setSelectedVariationId(varId);
+    if (varId) {
+      const v = activeTemplate.variations?.find((item) => item.id === varId);
+      if (v?.targetTextureName) {
+        setExportFilename(v.targetTextureName);
+      }
+      setSavedStatus(`Switched style variation to: ${v?.name || 'Variation'}`);
+    } else {
+      setExportFilename(activeTemplate.targetTextureName || activeTemplate.name);
+      setSavedStatus('Switched to default style');
+    }
+    setTimeout(() => setSavedStatus(null), 2500);
+  };
 
   const handleFieldChange = (fieldId: string, val: string) => {
     if (!isUnlocked) {
@@ -105,7 +152,7 @@ export const UserBoardEditor: React.FC<UserBoardEditorProps> = ({
       return;
     }
     const initial: UserBoardValues = {};
-    activeTemplate.fields.forEach((f) => {
+    effectiveTemplate.fields.forEach((f) => {
       initial[f.id] = f.defaultValue || f.imageUrl || '';
     });
     setValues(initial);
@@ -168,13 +215,13 @@ export const UserBoardEditor: React.FC<UserBoardEditorProps> = ({
     setIsExportingDDS(true);
     try {
       await exportBoardToDDS(
-        activeTemplate,
+        effectiveTemplate,
         values,
         ddsFormat,
         customBackground || undefined,
         exportFilename
       );
-      setSavedStatus(`Exported ${exportFilename || activeTemplate.name} to DDS (${ddsFormat.toUpperCase()}) successfully!`);
+      setSavedStatus(`Exported ${exportFilename || effectiveTemplate.name} to DDS (${ddsFormat.toUpperCase()}) successfully!`);
       setTimeout(() => setSavedStatus(null), 3500);
     } catch (err) {
       console.error('DDS export error:', err);
@@ -192,13 +239,13 @@ export const UserBoardEditor: React.FC<UserBoardEditorProps> = ({
     setIsExportingPNG(true);
     try {
       await exportBoardToPNG(
-        activeTemplate,
+        effectiveTemplate,
         values,
         1,
         customBackground || undefined,
         exportFilename
       );
-      setSavedStatus(`Exported ${exportFilename || activeTemplate.name}.png successfully!`);
+      setSavedStatus(`Exported ${exportFilename || effectiveTemplate.name}.png successfully!`);
       setTimeout(() => setSavedStatus(null), 3000);
     } catch (err) {
       console.error('PNG export error:', err);
@@ -212,7 +259,7 @@ export const UserBoardEditor: React.FC<UserBoardEditorProps> = ({
       openPurchaseModal(activeTemplate);
       return;
     }
-    const defaultTitle = values[activeTemplate.fields[0]?.id] || activeTemplate.name;
+    const defaultTitle = values[effectiveTemplate.fields[0]?.id] || effectiveTemplate.name;
     const boardTitle = window.prompt("Save this customized board to My Store as:", defaultTitle);
     if (!boardTitle || !boardTitle.trim()) return;
 
@@ -403,6 +450,102 @@ export const UserBoardEditor: React.FC<UserBoardEditorProps> = ({
           </button>
         </div>
 
+        {/* Style / Theme Variations Selector */}
+        {activeTemplate.variations && activeTemplate.variations.length > 0 && (
+          <div
+            className="variation-selector-box"
+            style={{
+              margin: '12px 0',
+              padding: '12px 14px',
+              borderRadius: '10px',
+              background: 'linear-gradient(135deg, rgba(251, 146, 60, 0.08) 0%, rgba(30, 41, 59, 0.6) 100%)',
+              border: '1px solid rgba(251, 146, 60, 0.25)'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <label
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  fontSize: 12,
+                  fontWeight: 700,
+                  color: '#fb923c',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px'
+                }}
+              >
+                <Sparkles size={14} /> Style / Theme Variations
+              </label>
+              <span style={{ fontSize: 11, color: '#94a3b8' }}>
+                {activeTemplate.variations.length} available
+              </span>
+            </div>
+            <p style={{ fontSize: 11, color: '#cbd5e1', margin: '0 0 10px 0', lineHeight: 1.4 }}>
+              Choose a theme variant (e.g. Saffron LED, Ice Blue Matrix, Dual-Line, Sleeper) while keeping your custom text.
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <button
+                type="button"
+                onClick={() => handleSelectVariation(null)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '8px 12px',
+                  borderRadius: '6px',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  border: !selectedVariationId ? '1px solid #fb923c' : '1px solid rgba(255,255,255,0.08)',
+                  background: !selectedVariationId ? 'rgba(251, 146, 60, 0.15)' : 'rgba(15, 23, 42, 0.6)',
+                  color: !selectedVariationId ? '#fed7aa' : '#94a3b8',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                <span>★ Default / Base Style</span>
+                {!selectedVariationId && <CheckCircle2 size={14} style={{ color: '#fb923c' }} />}
+              </button>
+              {activeTemplate.variations.map((v) => {
+                const isSelected = selectedVariationId === v.id;
+                return (
+                  <button
+                    key={v.id}
+                    type="button"
+                    onClick={() => handleSelectVariation(v.id)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '8px 12px',
+                      borderRadius: '6px',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      border: isSelected ? '1px solid #fb923c' : '1px solid rgba(255,255,255,0.08)',
+                      background: isSelected ? 'rgba(251, 146, 60, 0.15)' : 'rgba(15, 23, 42, 0.6)',
+                      color: isSelected ? '#fed7aa' : '#cbd5e1',
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    <div style={{ textAlign: 'left' }}>
+                      <div>{v.name}</div>
+                      {v.description && (
+                        <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 400, marginTop: 2 }}>
+                          {v.description}
+                        </div>
+                      )}
+                    </div>
+                    {isSelected && (
+                      <CheckCircle2 size={14} style={{ color: '#fb923c', flexShrink: 0, marginLeft: 8 }} />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* User Background Customization (If permitted by Admin) */}
         <div className="user-bg-permission-card">
           <div className="perm-header">
@@ -563,14 +706,14 @@ export const UserBoardEditor: React.FC<UserBoardEditorProps> = ({
         <div className="fields-form">
           <div className="slots-header-actions">
             <h4 className="section-heading">
-              DETECTED FIELDS ({activeTemplate.fields.filter(f => !f.hiddenFromUser).length})
+              DETECTED FIELDS ({effectiveTemplate.fields.filter(f => !f.hiddenFromUser).length})
             </h4>
           </div>
 
-          {activeTemplate.fields.filter(f => !f.hiddenFromUser).length === 0 ? (
+          {effectiveTemplate.fields.filter(f => !f.hiddenFromUser).length === 0 ? (
             <p className="no-selection-hint">No user-editable fields in this template.</p>
           ) : (
-            activeTemplate.fields
+            effectiveTemplate.fields
               .filter((f) => !f.hiddenFromUser)
               .map((field, idx) => {
               const currentValue = values[field.id] !== undefined ? values[field.id] : (field.defaultValue || field.imageUrl || '');
@@ -776,7 +919,7 @@ export const UserBoardEditor: React.FC<UserBoardEditorProps> = ({
           )}
 
           <BoardCanvas
-            template={activeTemplate}
+            template={effectiveTemplate}
             values={values}
             customBackgroundUrl={customBackground || undefined}
             isAdminMode={false}

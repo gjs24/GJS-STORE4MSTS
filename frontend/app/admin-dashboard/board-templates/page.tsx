@@ -291,7 +291,7 @@ export default function AdminBoardTemplatesPage() {
           </div>
         </div>
 
-        <div className="gjs-board-studio-root" style={{ background: "#0b1016", borderRadius: 12, overflow: "hidden", border: "1px solid rgba(255,255,255,0.08)" }}>
+        <div className="gjs-board-studio-root" style={{ background: "#0b1016", borderRadius: 12, overflow: "hidden", border: "1px solid rgba(255,255,255,0.08)", height: "calc(100vh - 130px)", minHeight: "750px", display: "flex", flexDirection: "column" }}>
           <AdminTemplateStudio
             templates={templates}
             activeTemplate={visualStudioTemplate}

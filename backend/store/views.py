@@ -1108,6 +1108,20 @@ class BoardTemplateViewSet(viewsets.ModelViewSet):
         instance.delete()
         log_admin_activity(self.request, "Deleted board template", "BoardTemplate", template_id, f"Deleted {template_name}")
 
+    @action(detail=False, methods=["post"], url_path="upload-image", permission_classes=[permissions.IsAdminUser])
+    def upload_image(self, request):
+        image = request.FILES.get("image") or request.FILES.get("file")
+        if not image:
+            return Response({"detail": "No image file provided."}, status=status.HTTP_400_BAD_REQUEST)
+        from django.core.files.storage import default_storage
+        import uuid
+        ext = image.name.split(".")[-1] if "." in image.name else "png"
+        filename = f"board_bg_{uuid.uuid4().hex[:10]}.{ext}"
+        url = default_storage.url(saved_path)
+        if not url.startswith("http"):
+            url = request.build_absolute_uri(url)
+        return Response({"url": url, "path": saved_path}, status=status.HTTP_201_CREATED)
+
 
 class UserCustomBoardViewSet(viewsets.ModelViewSet):
     serializer_class = UserCustomBoardSerializer

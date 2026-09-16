@@ -175,7 +175,7 @@ class BoardTemplate(models.Model):
     base_width = models.PositiveIntegerField(default=1024)
     base_height = models.PositiveIntegerField(default=1024)
     background_image = models.ImageField(upload_to="assets/board_templates/", blank=True, null=True)
-    background_image_url = models.URLField(blank=True, default="")
+    background_image_url = models.TextField(blank=True, default="", help_text="Background image URL or data URI")
     target_texture_name = models.CharField(
         max_length=120,
         blank=True,
@@ -187,6 +187,7 @@ class BoardTemplate(models.Model):
     published = models.BooleanField(default=True)
     fields = models.JSONField(default=list, blank=True, help_text="LED text slot definitions")
     fixed_graphics = models.JSONField(default=list, blank=True, help_text="Fixed graphics, borders, bolts, IR crests")
+    variations = models.JSONField(default=list, blank=True, help_text="Style variations for this template designed by admin")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

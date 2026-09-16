@@ -113,6 +113,19 @@ export interface BoardTemplate {
   canCustomize?: boolean; // true if permitted to save customized variants
   unlockedViaAsset?: { id: number; title: string; slug: string } | null;
   bundledWithAssets?: { id: number; title: string; slug: string; price: string }[];
+  variations?: BoardVariation[];
+}
+
+export interface BoardVariation {
+  id: string;
+  name: string;
+  description?: string;
+  backgroundImageUrl?: string;
+  backgroundColor?: string;
+  backgroundSecondaryColor?: string;
+  targetTextureName?: string;
+  fields?: EditableField[];
+  fixedGraphics?: FixedGraphicElement[];
 }
 
 export type UserBoardValues = Record<string, string>;

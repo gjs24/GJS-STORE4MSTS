@@ -535,6 +535,7 @@ class AssetWriteSerializer(serializers.ModelSerializer):
 
 
 class BoardTemplateSerializer(serializers.ModelSerializer):
+    background_image_url = serializers.CharField(required=False, allow_blank=True)
     can_customize = serializers.SerializerMethodField()
     is_unlocked = serializers.SerializerMethodField()
     unlocked_via_asset = serializers.SerializerMethodField()
@@ -557,6 +558,7 @@ class BoardTemplateSerializer(serializers.ModelSerializer):
             "published",
             "fields",
             "fixed_graphics",
+            "variations",
             "can_customize",
             "is_unlocked",
             "unlocked_via_asset",

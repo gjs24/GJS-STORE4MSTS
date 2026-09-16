@@ -1,10 +1,11 @@
 'use client';
 
 import React, { useState, useRef } from 'react';
-import { BoardTemplate, EditableField, BoardCategory, FixedGraphicElement } from '@/lib/board-studio/types';
+import { BoardTemplate, EditableField, BoardCategory, FixedGraphicElement, BoardVariation } from '@/lib/board-studio/types';
 import { BoardCanvas } from './board-canvas';
 import { CustomFontModal } from './custom-font-modal';
 import { fontManager } from '@/lib/board-studio/font-manager';
+import { storageService } from '@/lib/board-studio/storage-service';
 import {
   Plus,
   Trash2,
@@ -31,7 +32,8 @@ import {
   Tag,
   ZoomIn,
   ZoomOut,
-  Maximize2
+  Maximize2,
+  RefreshCw
 } from 'lucide-react';
 
 interface AdminTemplateStudioProps {
@@ -56,7 +58,7 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({
   const [selectedFieldId, setSelectedFieldId] = useState<string | null>(
     activeTemplate.fields[0]?.id || null
   );
-  const [activeTab, setActiveTab] = useState<'details' | 'fields' | 'board' | 'fixed'>('details');
+  const [activeTab, setActiveTab] = useState<'details' | 'fields' | 'board' | 'fixed' | 'variations'>('details');
   const [saveToast, setSaveToast] = useState<string | null>(null);
 
   // Rename states
@@ -66,9 +68,16 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({
   // Zoom controls state
   const [zoomLevel, setZoomLevel] = useState<number>(1.0);
 
+  // Variations & Background Upload states
+  const [selectedVariationId, setSelectedVariationId] = useState<string | null>(null);
+  const [editingVariationOnCanvas, setEditingVariationOnCanvas] = useState<string | null>(null);
+  const [isUploadingBg, setIsUploadingBg] = useState(false);
+  const [uploadingForVariationId, setUploadingForVariationId] = useState<string | null>(null);
+
   const bgFileInputRef = useRef<HTMLInputElement>(null);
   const slotImageInputRef = useRef<HTMLInputElement>(null);
   const stampImageInputRef = useRef<HTMLInputElement>(null);
+  const variationBgInputRef = useRef<HTMLInputElement>(null);
   const [selectedStampId, setSelectedStampId] = useState<string | null>(
     activeTemplate.fixedGraphics[0]?.id || null
   );
@@ -206,30 +215,218 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({
     handlePublishToggle(tpl);
   };
 
-  // Image Upload handler for custom background texture map
-  const handleBgImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Image Upload handler for custom background texture map (uploads to Django media storage)
+  const handleBgImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const dataUrl = event.target?.result as string;
+    setIsUploadingBg(true);
+    setSaveToast('Uploading background texture to server...');
+
+    try {
+      const uploadedUrl = await storageService.uploadBoardImage(file);
+      const urlToUse = uploadedUrl || '';
+
       const img = new Image();
       img.onload = () => {
         updateTemplate({
-          backgroundImageUrl: dataUrl,
+          backgroundImageUrl: urlToUse || img.src,
           backgroundType: 'transparent',
           baseWidth: img.naturalWidth || 1024,
           baseHeight: img.naturalHeight || 1024,
           isTextureSheet: img.naturalWidth === img.naturalHeight,
           textureResolution: img.naturalWidth
         });
-        setSaveToast(`Background texture loaded (${img.naturalWidth}×${img.naturalHeight}px)`);
+        setIsUploadingBg(false);
+        setSaveToast(`Background texture saved to server! (${img.naturalWidth}×${img.naturalHeight}px)`);
         setTimeout(() => setSaveToast(null), 3000);
       };
-      img.src = dataUrl;
+      img.onerror = () => {
+        updateTemplate({
+          backgroundImageUrl: urlToUse,
+          backgroundType: 'transparent'
+        });
+        setIsUploadingBg(false);
+        setSaveToast('Background texture saved to server!');
+        setTimeout(() => setSaveToast(null), 3000);
+      };
+      img.src = urlToUse;
+    } catch (err) {
+      console.warn('Server upload failed, falling back to data URL:', err);
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const dataUrl = event.target?.result as string;
+        const img = new Image();
+        img.onload = () => {
+          updateTemplate({
+            backgroundImageUrl: dataUrl,
+            backgroundType: 'transparent',
+            baseWidth: img.naturalWidth || 1024,
+            baseHeight: img.naturalHeight || 1024,
+            isTextureSheet: img.naturalWidth === img.naturalHeight,
+            textureResolution: img.naturalWidth
+          });
+          setIsUploadingBg(false);
+          setSaveToast(`Background texture loaded locally (${img.naturalWidth}×${img.naturalHeight}px)`);
+          setTimeout(() => setSaveToast(null), 3000);
+        };
+        img.src = dataUrl;
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Upload handler for variation background
+  const triggerVariationBgUpload = (varId: string) => {
+    setUploadingForVariationId(varId);
+    variationBgInputRef.current?.click();
+  };
+
+  const handleVariationBgFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !uploadingForVariationId) return;
+
+    setSaveToast('Uploading variation background...');
+    try {
+      const uploadedUrl = await storageService.uploadBoardImage(file);
+      handleUpdateVariation(uploadingForVariationId, { backgroundImageUrl: uploadedUrl });
+      setSaveToast('Variation background texture uploaded & saved!');
+      setTimeout(() => setSaveToast(null), 3000);
+    } catch (err) {
+      console.warn('Failed variation image upload, falling back to data URL:', err);
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const dataUrl = event.target?.result as string;
+        handleUpdateVariation(uploadingForVariationId, { backgroundImageUrl: dataUrl });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Variations CRUD & Canvas synchronization
+  const handleAddVariation = () => {
+    const nextNum = (template.variations?.length || 0) + 1;
+    const newVariation: BoardVariation = {
+      id: `var_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      name: `Variation ${nextNum}`,
+      description: 'Alternate theme or colorway (e.g. Ice Blue Matrix, Night Mode, Stencil)',
+      targetTextureName: template.targetTextureName,
+      backgroundImageUrl: template.backgroundImageUrl,
+      backgroundColor: template.backgroundColor,
+      fields: template.fields.map((f) => ({ ...f })),
+      fixedGraphics: template.fixedGraphics ? [...template.fixedGraphics] : []
     };
-    reader.readAsDataURL(file);
+    const updated = [...(template.variations || []), newVariation];
+    updateTemplate({ variations: updated });
+    setSelectedVariationId(newVariation.id);
+    setSaveToast(`Added new variation: "${newVariation.name}"`);
+    setTimeout(() => setSaveToast(null), 2500);
+  };
+
+  const handleSaveCurrentCanvasAsNewVariation = () => {
+    const defaultName = `Variation ${(template.variations?.length || 0) + 1}`;
+    const name = window.prompt('Name this new style variation (e.g. "Amrit Bharat Saffron LED" or "Ice Blue Matrix"):', defaultName);
+    if (!name || !name.trim()) return;
+
+    const newVariation: BoardVariation = {
+      id: `var_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      name: name.trim(),
+      description: 'Custom style & layout captured from current board canvas',
+      targetTextureName: template.targetTextureName,
+      backgroundImageUrl: template.backgroundImageUrl,
+      backgroundColor: template.backgroundColor,
+      fields: template.fields.map((f) => ({ ...f })),
+      fixedGraphics: template.fixedGraphics ? [...template.fixedGraphics] : []
+    };
+
+    const updated = [...(template.variations || []), newVariation];
+    updateTemplate({ variations: updated });
+    setSelectedVariationId(newVariation.id);
+    setSaveToast(`Snapshot saved as variation: "${newVariation.name}"!`);
+    setTimeout(() => setSaveToast(null), 3000);
+  };
+
+  const handleUpdateVariation = (varId: string, updates: Partial<BoardVariation>) => {
+    const updated = (template.variations || []).map((v) =>
+      v.id === varId ? { ...v, ...updates } : v
+    );
+    updateTemplate({ variations: updated });
+  };
+
+  const handleDeleteVariation = (varId: string) => {
+    const v = (template.variations || []).find((item) => item.id === varId);
+    if (!window.confirm(`Delete variation "${v?.name || 'this variation'}"?`)) return;
+    const updated = (template.variations || []).filter((item) => item.id !== varId);
+    updateTemplate({ variations: updated });
+    if (selectedVariationId === varId) setSelectedVariationId(null);
+    if (editingVariationOnCanvas === varId) setEditingVariationOnCanvas(null);
+    setSaveToast(`Deleted variation "${v?.name || ''}"`);
+    setTimeout(() => setSaveToast(null), 2500);
+  };
+
+  const handleDuplicateVariation = (varId: string) => {
+    const orig = (template.variations || []).find((item) => item.id === varId);
+    if (!orig) return;
+    const cloned: BoardVariation = {
+      ...orig,
+      id: `var_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      name: `${orig.name} (Copy)`
+    };
+    const updated = [...(template.variations || []), cloned];
+    updateTemplate({ variations: updated });
+    setSelectedVariationId(cloned.id);
+    setSaveToast(`Duplicated "${orig.name}"`);
+    setTimeout(() => setSaveToast(null), 2500);
+  };
+
+  const handleLoadVariationToCanvas = (varId: string) => {
+    const v = (template.variations || []).find((item) => item.id === varId);
+    if (!v) return;
+
+    let mergedFields = template.fields;
+    if (v.fields && v.fields.length > 0) {
+      mergedFields = template.fields.map((f) => {
+        const override = v.fields?.find((vf) => vf.id === f.id);
+        return override ? { ...f, ...override } : f;
+      });
+    }
+
+    setEditingVariationOnCanvas(varId);
+    updateTemplate({
+      backgroundImageUrl: v.backgroundImageUrl !== undefined ? v.backgroundImageUrl : template.backgroundImageUrl,
+      backgroundColor: v.backgroundColor || template.backgroundColor,
+      targetTextureName: v.targetTextureName || template.targetTextureName,
+      fields: mergedFields,
+      fixedGraphics: v.fixedGraphics && v.fixedGraphics.length > 0 ? v.fixedGraphics : template.fixedGraphics
+    });
+
+    setSaveToast(`Loaded "${v.name}" onto canvas. You can now tweak slots, colors, and background!`);
+    setTimeout(() => setSaveToast(null), 3500);
+  };
+
+  const handleSaveCanvasToActiveVariation = () => {
+    if (!editingVariationOnCanvas) return;
+    const v = (template.variations || []).find((item) => item.id === editingVariationOnCanvas);
+    if (!v) return;
+
+    const fieldsSnapshot = template.fields.map((f) => ({ ...f }));
+
+    handleUpdateVariation(editingVariationOnCanvas, {
+      backgroundImageUrl: template.backgroundImageUrl,
+      backgroundColor: template.backgroundColor,
+      targetTextureName: template.targetTextureName,
+      fields: fieldsSnapshot,
+      fixedGraphics: template.fixedGraphics ? [...template.fixedGraphics] : []
+    });
+
+    setSaveToast(`Updated variation "${v.name}" with current canvas settings!`);
+    setTimeout(() => setSaveToast(null), 3000);
+  };
+
+  const handleFinishEditingVariation = () => {
+    setEditingVariationOnCanvas(null);
+    setSaveToast('Exited variation canvas edit mode.');
+    setTimeout(() => setSaveToast(null), 2000);
   };
 
   // Image Upload handler for a specific slot/box
@@ -509,6 +706,13 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({
             onClick={() => setActiveTab('fixed')}
           >
             <Layers size={13} /> Static Stamps
+          </button>
+          <button
+            type="button"
+            className={`admin-tab ${activeTab === 'variations' ? 'active' : ''}`}
+            onClick={() => setActiveTab('variations')}
+          >
+            <Sparkles size={13} /> Variations ({(template.variations || []).length})
           </button>
         </div>
 
@@ -1389,8 +1593,9 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({
                   type="button"
                   className="btn-primary"
                   onClick={() => bgFileInputRef.current?.click()}
+                  disabled={isUploadingBg}
                 >
-                  <Upload size={14} /> Upload Background Image
+                  <Upload size={14} /> {isUploadingBg ? 'Uploading to Server...' : 'Upload Background Image'}
                 </button>
                 {template.backgroundImageUrl && (
                   <button
@@ -1402,6 +1607,33 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({
                   </button>
                 )}
               </div>
+
+              {/* Direct URL input fallback */}
+              <div style={{ marginTop: 8 }}>
+                <label style={{ fontSize: 11, color: '#94a3b8' }}>Or Background Image URL / CDN Link:</label>
+                <input
+                  type="text"
+                  placeholder="https://... or /media/... or /textures/..."
+                  value={template.backgroundImageUrl || ''}
+                  onChange={(e) => updateTemplate({ backgroundImageUrl: e.target.value })}
+                  style={{ width: '100%', fontSize: 11, padding: '6px 8px', marginTop: 4 }}
+                />
+              </div>
+
+              {/* Thumbnail preview if set */}
+              {template.backgroundImageUrl && (
+                <div style={{ marginTop: 8, padding: 6, background: 'rgba(0,0,0,0.3)', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <img
+                    src={template.backgroundImageUrl}
+                    alt="Background Preview"
+                    style={{ width: 44, height: 44, objectFit: 'contain', borderRadius: 4, background: '#111', border: '1px solid rgba(255,255,255,0.1)' }}
+                  />
+                  <div style={{ fontSize: 11, color: '#cbd5e1', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <div style={{ fontWeight: 600, color: '#4ade80' }}>✓ Active Background Saved</div>
+                    <div style={{ fontSize: 10, color: '#94a3b8' }}>{template.baseWidth} × {template.baseHeight} px</div>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="prop-row-double">
@@ -1885,6 +2117,250 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({
           </div>
         )}
 
+        {/* TAB 4: BOARD VARIATIONS & THEMES */}
+        {activeTab === 'variations' && (
+          <div className="tab-content">
+            <span className="sub-title">Board Variations & Themes</span>
+            <p className="field-help">
+              Design multiple visual variants for this template (e.g. Amrit Bharat Saffron LED vs Ice Blue Matrix, Dual-line Hindi + English, Sleeper coach stencil). Users can pick any variation freely while keeping their customized train numbers & names.
+            </p>
+
+            <input
+              ref={variationBgInputRef}
+              type="file"
+              accept="image/*"
+              style={{ display: 'none' }}
+              onChange={handleVariationBgFile}
+            />
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, margin: '12px 0 16px 0' }}>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={handleSaveCurrentCanvasAsNewVariation}
+                style={{ background: 'linear-gradient(135deg, #ea580c 0%, #f97316 100%)', justifyContent: 'center' }}
+                title="Capture the current canvas slots, colors, and background into a new variation"
+              >
+                <Sparkles size={14} /> 📸 Save Canvas as New Variation
+              </button>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={handleAddVariation}
+                style={{ justifyContent: 'center' }}
+                title="Add an empty variation based on this template"
+              >
+                <Plus size={14} /> + Add Blank Variation
+              </button>
+            </div>
+
+            {(!template.variations || template.variations.length === 0) ? (
+              <div style={{ padding: 18, background: 'rgba(0,0,0,0.3)', border: '1px dashed rgba(255,255,255,0.15)', borderRadius: 8, textAlign: 'center' }}>
+                <Sparkles size={24} style={{ color: '#fb923c', margin: '0 auto 8px auto', display: 'block' }} />
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#f1f5f9', marginBottom: 4 }}>No Variations Created Yet</div>
+                <p style={{ fontSize: 11, color: '#94a3b8', margin: '0 0 12px 0', lineHeight: 1.4 }}>
+                  Style your board on the right canvas (change text color to Ice Blue, Amber, or swap background) then click &quot;Save Canvas as New Variation&quot;.
+                </p>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {template.variations.map((v, idx) => {
+                  const isEditingThis = editingVariationOnCanvas === v.id;
+                  return (
+                    <div
+                      key={v.id}
+                      style={{
+                        padding: 12,
+                        borderRadius: 8,
+                        background: isEditingThis ? 'rgba(234, 88, 12, 0.12)' : 'rgba(15, 23, 42, 0.6)',
+                        border: isEditingThis ? '1px solid #ea580c' : '1px solid rgba(255,255,255,0.1)'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ fontSize: 11, fontWeight: 800, color: '#fb923c' }}>#{idx + 1}</span>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: '#f8fafc' }}>{v.name}</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <button
+                            type="button"
+                            className="btn-icon"
+                            onClick={() => handleDuplicateVariation(v.id)}
+                            title="Duplicate variation"
+                          >
+                            <Copy size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-icon danger"
+                            onClick={() => handleDeleteVariation(v.id)}
+                            title="Delete variation"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Action Bar for Variation */}
+                      <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+                        <button
+                          type="button"
+                          className="btn-primary"
+                          onClick={() => handleLoadVariationToCanvas(v.id)}
+                          style={{
+                            flex: 1,
+                            fontSize: 11,
+                            padding: '4px 8px',
+                            background: isEditingThis ? '#ea580c' : 'rgba(255,255,255,0.08)'
+                          }}
+                          title="Load this variation onto the main canvas so you can visually move slots, change fonts, and preview"
+                        >
+                          <Palette size={12} /> {isEditingThis ? 'Editing on Canvas' : 'Load to Canvas'}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-secondary"
+                          onClick={() => {
+                            setEditingVariationOnCanvas(v.id);
+                            handleSaveCanvasToActiveVariation();
+                          }}
+                          style={{ fontSize: 11, padding: '4px 8px' }}
+                          title="Update this variation with the current slots & colors from the canvas"
+                        >
+                          <Check size={12} /> Snapshot Canvas
+                        </button>
+                      </div>
+
+                      {/* Variation Name */}
+                      <div style={{ marginBottom: 6 }}>
+                        <label style={{ fontSize: 10, color: '#94a3b8', textTransform: 'uppercase', fontWeight: 700 }}>
+                          Variation Name:
+                        </label>
+                        <input
+                          type="text"
+                          value={v.name}
+                          onChange={(e) => handleUpdateVariation(v.id, { name: e.target.value })}
+                          style={{ width: '100%', fontSize: 11, padding: '5px 8px', marginTop: 2 }}
+                        />
+                      </div>
+
+                      {/* Variation Description */}
+                      <div style={{ marginBottom: 6 }}>
+                        <label style={{ fontSize: 10, color: '#94a3b8', textTransform: 'uppercase', fontWeight: 700 }}>
+                          Theme Description:
+                        </label>
+                        <input
+                          type="text"
+                          value={v.description || ''}
+                          placeholder="e.g. Saffron LED Matrix, Ice Blue, Sleeper Stencil"
+                          onChange={(e) => handleUpdateVariation(v.id, { description: e.target.value })}
+                          style={{ width: '100%', fontSize: 11, padding: '5px 8px', marginTop: 2 }}
+                        />
+                      </div>
+
+                      {/* Export Filename Override */}
+                      <div style={{ marginBottom: 6 }}>
+                        <label style={{ fontSize: 10, color: '#94a3b8', textTransform: 'uppercase', fontWeight: 700 }}>
+                          Target Texture Filename (.dds override):
+                        </label>
+                        <input
+                          type="text"
+                          value={v.targetTextureName || ''}
+                          placeholder="e.g. AMRIT_LED or VB_AMRIT_ORANGE"
+                          onChange={(e) => handleUpdateVariation(v.id, { targetTextureName: e.target.value })}
+                          style={{ width: '100%', fontSize: 11, padding: '5px 8px', marginTop: 2 }}
+                        />
+                      </div>
+
+                      {/* Background Color & Image for Variation */}
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}>
+                        <div style={{ flex: 1 }}>
+                          <label style={{ fontSize: 10, color: '#94a3b8', textTransform: 'uppercase', fontWeight: 700 }}>
+                            BG Color:
+                          </label>
+                          <div style={{ display: 'flex', gap: 4, alignItems: 'center', marginTop: 2 }}>
+                            <input
+                              type="color"
+                              value={v.backgroundColor || '#000000'}
+                              onChange={(e) => handleUpdateVariation(v.id, { backgroundColor: e.target.value })}
+                              style={{ width: 26, height: 26, padding: 0, border: 'none', cursor: 'pointer', background: 'transparent' }}
+                            />
+                            <span style={{ fontSize: 10, fontFamily: 'monospace', color: '#cbd5e1' }}>
+                              {v.backgroundColor || '#000000'}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div style={{ flex: 2 }}>
+                          <label style={{ fontSize: 10, color: '#94a3b8', textTransform: 'uppercase', fontWeight: 700 }}>
+                            Variation Background Texture:
+                          </label>
+                          <div style={{ display: 'flex', gap: 4, marginTop: 2 }}>
+                            <button
+                              type="button"
+                              className="btn-secondary"
+                              style={{ fontSize: 10, padding: '4px 6px', flex: 1 }}
+                              onClick={() => triggerVariationBgUpload(v.id)}
+                            >
+                              <Upload size={11} /> {v.backgroundImageUrl ? 'Replace' : 'Upload Texture'}
+                            </button>
+                            {v.backgroundImageUrl && (
+                              <button
+                                type="button"
+                                className="btn-danger-outline"
+                                style={{ fontSize: 10, padding: '4px 6px' }}
+                                onClick={() => handleUpdateVariation(v.id, { backgroundImageUrl: undefined })}
+                              >
+                                Clear
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Slot Overrides Quick Summary */}
+                      {v.fields && v.fields.length > 0 && (
+                        <div style={{ marginTop: 8, padding: 6, background: 'rgba(0,0,0,0.25)', borderRadius: 4 }}>
+                          <span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 700 }}>
+                            SLOT STYLING OVERRIDES ({v.fields.length} SLOTS):
+                          </span>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+                            {v.fields.map((fld) => (
+                              <div
+                                key={fld.id}
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 4,
+                                  fontSize: 10,
+                                  background: 'rgba(255,255,255,0.05)',
+                                  padding: '2px 6px',
+                                  borderRadius: 3
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    display: 'inline-block',
+                                    width: 8,
+                                    height: 8,
+                                    borderRadius: '50%',
+                                    backgroundColor: fld.color || '#fff'
+                                  }}
+                                />
+                                <span style={{ color: '#cbd5e1' }}>{fld.label || fld.id}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
         {saveToast && (
           <div className="notification-toast">
             <CheckCircle size={15} />
@@ -1999,6 +2475,53 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({
 
         {/* Canvas Viewport with Slot Handles */}
         <div className="canvas-viewport admin-viewport">
+          {/* Active Variation Editing Banner */}
+          {editingVariationOnCanvas && (() => {
+            const currentVar = (template.variations || []).find((v) => v.id === editingVariationOnCanvas);
+            return (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '8px 16px',
+                  background: 'linear-gradient(90deg, rgba(234, 88, 12, 0.25), rgba(249, 115, 22, 0.25))',
+                  border: '1px solid #ea580c',
+                  borderRadius: '8px',
+                  marginBottom: '10px',
+                  width: '100%',
+                  maxWidth: '960px'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Sparkles size={16} style={{ color: '#fb923c' }} />
+                  <span style={{ fontSize: '13px', fontWeight: 700, color: '#fed7aa' }}>
+                    Currently Editing Variation: <strong>{currentVar?.name || 'Variation'}</strong>
+                  </span>
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    style={{ fontSize: '11px', padding: '4px 10px', background: '#ea580c' }}
+                    onClick={handleSaveCanvasToActiveVariation}
+                    title="Save current canvas slots, colors, and background to this variation"
+                  >
+                    💾 Save Changes to Variation
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    style={{ fontSize: '11px', padding: '4px 10px' }}
+                    onClick={handleFinishEditingVariation}
+                  >
+                    ✕ Done
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
+
           <div className="canvas-helper-banner">
             <Move size={14} />
             <span>Drag slots or picture boxes to position them. Use tabs on the left to edit details, slots, permissions, and visibility.</span>
