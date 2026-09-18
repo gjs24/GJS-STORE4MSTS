@@ -155,7 +155,7 @@ export function AssetActions({ asset }: { asset: Asset }) {
         let phone = storedUser?.phone_number || (typeof window !== "undefined" ? (localStorage.getItem("gjs_customer_phone") || "") : "");
         if (!phone || phone.replace(/\D/g, "").length !== 10) {
           const userPhone = window.prompt(
-            "Enter your 10-digit mobile number for Cashfree payment gateway & SMS receipt (Required by Cashfree):",
+            "Enter your 10-digit mobile number for order receipt & OTP:",
             phone
           );
           if (userPhone && userPhone.replace(/\D/g, "").length >= 10) {

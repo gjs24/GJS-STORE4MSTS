@@ -189,10 +189,12 @@ export async function renderBoardToCanvas(
     let fontSize = f.fontSize * scale;
     ctx.font = `${f.fontStyle || 'normal'} ${f.fontWeight} ${fontSize}px ${f.fontFamily}`;
 
-    // Auto-fit if text exceeds width
-    const measured = ctx.measureText(text).width;
-    if (measured > fw) {
-      fontSize = fontSize * (fw / measured) * 0.96;
+    const lines = String(text).split('\n');
+
+    // Auto-fit if any line exceeds width
+    const maxMeasured = Math.max(...lines.map((l) => ctx.measureText(l).width), 1);
+    if (maxMeasured > fw) {
+      fontSize = fontSize * (fw / maxMeasured) * 0.96;
       ctx.font = `${f.fontStyle || 'normal'} ${f.fontWeight} ${fontSize}px ${f.fontFamily}`;
     }
 
@@ -200,21 +202,27 @@ export async function renderBoardToCanvas(
     ctx.textBaseline = 'middle';
 
     const drawX = f.align === 'left' ? -fw / 2 : f.align === 'right' ? fw / 2 : 0;
+    const lineHeight = fontSize * 1.18;
+    const totalBlockHeight = (lines.length - 1) * lineHeight;
+    const startY = -totalBlockHeight / 2;
 
-    // Apply LED Glow
-    if (f.ledGlow) {
-      const glowR = (f.glowRadius || 12) * scale;
-      ctx.shadowColor = f.glowColor || '#ff6200';
-      ctx.shadowBlur = glowR;
-      ctx.fillStyle = f.color;
-      ctx.fillText(text, drawX, 0);
-      // Secondary pass for intense core glow
-      ctx.shadowBlur = glowR / 2;
-      ctx.fillText(text, drawX, 0);
-    } else {
-      ctx.fillStyle = f.color;
-      ctx.fillText(text, drawX, 0);
-    }
+    lines.forEach((lineText, lineIdx) => {
+      const lineY = startY + lineIdx * lineHeight;
+      // Apply LED Glow
+      if (f.ledGlow) {
+        const glowR = (f.glowRadius || 12) * scale;
+        ctx.shadowColor = f.glowColor || '#ff6200';
+        ctx.shadowBlur = glowR;
+        ctx.fillStyle = f.color;
+        ctx.fillText(lineText, drawX, lineY);
+        // Secondary pass for intense core glow
+        ctx.shadowBlur = glowR / 2;
+        ctx.fillText(lineText, drawX, lineY);
+      } else {
+        ctx.fillStyle = f.color;
+        ctx.fillText(lineText, drawX, lineY);
+      }
+    });
     ctx.restore();
   }
 

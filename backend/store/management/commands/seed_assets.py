@@ -39,6 +39,7 @@ class Command(BaseCommand):
             ("Textures", "Liveries, weathering, and scenery textures", "texture"),
             ("Free Downloads", "Community-ready free assets", "download"),
             ("Premium Downloads", "Paid production-grade packs", "premium"),
+            ("Nameboard", "Coach and locomotive LED dot-matrix destination nameboards & board templates", "nameboard"),
         ]
 
         category_map = {}

@@ -4,6 +4,7 @@ import {
   Download,
   Gauge,
   Layers,
+  LayoutTemplate,
   Map,
   Palette,
   Sparkles,
@@ -29,6 +30,9 @@ function getCategoryIcon(slug: string) {
       return Download;
     case "premium-downloads":
       return Sparkles;
+    case "nameboard":
+    case "nameboards":
+      return LayoutTemplate;
     default:
       return Layers;
   }
@@ -45,7 +49,7 @@ export default async function CategoriesPage() {
           return (
             <Link
               key={category.slug}
-              href={`/assets?category=${category.slug}`}
+              href={category.slug === "nameboard" ? "/board-studio" : `/assets?category=${category.slug}`}
               className="card-shine group relative flex flex-col justify-between overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-[#0c182b]/80 via-rail-navy/60 to-rail-black/95 p-6 shadow-xl transition-all duration-300 hover:-translate-y-1.5 hover:border-rail-red/40 hover:shadow-[0_16px_36px_rgba(0,0,0,0.5),0_0_24px_rgba(239,59,45,0.18)]"
             >
               <div>
@@ -62,10 +66,12 @@ export default async function CategoriesPage() {
 
               <div className="mt-6 flex items-center justify-between border-t border-white/[0.08] pt-4 text-xs font-semibold">
                 <span className="rounded-full bg-white/[0.06] px-3 py-1 text-rail-amber">
-                  {category.asset_count || 0} packs available
+                  {category.slug === "nameboard"
+                    ? "Interactive Studio & Templates"
+                    : `${category.asset_count || 0} packs available`}
                 </span>
                 <span className="flex items-center gap-1 text-slate-300 transition-colors group-hover:text-white">
-                  <span>Explore</span>
+                  <span>{category.slug === "nameboard" ? "Open Studio" : "Explore"}</span>
                   <ArrowRight size={14} className="transition-transform group-hover:translate-x-1" />
                 </span>
               </div>

@@ -1613,6 +1613,8 @@ class AdminOrderViewSet(viewsets.ModelViewSet):
                 | Q(user__username__icontains=search)
                 | Q(user__email__icontains=search)
                 | Q(asset__title__icontains=search)
+                | Q(board_template__name__icontains=search)
+                | Q(board_template__id__icontains=search)
             )
 
         ordering = self.request.query_params.get("ordering") or self.request.query_params.get("sort")

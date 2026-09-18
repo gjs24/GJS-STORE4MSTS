@@ -368,7 +368,9 @@ export const BoardCanvas: React.FC<BoardCanvasProps> = ({
                         ? `${field.outlineWidth * effectiveScale}px ${field.outlineColor || '#000000'}`
                         : undefined,
                     maxWidth: '100%',
-                    whiteSpace: 'nowrap',
+                    width: '100%',
+                    whiteSpace: 'pre-line',
+                    lineHeight: 1.18,
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
                     textAlign: field.align,

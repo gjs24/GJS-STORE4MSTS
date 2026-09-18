@@ -832,16 +832,35 @@ export const UserBoardEditor: React.FC<UserBoardEditorProps> = ({
                       )}
                     </div>
                   ) : (
-                    <input
-                      id={`input-${field.id}`}
-                      type="text"
-                      className="field-input"
-                      value={currentValue}
-                      placeholder={field.placeholder || 'Re-enter content...'}
-                      onChange={(e) => handleFieldChange(field.id, e.target.value)}
-                      onFocus={() => setSelectedFieldId(field.id)}
-                      maxLength={field.maxChars || 80}
-                    />
+                    <div style={{ position: 'relative' }}>
+                      <textarea
+                        id={`input-${field.id}`}
+                        rows={currentValue && currentValue.includes('\n') ? Math.min(6, currentValue.split('\n').length) : 2}
+                        className="field-input"
+                        value={currentValue}
+                        placeholder={field.placeholder || 'Enter content (Press Enter for next line)...'}
+                        onChange={(e) => handleFieldChange(field.id, e.target.value)}
+                        onFocus={() => setSelectedFieldId(field.id)}
+                        maxLength={field.maxChars || 300}
+                        style={{
+                          width: '100%',
+                          minHeight: 46,
+                          lineHeight: '1.4',
+                          resize: 'vertical',
+                          fontFamily: 'inherit',
+                          padding: '8px 10px',
+                          display: 'block'
+                        }}
+                      />
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 3 }}>
+                        <small style={{ fontSize: 10, color: '#94a3b8' }}>
+                          💡 Press <kbd style={{ background: 'rgba(255,255,255,0.1)', padding: '1px 4px', borderRadius: 3, color: '#f1f5f9' }}>Enter</kbd> to add next line
+                        </small>
+                        <small style={{ fontSize: 10, color: '#64748b' }}>
+                          {currentValue.length}/{field.maxChars || 300}
+                        </small>
+                      </div>
+                    </div>
                   )}
 
                   {field.helpText && <span className="field-help">{field.helpText}</span>}

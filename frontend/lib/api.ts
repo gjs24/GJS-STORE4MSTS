@@ -210,8 +210,12 @@ export function setStoredUser(user: CurrentUser | null) {
   if (typeof window === "undefined") return;
   if (user) {
     localStorage.setItem("currentUser", JSON.stringify(user));
+    if (user.phone_number) {
+      localStorage.setItem("gjs_customer_phone", user.phone_number.replace(/\D/g, "").slice(-10));
+    }
   } else {
     localStorage.removeItem("currentUser");
+    localStorage.removeItem("gjs_customer_phone");
   }
   emitAuthChange();
 }
@@ -221,6 +225,7 @@ export function clearAuth() {
   localStorage.removeItem("accessToken");
   localStorage.removeItem("refreshToken");
   localStorage.removeItem("currentUser");
+  localStorage.removeItem("gjs_customer_phone");
   emitAuthChange();
 }
 
@@ -238,7 +243,8 @@ export const fallbackCategories: Category[] = [
   { id: 4, name: "Cab Views", slug: "cab-views", description: "Cab panels and driving views", icon: "PanelTop" },
   { id: 5, name: "Textures", slug: "textures", description: "Liveries and scenery textures", icon: "Palette" },
   { id: 6, name: "Free Downloads", slug: "free-downloads", description: "Free assets for logged-in users", icon: "Download" },
-  { id: 7, name: "Premium Downloads", slug: "premium-downloads", description: "Paid GJS Production packs", icon: "BadgeIndianRupee" }
+  { id: 7, name: "Premium Downloads", slug: "premium-downloads", description: "Paid GJS Production packs", icon: "BadgeIndianRupee" },
+  { id: 8, name: "Nameboard", slug: "nameboard", description: "Coach and locomotive LED dot-matrix destination nameboards & board templates", icon: "LayoutTemplate" }
 ];
 
 export const fallbackAssets: Asset[] = [

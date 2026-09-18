@@ -1713,11 +1713,25 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({
                   /* TEXT SPECIFIC CONTROLS */
                   <>
                     <div className="prop-row">
-                      <label>Default Text Content:</label>
-                      <input
-                        type="text"
-                        value={currentField.defaultValue}
+                      <label>Default Text Content (Supports Enter / Next Line):</label>
+                      <textarea
+                        rows={currentField.defaultValue?.includes('\n') ? Math.min(6, currentField.defaultValue.split('\n').length) : 2}
+                        value={currentField.defaultValue || ''}
+                        placeholder="Enter default text... (Press Enter for next line)"
                         onChange={(e) => handleUpdateSelectedField({ defaultValue: e.target.value })}
+                        style={{
+                          width: '100%',
+                          resize: 'vertical',
+                          minHeight: 48,
+                          padding: '6px 10px',
+                          fontSize: 12,
+                          background: 'rgba(0,0,0,0.4)',
+                          color: '#fff',
+                          border: '1px solid rgba(255,255,255,0.15)',
+                          borderRadius: 4,
+                          lineHeight: 1.4,
+                          fontFamily: 'inherit'
+                        }}
                       />
                     </div>
 

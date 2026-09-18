@@ -182,9 +182,15 @@ function OrderAccessModal({ order, initialMode = "MANAGE", onClose, onSave, onDe
         {/* Customer & Asset Summary Card */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-4 text-xs">
           <div className="space-y-1">
-            <span className="text-slate-500 font-semibold uppercase tracking-wider block text-[10px]">Product / Asset</span>
-            <p className="font-bold text-sm text-white">{order.asset?.title || "Asset"}</p>
-            <span className="text-slate-400 font-mono text-[11px] block">{order.asset?.category?.name || "Locomotive / Route"}</span>
+            <span className="text-slate-500 font-semibold uppercase tracking-wider block text-[10px]">
+              {order.board_template ? "Board Studio Template" : "Product / Asset"}
+            </span>
+            <p className="font-bold text-sm text-white">
+              {order.board_template ? order.board_template.name : (order.asset?.title || "Asset")}
+            </p>
+            <span className="text-slate-400 font-mono text-[11px] block">
+              {order.board_template ? `Template ID: ${order.board_template.id}` : (order.asset?.category?.name || "Railway Asset")}
+            </span>
           </div>
 
           <div className="space-y-1">
@@ -412,7 +418,7 @@ function OrderAccessModal({ order, initialMode = "MANAGE", onClose, onSave, onDe
               <AlertTriangle size={18} className="text-red-400 shrink-0 mt-0.5" />
               <div>
                 <strong className="block text-red-300 font-bold">Access Revocation Notice:</strong>
-                Saving these changes will immediately block <strong>{order.user?.username || "this customer"}</strong> from downloading <strong>{order.asset?.title}</strong>. If they attempt to download, the store API will return an access denied error.
+                Saving these changes will immediately block <strong>{order.user?.username || "this customer"}</strong> from downloading <strong>{order.board_template ? order.board_template.name : (order.asset?.title || "this item")}</strong>. If they attempt to download, the store API will return an access denied error.
               </div>
             </div>
           ) : null}
@@ -814,7 +820,7 @@ function OrdersContent() {
       <div className="overflow-hidden rounded-lg border border-white/10 bg-white/[0.02]">
         <div className="grid gap-2 bg-white/10 p-3 text-xs uppercase tracking-wider text-slate-400 md:grid-cols-[80px_1.5fr_1.3fr_110px_150px_210px]">
           <span>ID</span>
-          <span>Asset / Customer</span>
+          <span>Item / Customer</span>
           <span>Payment Details</span>
           <span>Amount</span>
           <span>Status & Access</span>
@@ -853,8 +859,22 @@ function OrdersContent() {
                 </div>
 
                 <div>
-                  <span className="block font-bold text-white">{order.asset?.title || "Asset"}</span>
-                  <span className="text-xs text-slate-300">
+                  {order.board_template ? (
+                    <div>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="inline-flex items-center gap-1 rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-bold text-amber-300 border border-amber-500/30">
+                          🎯 Board Template
+                        </span>
+                        <span className="font-bold text-white">{order.board_template.name}</span>
+                      </div>
+                      <span className="block text-[11px] text-slate-400 font-mono mt-0.5">
+                        ID: {order.board_template.id}
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="block font-bold text-white">{order.asset?.title || "Asset"}</span>
+                  )}
+                  <span className="text-xs text-slate-300 block mt-0.5">
                     {order.user?.username || "User"}{" "}
                     {order.user?.email ? (
                       <span className="text-slate-500">({order.user.email})</span>

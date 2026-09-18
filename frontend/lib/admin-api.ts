@@ -46,6 +46,13 @@ export type AdminOrder = {
   id: number;
   user?: AdminUser;
   asset?: Asset;
+  board_template?: {
+    id: string;
+    name: string;
+    category?: string;
+    price?: number | string;
+    background_image_url?: string;
+  };
   amount: string;
   currency: string;
   status: "PENDING" | "VERIFICATION_PENDING" | "APPROVED" | "PAID" | "REJECTED" | "FAILED" | "REFUNDED" | "BLOCKED";

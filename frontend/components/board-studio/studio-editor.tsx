@@ -186,7 +186,7 @@ export function StudioEditor({
             disabled={isUnlocking}
             className="flex items-center gap-2 rounded-lg bg-rail-amber px-5 py-2.5 text-sm font-bold text-black shadow-glow transition-all hover:bg-yellow-400 disabled:opacity-50"
           >
-            {isUnlocking ? "Processing..." : `Unlock for ₹${template.price} via Cashfree`}
+            {isUnlocking ? "Processing..." : `Buy for ₹${template.price}`}
           </button>
         </div>
       )}

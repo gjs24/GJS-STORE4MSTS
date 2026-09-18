@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { load } from '@cashfreepayments/cashfree-js';
 import { BoardTemplate } from '@/lib/board-studio/types';
@@ -54,6 +54,21 @@ export const PurchaseTemplateModal: React.FC<PurchaseTemplateModalProps> = ({
     }
     return '';
   });
+  const [isEditingPhone, setIsEditingPhone] = useState(false);
+
+  useEffect(() => {
+    if (isOpen && typeof window !== 'undefined') {
+      const u = getStoredUser();
+      const phone = (u?.phone_number || localStorage.getItem('gjs_customer_phone') || '').replace(/\D/g, '').slice(-10);
+      if (phone) {
+        setCustomerPhone(phone);
+      }
+      setIsEditingPhone(false);
+    }
+  }, [isOpen]);
+
+  const cleanDigits = customerPhone.replace(/\D/g, '').slice(-10);
+  const hasSavedPhone = cleanDigits.length === 10 && ['6', '7', '8', '9'].includes(cleanDigits[0]);
 
   if (!isOpen || !template) return null;
 
@@ -72,9 +87,9 @@ export const PurchaseTemplateModal: React.FC<PurchaseTemplateModalProps> = ({
         return;
       }
 
-      const cleanedPhone = customerPhone.replace(/\D/g, '');
+      const cleanedPhone = cleanDigits;
       if (cleanedPhone.length > 0 && cleanedPhone.length !== 10) {
-        setError('Please enter a valid 10-digit mobile number for Cashfree checkout.');
+        setError('Please enter a valid 10-digit mobile number.');
         setIsProcessing(false);
         return;
       }
@@ -338,38 +353,101 @@ export const PurchaseTemplateModal: React.FC<PurchaseTemplateModalProps> = ({
               </ul>
             </div>
 
-            {/* Mobile Number for Cashfree / Invoice */}
+            {/* Mobile Number for Receipt / OTP */}
             {loggedIn && (
               <div style={{ margin: '0 24px 16px 24px' }}>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#fb923c', textTransform: 'uppercase', marginBottom: 4 }}>
-                  📱 Your 10-Digit Mobile Number (Required for Cashfree Gateway & SMS Receipt):
-                </label>
-                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                  <span style={{ padding: '8px 10px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 6, fontSize: 12, color: '#94a3b8' }}>
-                    +91
-                  </span>
-                  <input
-                    type="tel"
-                    maxLength={10}
-                    value={customerPhone}
-                    onChange={(e) => setCustomerPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                    placeholder="Enter your 10-digit number (e.g. 9876543210)"
+                {hasSavedPhone && !isEditingPhone ? (
+                  <div
                     style={{
-                      flex: 1,
-                      padding: '8px 12px',
-                      background: 'rgba(0,0,0,0.4)',
-                      border: '1px solid rgba(255,255,255,0.15)',
-                      borderRadius: 6,
-                      color: '#fff',
-                      fontSize: 13,
-                      letterSpacing: '1px',
-                      fontFamily: 'monospace'
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      background: 'rgba(255, 255, 255, 0.04)',
+                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                      borderRadius: 8,
+                      padding: '10px 14px'
                     }}
-                  />
-                </div>
-                <small style={{ fontSize: 10, color: '#94a3b8', marginTop: 4, display: 'block' }}>
-                  Cashfree will send the payment OTP and receipt directly to your mobile number.
-                </small>
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <span style={{ fontSize: 16 }}>📱</span>
+                      <div>
+                        <div style={{ fontSize: 11, color: '#94a3b8', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.5px' }}>
+                          Mobile for Receipt & OTP
+                        </div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: '#f8fafc', letterSpacing: '1px', fontFamily: 'monospace' }}>
+                          +91 {cleanDigits}
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingPhone(true)}
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        color: '#fb923c',
+                        fontSize: 12,
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        padding: '4px 8px',
+                        borderRadius: 4,
+                        textDecoration: 'underline'
+                      }}
+                    >
+                      Change
+                    </button>
+                  </div>
+                ) : (
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                      <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#fb923c', textTransform: 'uppercase' }}>
+                        📱 Your 10-Digit Mobile Number:
+                      </label>
+                      {hasSavedPhone && (
+                        <button
+                          type="button"
+                          onClick={() => setIsEditingPhone(false)}
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: '#94a3b8',
+                            fontSize: 11,
+                            cursor: 'pointer',
+                            textDecoration: 'underline'
+                          }}
+                        >
+                          Cancel
+                        </button>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      <span style={{ padding: '8px 10px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 6, fontSize: 12, color: '#94a3b8' }}>
+                        +91
+                      </span>
+                      <input
+                        type="tel"
+                        maxLength={10}
+                        value={customerPhone}
+                        onChange={(e) => setCustomerPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                        placeholder="Enter your 10-digit number (e.g. 9876543210)"
+                        style={{
+                          flex: 1,
+                          padding: '8px 12px',
+                          background: 'rgba(0,0,0,0.4)',
+                          border: '1px solid rgba(255,255,255,0.15)',
+                          borderRadius: 6,
+                          color: '#fff',
+                          fontSize: 13,
+                          letterSpacing: '1px',
+                          fontFamily: 'monospace'
+                        }}
+                      />
+                    </div>
+                    <small style={{ fontSize: 10, color: '#94a3b8', marginTop: 4, display: 'block' }}>
+                      Payment OTP and official receipt will be sent directly to this number.
+                    </small>
+                  </div>
+                )}
               </div>
             )}
 
@@ -390,7 +468,7 @@ export const PurchaseTemplateModal: React.FC<PurchaseTemplateModalProps> = ({
                   disabled={isProcessing}
                   style={{ background: 'linear-gradient(135deg, #ef3b2d 0%, #ff8a1f 100%)', color: '#fff', fontWeight: 700, border: 'none', padding: '8px 20px', borderRadius: 6, fontSize: 13, cursor: isProcessing ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', gap: 6, boxShadow: '0 0 20px rgba(239, 59, 45, 0.4)' }}
                 >
-                  {isProcessing ? 'Processing...' : `Pay ₹${price} via Store Gateway`}
+                  {isProcessing ? 'Processing...' : `Buy for ₹${price}`}
                   <ArrowRight size={14} />
                 </button>
               ) : (
