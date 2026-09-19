@@ -40,7 +40,8 @@ import {
   ChevronDown,
   ChevronUp,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  ArrowUpDown
 } from 'lucide-react';
 
 interface AdminTemplateStudioProps {
@@ -74,6 +75,7 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({
   );
   const [canvasTestPresetId, setCanvasTestPresetId] = useState<string | null>(null);
   const [canvasTestValues, setCanvasTestValues] = useState<Record<string, string> | null>(null);
+  const [isArrangingSlots, setIsArrangingSlots] = useState<boolean>(false);
 
   // Rename states
   const [isRenaming, setIsRenaming] = useState(false);
@@ -122,6 +124,7 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({
     setSelectedPresetId(activeTemplate.quickPresets?.[0]?.id || null);
     setCanvasTestPresetId(null);
     setCanvasTestValues(null);
+    setIsArrangingSlots(false);
   }, [activeTemplate.id]);
 
   const handleZoomIn = () => setZoomLevel((prev) => Math.min(3.0, Number((prev + 0.25).toFixed(2))));
@@ -766,6 +769,34 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({
     setSelectedFieldId(newId);
     setSaveToast(`Duplicated ${isImage ? 'Picture Box' : 'Text Slot'}: "${cloned.label}"`);
     setTimeout(() => setSaveToast(null), 2500);
+  };
+
+  // Arrange / Reorder Slots for User Form
+  const handleMoveField = (fieldId: string, direction: 'up' | 'down') => {
+    const list = [...template.fields];
+    const idx = list.findIndex((f) => f.id === fieldId);
+    if (idx < 0) return;
+    const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (targetIdx < 0 || targetIdx >= list.length) return;
+    const temp = list[idx];
+    list[idx] = list[targetIdx];
+    list[targetIdx] = temp;
+    updateTemplate({ fields: list });
+    setSaveToast(`Moved "${temp.label}" to position #${targetIdx + 1} in user form.`);
+    setTimeout(() => setSaveToast(null), 2000);
+  };
+
+  const handleAutoArrangeFieldsTopToBottom = () => {
+    const sorted = [...template.fields].sort((a, b) => {
+      // Primary: Y coordinate (top to bottom). If within 5% vertically, sort by X (left to right)
+      if (Math.abs(a.y - b.y) > 5) {
+        return a.y - b.y;
+      }
+      return a.x - b.x;
+    });
+    updateTemplate({ fields: sorted });
+    setSaveToast('Slots arranged automatically from top to bottom based on board position!');
+    setTimeout(() => setSaveToast(null), 3000);
   };
 
   // Duplicate / Copy Static Stamp / Logo
@@ -1682,6 +1713,161 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({
               </div>
             </div>
 
+            {/* Slot Arrangement & Ordering Controls */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '6px 10px',
+                background: 'rgba(255, 255, 255, 0.03)',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                borderRadius: 6,
+                marginBottom: 10,
+                fontSize: 11
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <ArrowUpDown size={13} style={{ color: '#fb923c' }} />
+                <span style={{ color: '#cbd5e1', fontWeight: 600 }}>User Form Slot Order:</span>
+                <span style={{ color: '#94a3b8', fontSize: 10 }}>
+                  ({template.fields.length} slots)
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <button
+                  type="button"
+                  onClick={handleAutoArrangeFieldsTopToBottom}
+                  style={{
+                    padding: '3px 8px',
+                    fontSize: 10,
+                    fontWeight: 700,
+                    background: 'rgba(234, 88, 12, 0.15)',
+                    border: '1px solid rgba(234, 88, 12, 0.35)',
+                    borderRadius: 4,
+                    color: '#fb923c',
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4
+                  }}
+                  title="Automatically sort slots from top to bottom based on board position (Y & X coordinates) so users fill them in natural order"
+                >
+                  <Sparkles size={11} /> Auto-Arrange (Top &rarr; Down)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsArrangingSlots(!isArrangingSlots)}
+                  style={{
+                    padding: '3px 8px',
+                    fontSize: 10,
+                    fontWeight: 700,
+                    background: isArrangingSlots ? '#ea580c' : 'rgba(255, 255, 255, 0.08)',
+                    border: isArrangingSlots ? '1px solid #ea580c' : '1px solid rgba(255, 255, 255, 0.15)',
+                    borderRadius: 4,
+                    color: '#fff',
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4
+                  }}
+                  title="Open or close full slot reordering panel"
+                >
+                  <ArrowUpDown size={11} /> {isArrangingSlots ? 'Hide Arrange' : 'Arrange Slots'}
+                </button>
+              </div>
+            </div>
+
+            {/* Interactive Slot Order Arrange Panel */}
+            {isArrangingSlots && (
+              <div
+                style={{
+                  padding: 10,
+                  background: 'rgba(15, 23, 42, 0.85)',
+                  border: '1px solid rgba(234, 88, 12, 0.35)',
+                  borderRadius: 8,
+                  marginBottom: 12
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <ArrowUpDown size={12} style={{ color: '#fb923c' }} /> Arrange Order for Users:
+                  </div>
+                  <div style={{ fontSize: 10, color: '#94a3b8' }}>
+                    Click &uarr; and &darr; to set order in user edit form
+                  </div>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 220, overflowY: 'auto' }}>
+                  {template.fields.map((f, i) => (
+                    <div
+                      key={f.id}
+                      onClick={() => setSelectedFieldId(f.id)}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '4px 8px',
+                        background: selectedFieldId === f.id ? 'rgba(234, 88, 12, 0.2)' : 'rgba(0, 0, 0, 0.3)',
+                        border: selectedFieldId === f.id ? '1px solid #ea580c' : '1px solid rgba(255, 255, 255, 0.06)',
+                        borderRadius: 5,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                        <span style={{ fontSize: 10, fontWeight: 800, color: '#fb923c', width: 22 }}>
+                          #{i + 1}
+                        </span>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#f1f5f9', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {f.type === 'image' ? '🖼️ ' : ''}{f.label}
+                        </span>
+                        <span style={{ fontSize: 9, color: '#64748b' }}>
+                          (Y: {f.y}%)
+                        </span>
+                        {f.allowUserEdit === false && (
+                          <span style={{ fontSize: 9, color: '#ff758f', display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+                            <Lock size={9} /> Locked
+                          </span>
+                        )}
+                        {f.hiddenFromUser && (
+                          <span style={{ fontSize: 9, color: '#94a3b8', display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+                            <EyeOff size={9} /> Hidden
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                        <button
+                          type="button"
+                          className="btn-icon"
+                          disabled={i === 0}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleMoveField(f.id, 'up');
+                          }}
+                          style={{ padding: '2px 4px', opacity: i === 0 ? 0.25 : 1 }}
+                          title="Move slot earlier in form (Up)"
+                        >
+                          <ArrowUp size={11} />
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-icon"
+                          disabled={i === template.fields.length - 1}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleMoveField(f.id, 'down');
+                          }}
+                          style={{ padding: '2px 4px', opacity: i === template.fields.length - 1 ? 0.25 : 1 }}
+                          title="Move slot later in form (Down)"
+                        >
+                          <ArrowDown size={11} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="slots-chips-grid">
               {template.fields.map((f, i) => (
                 <div
@@ -1699,25 +1885,65 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({
                     </span>
                     {f.allowUserEdit === false && <Lock size={10} style={{ color: '#ff758f', flexShrink: 0 }} />}
                   </div>
-                  <span
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDuplicateField(f.id);
-                    }}
-                    title={`Duplicate "${f.label}" (Ctrl+D)`}
-                    style={{
-                      padding: '2px 4px',
-                      borderRadius: 3,
-                      opacity: 0.6,
-                      cursor: 'pointer',
-                      display: 'inline-flex',
-                      alignItems: 'center'
-                    }}
-                    onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
-                    onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.6')}
-                  >
-                    <Copy size={11} />
-                  </span>
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+                    <span
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleMoveField(f.id, 'up');
+                      }}
+                      title={`Move "${f.label}" earlier in user form (#${i} of ${template.fields.length})`}
+                      style={{
+                        padding: '1px 3px',
+                        borderRadius: 3,
+                        opacity: i === 0 ? 0.2 : 0.6,
+                        cursor: i === 0 ? 'default' : 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center'
+                      }}
+                      onMouseEnter={(e) => { if (i !== 0) e.currentTarget.style.opacity = '1'; }}
+                      onMouseLeave={(e) => { if (i !== 0) e.currentTarget.style.opacity = '0.6'; }}
+                    >
+                      <ArrowUp size={10} />
+                    </span>
+                    <span
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleMoveField(f.id, 'down');
+                      }}
+                      title={`Move "${f.label}" later in user form (#${i + 2} of ${template.fields.length})`}
+                      style={{
+                        padding: '1px 3px',
+                        borderRadius: 3,
+                        opacity: i === template.fields.length - 1 ? 0.2 : 0.6,
+                        cursor: i === template.fields.length - 1 ? 'default' : 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center'
+                      }}
+                      onMouseEnter={(e) => { if (i !== template.fields.length - 1) e.currentTarget.style.opacity = '1'; }}
+                      onMouseLeave={(e) => { if (i !== template.fields.length - 1) e.currentTarget.style.opacity = '0.6'; }}
+                    >
+                      <ArrowDown size={10} />
+                    </span>
+                    <span
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDuplicateField(f.id);
+                      }}
+                      title={`Duplicate "${f.label}" (Ctrl+D)`}
+                      style={{
+                        padding: '1px 3px',
+                        borderRadius: 3,
+                        opacity: 0.6,
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center'
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
+                      onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.6')}
+                    >
+                      <Copy size={10} />
+                    </span>
+                  </div>
                 </div>
               ))}
             </div>
@@ -1757,6 +1983,70 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({
                       title="Delete this slot"
                     >
                       <Trash2 size={13} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* USER FORM ORDER & ARRANGEMENT */}
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '7px 10px',
+                    margin: '8px 0',
+                    background: 'rgba(234, 88, 12, 0.08)',
+                    border: '1px solid rgba(234, 88, 12, 0.22)',
+                    borderRadius: 6
+                  }}
+                >
+                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ fontSize: 11, color: '#cbd5e1' }}>User Form Order:</span>
+                      <strong style={{ fontSize: 12, color: '#fb923c' }}>
+                        #{template.fields.findIndex((f) => f.id === currentField.id) + 1} of {template.fields.length}
+                      </strong>
+                    </div>
+                    <span style={{ fontSize: 10, color: '#94a3b8' }}>
+                      Position where users see this slot in the editor form
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      disabled={template.fields.findIndex((f) => f.id === currentField.id) === 0}
+                      onClick={() => handleMoveField(currentField.id, 'up')}
+                      style={{
+                        padding: '3px 7px',
+                        fontSize: 10,
+                        fontWeight: 700,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 3,
+                        opacity: template.fields.findIndex((f) => f.id === currentField.id) === 0 ? 0.35 : 1
+                      }}
+                      title="Move earlier in user edit form (Up)"
+                    >
+                      <ArrowUp size={11} /> Move Up
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      disabled={template.fields.findIndex((f) => f.id === currentField.id) === template.fields.length - 1}
+                      onClick={() => handleMoveField(currentField.id, 'down')}
+                      style={{
+                        padding: '3px 7px',
+                        fontSize: 10,
+                        fontWeight: 700,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 3,
+                        opacity: template.fields.findIndex((f) => f.id === currentField.id) === template.fields.length - 1 ? 0.35 : 1
+                      }}
+                      title="Move later in user edit form (Down)"
+                    >
+                      <ArrowDown size={11} /> Move Down
                     </button>
                   </div>
                 </div>
