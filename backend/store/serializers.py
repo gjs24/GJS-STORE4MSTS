@@ -625,6 +625,7 @@ class BoardTemplateSerializer(serializers.ModelSerializer):
             "fields",
             "fixed_graphics",
             "variations",
+            "quick_presets",
             "can_customize",
             "is_unlocked",
             "unlocked_via_asset",

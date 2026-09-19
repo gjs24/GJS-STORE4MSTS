@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { BoardTemplate, EditableField, BoardCategory, FixedGraphicElement, BoardVariation } from '@/lib/board-studio/types';
+import { BoardTemplate, EditableField, BoardCategory, FixedGraphicElement, BoardVariation, QuickPreset } from '@/lib/board-studio/types';
 import { BoardCanvas } from './board-canvas';
 import { CustomFontModal } from './custom-font-modal';
 import { fontManager } from '@/lib/board-studio/font-manager';
@@ -34,7 +34,13 @@ import {
   ZoomIn,
   ZoomOut,
   Maximize2,
-  RefreshCw
+  RefreshCw,
+  Zap,
+  Play,
+  ChevronDown,
+  ChevronUp,
+  ArrowUp,
+  ArrowDown
 } from 'lucide-react';
 
 interface AdminTemplateStudioProps {
@@ -59,8 +65,15 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({
   const [selectedFieldId, setSelectedFieldId] = useState<string | null>(
     activeTemplate.fields[0]?.id || null
   );
-  const [activeTab, setActiveTab] = useState<'details' | 'fields' | 'board' | 'fixed' | 'variations'>('details');
+  const [activeTab, setActiveTab] = useState<'details' | 'fields' | 'presets' | 'board' | 'fixed' | 'variations'>('details');
   const [saveToast, setSaveToast] = useState<string | null>(null);
+
+  // Quick Presets states
+  const [selectedPresetId, setSelectedPresetId] = useState<string | null>(
+    activeTemplate.quickPresets?.[0]?.id || null
+  );
+  const [canvasTestPresetId, setCanvasTestPresetId] = useState<string | null>(null);
+  const [canvasTestValues, setCanvasTestValues] = useState<Record<string, string> | null>(null);
 
   // Rename states
   const [isRenaming, setIsRenaming] = useState(false);
@@ -106,6 +119,9 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({
     if (activeTemplate.fixedGraphics.length > 0) {
       setSelectedStampId(activeTemplate.fixedGraphics[0].id);
     }
+    setSelectedPresetId(activeTemplate.quickPresets?.[0]?.id || null);
+    setCanvasTestPresetId(null);
+    setCanvasTestValues(null);
   }, [activeTemplate.id]);
 
   const handleZoomIn = () => setZoomLevel((prev) => Math.min(3.0, Number((prev + 0.25).toFixed(2))));
@@ -789,10 +805,136 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({
   const currentField = template.fields.find((f) => f.id === selectedFieldId);
 
   // Preview values
-  const previewValues = template.fields.reduce<Record<string, string>>((acc, f) => {
+  const defaultPreviewValues = template.fields.reduce<Record<string, string>>((acc, f) => {
     acc[f.id] = f.defaultValue || f.imageUrl || '';
     return acc;
   }, {});
+
+  const effectivePreviewValues = canvasTestValues
+    ? { ...defaultPreviewValues, ...canvasTestValues }
+    : defaultPreviewValues;
+
+  // Quick Preset Handlers
+  const handleCaptureCanvasAsNewPreset = () => {
+    const currentValues: Record<string, string> = {};
+    template.fields.forEach((f) => {
+      currentValues[f.id] = effectivePreviewValues[f.id] || f.defaultValue || '';
+    });
+    const defaultName = `Preset ${(template.quickPresets || []).length + 1}`;
+    const name = window.prompt('Enter a name for this Quick Preset (e.g. "Tamil Nadu Exp" or "Karnataka Express"):', defaultName);
+    if (!name || !name.trim()) return;
+
+    const newPresetId = `preset-${Date.now()}`;
+    const newPreset: QuickPreset = {
+      id: newPresetId,
+      name: name.trim(),
+      description: '',
+      values: currentValues
+    };
+    const updated = [...(template.quickPresets || []), newPreset];
+    updateTemplate({ quickPresets: updated });
+    setSelectedPresetId(newPresetId);
+    setSaveToast(`Captured current canvas text into "${newPreset.name}"!`);
+    setTimeout(() => setSaveToast(null), 3000);
+  };
+
+  const handleAddPreset = () => {
+    const defaultVals: Record<string, string> = {};
+    template.fields.forEach((f) => {
+      defaultVals[f.id] = f.defaultValue || '';
+    });
+    const newPresetId = `preset-${Date.now()}`;
+    const newPreset: QuickPreset = {
+      id: newPresetId,
+      name: `Preset ${(template.quickPresets || []).length + 1}`,
+      description: '',
+      values: defaultVals
+    };
+    const updated = [...(template.quickPresets || []), newPreset];
+    updateTemplate({ quickPresets: updated });
+    setSelectedPresetId(newPresetId);
+  };
+
+  const handleTestPresetOnCanvas = (preset: QuickPreset) => {
+    setCanvasTestPresetId(preset.id);
+    setCanvasTestValues(preset.values);
+    setSaveToast(`Previewing "${preset.name}" live on canvas!`);
+    setTimeout(() => setSaveToast(null), 2500);
+  };
+
+  const handleOverwritePresetWithCanvas = (presetId: string) => {
+    const currentValues: Record<string, string> = {};
+    template.fields.forEach((f) => {
+      currentValues[f.id] = effectivePreviewValues[f.id] || f.defaultValue || '';
+    });
+    const updated = (template.quickPresets || []).map((p) =>
+      p.id === presetId ? { ...p, values: currentValues } : p
+    );
+    updateTemplate({ quickPresets: updated });
+    if (canvasTestPresetId === presetId) {
+      setCanvasTestValues(currentValues);
+    }
+    setSaveToast('Updated preset with current canvas text!');
+    setTimeout(() => setSaveToast(null), 3000);
+  };
+
+  const handleUpdatePreset = (presetId: string, updates: Partial<QuickPreset>) => {
+    const updated = (template.quickPresets || []).map((p) =>
+      p.id === presetId ? { ...p, ...updates } : p
+    );
+    updateTemplate({ quickPresets: updated });
+    if (canvasTestPresetId === presetId && updates.values) {
+      setCanvasTestValues(updates.values);
+    }
+  };
+
+  const handleUpdatePresetFieldValue = (presetId: string, fieldId: string, value: string) => {
+    const target = (template.quickPresets || []).find((p) => p.id === presetId);
+    if (!target) return;
+    const updatedValues = { ...target.values, [fieldId]: value };
+    handleUpdatePreset(presetId, { values: updatedValues });
+  };
+
+  const handleDuplicatePreset = (presetId: string) => {
+    const target = (template.quickPresets || []).find((p) => p.id === presetId);
+    if (!target) return;
+    const newPresetId = `preset-${Date.now()}`;
+    const duplicated: QuickPreset = {
+      ...target,
+      id: newPresetId,
+      name: `${target.name} (Copy)`,
+      values: { ...target.values }
+    };
+    const updated = [...(template.quickPresets || []), duplicated];
+    updateTemplate({ quickPresets: updated });
+    setSelectedPresetId(newPresetId);
+  };
+
+  const handleDeletePreset = (presetId: string) => {
+    const target = (template.quickPresets || []).find((p) => p.id === presetId);
+    if (!confirm(`Are you sure you want to delete preset "${target?.name || presetId}"?`)) return;
+    const updated = (template.quickPresets || []).filter((p) => p.id !== presetId);
+    updateTemplate({ quickPresets: updated });
+    if (selectedPresetId === presetId) {
+      setSelectedPresetId(updated[0]?.id || null);
+    }
+    if (canvasTestPresetId === presetId) {
+      setCanvasTestPresetId(null);
+      setCanvasTestValues(null);
+    }
+  };
+
+  const handleMovePreset = (presetId: string, direction: 'up' | 'down') => {
+    const list = [...(template.quickPresets || [])];
+    const idx = list.findIndex((p) => p.id === presetId);
+    if (idx < 0) return;
+    const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (targetIdx < 0 || targetIdx >= list.length) return;
+    const temp = list[idx];
+    list[idx] = list[targetIdx];
+    list[targetIdx] = temp;
+    updateTemplate({ quickPresets: list });
+  };
 
   const fontOptions = fontManager.getAllFontOptions();
 
@@ -1044,6 +1186,13 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({
             onClick={() => setActiveTab('fields')}
           >
             <Type size={13} /> Slots ({template.fields.length})
+          </button>
+          <button
+            type="button"
+            className={`admin-tab ${activeTab === 'presets' ? 'active' : ''}`}
+            onClick={() => setActiveTab('presets')}
+          >
+            <Zap size={13} /> Quick Presets ({(template.quickPresets || []).length})
           </button>
           <button
             type="button"
@@ -1417,6 +1566,67 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({
                   <CheckCircle size={12} /> Server Managed (Render Env)
                 </span>
               </div>
+            </div>
+
+            {/* Quick Presets Shortcut */}
+            <div
+              style={{
+                marginTop: 14,
+                padding: '12px 14px',
+                background: 'rgba(234, 88, 12, 0.08)',
+                border: '1px solid rgba(234, 88, 12, 0.25)',
+                borderRadius: 8
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Zap size={15} style={{ color: '#fb923c' }} />
+                  <strong style={{ fontSize: '0.82rem', color: '#fed7aa' }}>
+                    Quick Presets ({(template.quickPresets || []).length})
+                  </strong>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('presets')}
+                  style={{
+                    background: '#ea580c',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: 4,
+                    padding: '4px 9px',
+                    fontSize: '0.72rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4
+                  }}
+                >
+                  Edit Presets &rarr;
+                </button>
+              </div>
+              <p style={{ margin: 0, fontSize: '0.72rem', color: '#94a3b8', lineHeight: 1.4 }}>
+                1-click sample trains (e.g. Tamil Nadu Exp, Karnataka Express) for users in the editor.
+              </p>
+              {(template.quickPresets || []).length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 8 }}>
+                  {template.quickPresets!.map((p) => (
+                    <span
+                      key={p.id}
+                      style={{
+                        fontSize: '0.7rem',
+                        padding: '2px 6px',
+                        background: 'rgba(255,255,255,0.06)',
+                        border: '1px solid rgba(255,255,255,0.12)',
+                        borderRadius: 4,
+                        color: '#f1f5f9'
+                      }}
+                    >
+                      {p.name}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Danger Zone: Delete Template Option */}
@@ -2009,6 +2219,301 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({
               </div>
             ) : (
               <p className="no-selection-hint">Select or add a slot above to inspect and adjust.</p>
+            )}
+          </div>
+        )}
+
+        {/* TAB 1.5: QUICK PRESETS (TAMIL NADU EXP, KARNATAKA EXP, ETC.) */}
+        {activeTab === 'presets' && (
+          <div className="tab-content">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+              <span className="sub-title">Quick Presets & Sample Trains</span>
+              <span style={{ fontSize: 11, color: '#94a3b8' }}>
+                {(template.quickPresets || []).length} presets
+              </span>
+            </div>
+            <p className="field-help">
+              Define 1-click sample trains (such as <strong>Tamil Nadu Exp</strong>, <strong>Karnataka Express</strong>) with pre-filled train numbers, English/Hindi names, and routes. Users in the editor can pick any preset to populate all board text in 1 click.
+            </p>
+
+            {/* Quick Presets Action Buttons */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, margin: '12px 0 16px 0' }}>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={handleCaptureCanvasAsNewPreset}
+                style={{ background: 'linear-gradient(135deg, #ea580c 0%, #f97316 100%)', justifyContent: 'center' }}
+                title="Capture all text and values currently displayed on the canvas into a new preset"
+              >
+                <Sparkles size={14} /> 📸 Capture Current Canvas Values as Preset
+              </button>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={handleAddPreset}
+                style={{ justifyContent: 'center' }}
+                title="Add a new blank preset"
+              >
+                <Plus size={14} /> + Add New Quick Preset
+              </button>
+            </div>
+
+            {/* Presets List */}
+            {(!template.quickPresets || template.quickPresets.length === 0) ? (
+              <div style={{ padding: 18, background: 'rgba(0,0,0,0.3)', border: '1px dashed rgba(255,255,255,0.15)', borderRadius: 8, textAlign: 'center' }}>
+                <Zap size={26} style={{ color: '#fb923c', margin: '0 auto 8px auto', display: 'block' }} />
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#f1f5f9', marginBottom: 4 }}>
+                  No Quick Presets Configured Yet
+                </div>
+                <p style={{ fontSize: 11, color: '#94a3b8', margin: '0 0 12px 0', lineHeight: 1.4 }}>
+                  Click &quot;Capture Current Canvas Values as Preset&quot; to save current canvas text, or add a standard preset like Tamil Nadu Exp.
+                </p>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => {
+                    const samplePreset: QuickPreset = {
+                      id: `preset-sample-${Date.now()}`,
+                      name: 'Tamil Nadu Exp',
+                      description: '12621 / 12622 MAS < > NDLS Superfast Express',
+                      values: {
+                        train_number: '12621 / 12622',
+                        train_name_hi: 'तमिलनाडु एक्सप्रेस',
+                        train_name_en: 'TAMIL NADU EXPRESS',
+                        route_endpoints: 'चेन्नै सेंट्रल  MGR CHENNAI CTL < > NEW DELHI  नई दिल्ली',
+                        train_no_up: '12621',
+                        train_no_dn: '12622',
+                        route_codes: 'MAS < > NDLS',
+                        train_name_top: 'TAMIL NADU EXPRESS',
+                        train_name_bottom: 'तमिलनाडु एक्सप्रेस',
+                        led_row_1: 'TAMIL NADU EXP',
+                        led_row_2: 'MAS < > NDLS',
+                        led_row_3: 'SUPERFAST EXPRESS',
+                        led_row_4: 'COACH B1'
+                      }
+                    };
+                    const updated = [...(template.quickPresets || []), samplePreset];
+                    updateTemplate({ quickPresets: updated });
+                    setSelectedPresetId(samplePreset.id);
+                  }}
+                  style={{ margin: '0 auto', fontSize: 11 }}
+                >
+                  ⚡ Add &quot;Tamil Nadu Exp&quot; Preset
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {template.quickPresets.map((preset, idx) => {
+                  const isSelected = selectedPresetId === preset.id;
+                  const isTestingOnCanvas = canvasTestPresetId === preset.id;
+
+                  return (
+                    <div
+                      key={preset.id}
+                      style={{
+                        padding: 12,
+                        borderRadius: 8,
+                        background: isTestingOnCanvas
+                          ? 'rgba(234, 88, 12, 0.14)'
+                          : isSelected
+                          ? 'rgba(30, 41, 59, 0.85)'
+                          : 'rgba(15, 23, 42, 0.6)',
+                        border: isTestingOnCanvas
+                          ? '1px solid #ea580c'
+                          : isSelected
+                          ? '1px solid rgba(255,255,255,0.25)'
+                          : '1px solid rgba(255,255,255,0.08)'
+                      }}
+                    >
+                      {/* Preset Card Header */}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                        <div
+                          style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', flex: 1 }}
+                          onClick={() => setSelectedPresetId(isSelected ? null : preset.id)}
+                        >
+                          <span style={{ fontSize: 11, fontWeight: 800, color: '#fb923c' }}>#{idx + 1}</span>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: '#f8fafc' }}>{preset.name}</span>
+                          {isTestingOnCanvas && (
+                            <span
+                              style={{
+                                fontSize: 9,
+                                fontWeight: 800,
+                                background: '#ea580c',
+                                color: '#fff',
+                                padding: '1px 5px',
+                                borderRadius: 3,
+                                letterSpacing: 0.5
+                              }}
+                            >
+                              ON CANVAS
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Quick Action Buttons */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                          <button
+                            type="button"
+                            className="btn-icon"
+                            onClick={() => handleMovePreset(preset.id, 'up')}
+                            disabled={idx === 0}
+                            title="Move preset up"
+                            style={{ opacity: idx === 0 ? 0.3 : 1 }}
+                          >
+                            <ArrowUp size={12} />
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-icon"
+                            onClick={() => handleMovePreset(preset.id, 'down')}
+                            disabled={idx === template.quickPresets!.length - 1}
+                            title="Move preset down"
+                            style={{ opacity: idx === template.quickPresets!.length - 1 ? 0.3 : 1 }}
+                          >
+                            <ArrowDown size={12} />
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-icon"
+                            onClick={() => handleDuplicatePreset(preset.id)}
+                            title="Duplicate preset"
+                          >
+                            <Copy size={12} />
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-icon danger"
+                            onClick={() => handleDeletePreset(preset.id)}
+                            title="Delete preset"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Top Action Bar: Test on Canvas & Snapshot */}
+                      <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+                        <button
+                          type="button"
+                          className="btn-secondary"
+                          onClick={() => handleTestPresetOnCanvas(preset)}
+                          style={{
+                            flex: 1,
+                            fontSize: 11,
+                            padding: '4px 8px',
+                            background: isTestingOnCanvas ? '#ea580c' : 'rgba(255,255,255,0.06)',
+                            color: '#fff',
+                            borderColor: isTestingOnCanvas ? '#ea580c' : 'rgba(255,255,255,0.15)',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 4
+                          }}
+                          title="Load this preset's values into the canvas preview"
+                        >
+                          <Play size={11} fill={isTestingOnCanvas ? '#fff' : 'none'} />
+                          {isTestingOnCanvas ? 'Viewing on Canvas' : 'Test on Canvas'}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-secondary"
+                          onClick={() => handleOverwritePresetWithCanvas(preset.id)}
+                          style={{
+                            fontSize: 11,
+                            padding: '4px 8px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 4
+                          }}
+                          title="Overwrite this preset's values with whatever is currently displayed on the canvas"
+                        >
+                          <Sparkles size={11} /> Snapshot Canvas
+                        </button>
+                      </div>
+
+                      {/* Preset Properties Editor (Always editable) */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 10 }}>
+                        <div className="prop-row">
+                          <label style={{ fontSize: 11 }}>Preset Name / Title:</label>
+                          <input
+                            type="text"
+                            value={preset.name}
+                            onChange={(e) => handleUpdatePreset(preset.id, { name: e.target.value })}
+                            placeholder="e.g. Tamil Nadu Exp"
+                            style={{ fontSize: 12, fontWeight: 700 }}
+                          />
+                        </div>
+
+                        <div className="prop-row">
+                          <label style={{ fontSize: 11 }}>Description / Route Subtitle:</label>
+                          <input
+                            type="text"
+                            value={preset.description || ''}
+                            onChange={(e) => handleUpdatePreset(preset.id, { description: e.target.value })}
+                            placeholder="e.g. 12621 / 12622 MAS < > NDLS Superfast Express"
+                            style={{ fontSize: 11 }}
+                          />
+                        </div>
+
+                        {/* Slot Values Section */}
+                        <div style={{ marginTop: 4 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                            <span style={{ fontSize: 10, fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                              Preset Slot Text ({template.fields.length} Slots)
+                            </span>
+                            <span style={{ fontSize: 10, color: '#64748b' }}>
+                              Values applied when user clicks preset
+                            </span>
+                          </div>
+
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            {template.fields.map((field) => {
+                              const val = preset.values?.[field.id] ?? '';
+                              return (
+                                <div
+                                  key={field.id}
+                                  style={{
+                                    padding: '6px 8px',
+                                    background: 'rgba(0,0,0,0.25)',
+                                    borderRadius: 6,
+                                    border: '1px solid rgba(255,255,255,0.05)'
+                                  }}
+                                >
+                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 3 }}>
+                                    <span style={{ fontSize: 10, fontWeight: 700, color: '#cbd5e1' }}>
+                                      {field.label}
+                                    </span>
+                                    <span style={{ fontSize: 9, color: '#64748b', fontFamily: 'monospace' }}>
+                                      {field.id}
+                                    </span>
+                                  </div>
+                                  <textarea
+                                    value={val}
+                                    onChange={(e) => handleUpdatePresetFieldValue(preset.id, field.id, e.target.value)}
+                                    placeholder={field.defaultValue || `Default value for ${field.label}`}
+                                    rows={val.includes('\n') ? 2 : 1}
+                                    style={{
+                                      width: '100%',
+                                      padding: '4px 6px',
+                                      fontSize: 11,
+                                      background: 'rgba(0,0,0,0.35)',
+                                      border: '1px solid rgba(255,255,255,0.12)',
+                                      borderRadius: 4,
+                                      color: '#f8fafc',
+                                      resize: 'vertical',
+                                      fontFamily: field.isDotMatrix ? "'VT323', monospace" : 'inherit'
+                                    }}
+                                  />
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </div>
         )}
@@ -3284,9 +3789,54 @@ export const AdminTemplateStudio: React.FC<AdminTemplateStudioProps> = ({
             </div>
           )}
 
+          {canvasTestPresetId && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '7px 14px',
+                marginBottom: 8,
+                background: 'linear-gradient(90deg, rgba(234, 88, 12, 0.25) 0%, rgba(245, 158, 11, 0.18) 100%)',
+                border: '1px solid rgba(245, 158, 11, 0.4)',
+                borderRadius: 8,
+                fontSize: 12,
+                color: '#fef3c7'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Zap size={15} style={{ color: '#f59e0b' }} />
+                <span>
+                  Testing Quick Preset on Canvas: <strong>{template.quickPresets?.find((p) => p.id === canvasTestPresetId)?.name || 'Custom Preset'}</strong>
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setCanvasTestPresetId(null);
+                  setCanvasTestValues(null);
+                }}
+                style={{
+                  background: 'rgba(0, 0, 0, 0.45)',
+                  border: '1px solid rgba(255, 255, 255, 0.2)',
+                  color: '#fff',
+                  borderRadius: 4,
+                  padding: '3px 8px',
+                  fontSize: 11,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4
+                }}
+              >
+                <X size={12} /> Reset Canvas Text
+              </button>
+            </div>
+          )}
+
           <BoardCanvas
             template={template}
-            values={previewValues}
+            values={effectivePreviewValues}
             isAdminMode={true}
             selectedFieldId={selectedFieldId}
             onSelectField={(id) => setSelectedFieldId(id)}

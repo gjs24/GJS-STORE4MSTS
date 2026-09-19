@@ -132,6 +132,44 @@ export const DEFAULT_TEMPLATES: BoardTemplate[] = [
         helpText: 'Empty board slot for reverse or alternate coach display'
       }
     ],
+    quickPresets: [
+      {
+        id: 'preset-amrit-delhi',
+        name: 'Darbhanga - Delhi',
+        description: '15557 / 15558 Amrit Bharat Express DBG < > ANVT',
+        values: {
+          train_no_up: '15557',
+          train_no_dn: '15558',
+          route_codes: 'DBG < > ANVT',
+          train_name_top: 'AMRIT BHARAT EXPRESS',
+          train_name_bottom: 'अमृत भारत एक्सप्रेस'
+        }
+      },
+      {
+        id: 'preset-amrit-howrah',
+        name: 'Howrah - Balurghat',
+        description: '13063 / 13064 Amrit Bharat Express HWH < > BLGT',
+        values: {
+          train_no_up: '13063',
+          train_no_dn: '13064',
+          route_codes: 'HWH < > BLGT',
+          train_name_top: 'AMRIT BHARAT EXPRESS',
+          train_name_bottom: 'अमृत भारत एक्सप्रेस'
+        }
+      },
+      {
+        id: 'preset-amrit-malda',
+        name: 'Malda Town - SMVT',
+        description: '13433 / 13434 Amrit Bharat Express MLDT < > SMVT',
+        values: {
+          train_no_up: '13433',
+          train_no_dn: '13434',
+          route_codes: 'MLDT < > SMVT',
+          train_name_top: 'AMRIT BHARAT EXPRESS',
+          train_name_bottom: 'अमृत भारत एक्सप्रेस'
+        }
+      }
+    ],
     published: true,
     createdAt: '2026-09-14T00:00:00.000Z',
     updatedAt: '2026-09-14T00:00:00.000Z',
@@ -241,6 +279,41 @@ export const DEFAULT_TEMPLATES: BoardTemplate[] = [
         glowColor: '#fb8500',
         glowRadius: 14,
         isDotMatrix: true
+      }
+    ],
+    quickPresets: [
+      {
+        id: 'preset-gjs-karnataka',
+        name: 'Karnataka Express',
+        description: '12627 / 12628 SBC < > NDLS Superfast Express',
+        values: {
+          led_row_1: 'KARNATAKA EXP',
+          led_row_2: 'SBC < > NDLS',
+          led_row_3: 'SUPERFAST EXPRESS',
+          led_row_4: 'VIA PUNE - MANMAD'
+        }
+      },
+      {
+        id: 'preset-gjs-tamil-nadu',
+        name: 'Tamil Nadu Exp',
+        description: '12621 / 12622 MAS < > NDLS Superfast Express',
+        values: {
+          led_row_1: 'TAMIL NADU EXP',
+          led_row_2: 'MAS < > NDLS',
+          led_row_3: 'SUPERFAST EXPRESS',
+          led_row_4: 'VIA VIJAYAWADA - NAGPUR'
+        }
+      },
+      {
+        id: 'preset-gjs-amrit-bharat',
+        name: 'Amrit Bharat Exp',
+        description: '15557 / 15558 DBG < > ANVT Express',
+        values: {
+          led_row_1: 'AMRIT BHARAT',
+          led_row_2: 'DBG < > ANVT',
+          led_row_3: 'SUPERFAST EXPRESS',
+          led_row_4: 'INDIAN RAILWAYS'
+        }
       }
     ],
     published: true,
@@ -726,6 +799,41 @@ export const DEFAULT_TEMPLATES: BoardTemplate[] = [
         letterSpacing: 1
       }
     ],
+    quickPresets: [
+      {
+        id: 'preset-coach-tamil-nadu',
+        name: 'Tamil Nadu Exp',
+        description: '12621 / 12622 MAS < > NDLS Superfast Express',
+        values: {
+          train_number: '12621 / 12622',
+          train_name_hi: 'तमिलनाडु एक्सप्रेस',
+          train_name_en: 'TAMIL NADU EXPRESS',
+          route_endpoints: 'चेन्नै सेंट्रल  MGR CHENNAI CTL < > NEW DELHI  नई दिल्ली'
+        }
+      },
+      {
+        id: 'preset-coach-karnataka',
+        name: 'Karnataka Express',
+        description: '12627 / 12628 SBC < > NDLS Superfast Express',
+        values: {
+          train_number: '12627 / 12628',
+          train_name_hi: 'कर्नाटक एक्सप्रेस',
+          train_name_en: 'KARNATAKA EXPRESS',
+          route_endpoints: 'केएसआर बेंगलूरु  KSR BENGALURU < > NEW DELHI  नई दिल्ली'
+        }
+      },
+      {
+        id: 'preset-coach-grand-trunk',
+        name: 'Grand Trunk Express',
+        description: '12615 / 12616 MAS < > NDLS Superfast Express',
+        values: {
+          train_number: '12615 / 12616',
+          train_name_hi: 'ग्रैंड ट्रंक एक्सप्रेस',
+          train_name_en: 'GRAND TRUNK EXPRESS',
+          route_endpoints: 'चेन्नै सेंट्रल  MAS < > NEW DELHI  नई दिल्ली'
+        }
+      }
+    ],
     published: true,
     isPaid: true,
     price: 149,
@@ -968,6 +1076,41 @@ export const DEFAULT_TEMPLATES: BoardTemplate[] = [
         align: 'center',
         textTransform: 'uppercase',
         letterSpacing: 1
+      }
+    ],
+    quickPresets: [
+      {
+        id: 'preset-rajdhani-mumbai',
+        name: 'Mumbai Rajdhani',
+        description: '12951 / 12952 MMCT < > NDLS Rajdhani Express',
+        values: {
+          train_number: '12951 / 12952',
+          train_name_hi: 'मुम्बई राजधानी एक्सप्रेस',
+          train_name_en: 'MUMBAI RAJDHANI EXPRESS',
+          route_endpoints: 'VIA: SURAT · VADODARA · RATLAM · KOTA · MATHURA'
+        }
+      },
+      {
+        id: 'preset-rajdhani-bengaluru',
+        name: 'Bengaluru Rajdhani',
+        description: '22691 / 22692 SBC < > H. Nizamuddin Rajdhani Express',
+        values: {
+          train_number: '22691 / 22692',
+          train_name_hi: 'बेंगलूरु राजधानी एक्सप्रेस',
+          train_name_en: 'BENGALURU RAJDHANI EXPRESS',
+          route_endpoints: 'VIA: DHONE · KACHEGUDA · NAGPUR · BHOPAL · AGRA CANTT'
+        }
+      },
+      {
+        id: 'preset-rajdhani-chennai',
+        name: 'Chennai Rajdhani',
+        description: '12433 / 12434 MAS < > H. Nizamuddin Rajdhani Express',
+        values: {
+          train_number: '12433 / 12434',
+          train_name_hi: 'चेन्नै राजधानी एक्सप्रेस',
+          train_name_en: 'CHENNAI RAJDHANI EXPRESS',
+          route_endpoints: 'VIA: VIJAYAWADA · WARANGAL · BALHARSHAH · NAGPUR · BHOPAL · AGRA'
+        }
       }
     ],
     published: true,

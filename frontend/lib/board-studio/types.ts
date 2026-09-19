@@ -117,6 +117,14 @@ export interface BoardTemplate {
   unlockedViaAsset?: { id: number; title: string; slug: string } | null;
   bundledWithAssets?: { id: number; title: string; slug: string; price: string }[];
   variations?: BoardVariation[];
+  quickPresets?: QuickPreset[];
+}
+
+export interface QuickPreset {
+  id: string;
+  name: string;
+  description?: string;
+  values: Record<string, string>;
 }
 
 export interface BoardVariation {

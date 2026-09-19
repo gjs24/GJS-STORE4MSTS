@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { BoardTemplate, UserBoardValues } from '@/lib/board-studio/types';
+import { BoardTemplate, UserBoardValues, QuickPreset } from '@/lib/board-studio/types';
 import { BoardCanvas } from './board-canvas';
 import { exportBoardToPNG, exportBoardToDDS, printBoard } from '@/lib/board-studio/export-utils';
 import { storageService } from '@/lib/board-studio/storage-service';
@@ -290,39 +290,140 @@ export const UserBoardEditor: React.FC<UserBoardEditorProps> = ({
     setTimeout(() => setSavedStatus(null), 3000);
   };
 
-  // Quick presets
-  const applyPreset = (presetName: string) => {
-    if (activeTemplate.id.includes('amrit-bharat')) {
-      if (presetName === 'HOWRAH EXPRESS') {
-        setValues((prev) => ({
-          ...prev,
-          train_no_up: '13063',
-          train_no_dn: '13064',
-          route_codes: 'HWH < > BLGT',
-          train_name_top: 'HOWRAH AMRIT BHARAT EXP',
-          train_name_bottom: 'BALURGHAT ➔ HOWRAH'
-        }));
-      } else if (presetName === 'DELHI EXPRESS') {
-        setValues((prev) => ({
-          ...prev,
-          train_no_up: '15557',
-          train_no_dn: '15558',
-          route_codes: 'DBG < > ANVT',
-          train_name_top: 'AMRIT BHARAT EXPRESS',
-          train_name_bottom: 'DARBHANGA ➔ ANAND VIHAR'
-        }));
-      }
-    } else if (activeTemplate.id.includes('gjs-productions')) {
-      if (presetName === 'KARNATAKA') {
-        setValues((prev) => ({
-          ...prev,
-          led_row_1: 'KARNATAKA EXP',
-          led_row_2: 'SBC < > NDLS',
-          led_row_3: 'SUPERFAST EXPRESS',
-          led_row_4: 'COACH S4'
-        }));
-      }
+  // Dynamic Quick Presets: from effectiveTemplate / activeTemplate, or fallback defaults
+  const displayedPresets: QuickPreset[] = React.useMemo(() => {
+    if (effectiveTemplate.quickPresets && effectiveTemplate.quickPresets.length > 0) {
+      return effectiveTemplate.quickPresets;
     }
+    if (activeTemplate.quickPresets && activeTemplate.quickPresets.length > 0) {
+      return activeTemplate.quickPresets;
+    }
+    // Fallback defaults based on fields present in the template
+    const fieldIds = new Set(effectiveTemplate.fields.map((f) => f.id));
+    if (fieldIds.has('train_name_hi') || fieldIds.has('train_name_en') || fieldIds.has('train_number')) {
+      return [
+        {
+          id: 'fb-tamil-nadu',
+          name: 'Tamil Nadu Exp',
+          description: '12621 / 12622 MAS < > NDLS Superfast Express',
+          values: {
+            train_number: '12621 / 12622',
+            train_name_hi: 'तमिलनाडु एक्सप्रेस',
+            train_name_en: 'TAMIL NADU EXPRESS',
+            route_endpoints: 'चेन्नै सेंट्रल  MGR CHENNAI CTL < > NEW DELHI  नई दिल्ली'
+          }
+        },
+        {
+          id: 'fb-karnataka',
+          name: 'Karnataka Express',
+          description: '12627 / 12628 SBC < > NDLS Superfast Express',
+          values: {
+            train_number: '12627 / 12628',
+            train_name_hi: 'कर्नाटक एक्सप्रेस',
+            train_name_en: 'KARNATAKA EXPRESS',
+            route_endpoints: 'केएसआर बेंगलूरु  KSR BENGALURU < > NEW DELHI  नई दिल्ली'
+          }
+        },
+        {
+          id: 'fb-grand-trunk',
+          name: 'Grand Trunk Express',
+          description: '12615 / 12616 MAS < > NDLS Superfast Express',
+          values: {
+            train_number: '12615 / 12616',
+            train_name_hi: 'ग्रैंड ट्रंक एक्सप्रेस',
+            train_name_en: 'GRAND TRUNK EXPRESS',
+            route_endpoints: 'चेन्नै सेंट्रल  MAS < > NEW DELHI  नई दिल्ली'
+          }
+        }
+      ];
+    }
+    if (fieldIds.has('train_no_up') || fieldIds.has('train_name_top')) {
+      return [
+        {
+          id: 'fb-amrit-delhi',
+          name: 'Darbhanga - Delhi',
+          description: '15557 / 15558 Amrit Bharat DBG < > ANVT',
+          values: {
+            train_no_up: '15557',
+            train_no_dn: '15558',
+            route_codes: 'DBG < > ANVT',
+            train_name_top: 'AMRIT BHARAT EXPRESS',
+            train_name_bottom: 'DARBHANGA ➔ ANAND VIHAR'
+          }
+        },
+        {
+          id: 'fb-amrit-howrah',
+          name: 'Howrah - Balurghat',
+          description: '13063 / 13064 Amrit Bharat HWH < > BLGT',
+          values: {
+            train_no_up: '13063',
+            train_no_dn: '13064',
+            route_codes: 'HWH < > BLGT',
+            train_name_top: 'HOWRAH AMRIT BHARAT EXP',
+            train_name_bottom: 'BALURGHAT ➔ HOWRAH'
+          }
+        },
+        {
+          id: 'fb-amrit-malda',
+          name: 'Malda Town - SMVT',
+          description: '13433 / 13434 Amrit Bharat MLDT < > SMVT',
+          values: {
+            train_no_up: '13433',
+            train_no_dn: '13434',
+            route_codes: 'MLDT < > SMVT',
+            train_name_top: 'AMRIT BHARAT EXPRESS',
+            train_name_bottom: 'अमृत भारत एक्सप्रेस'
+          }
+        }
+      ];
+    }
+    if (fieldIds.has('led_row_1')) {
+      return [
+        {
+          id: 'fb-gjs-karnataka',
+          name: 'Karnataka Express',
+          description: '12627 / 12628 SBC < > NDLS',
+          values: {
+            led_row_1: 'KARNATAKA EXP',
+            led_row_2: 'SBC < > NDLS',
+            led_row_3: 'SUPERFAST EXPRESS',
+            led_row_4: 'COACH S4'
+          }
+        },
+        {
+          id: 'fb-gjs-tamil-nadu',
+          name: 'Tamil Nadu Exp',
+          description: '12621 / 12622 MAS < > NDLS',
+          values: {
+            led_row_1: 'TAMIL NADU EXP',
+            led_row_2: 'MAS < > NDLS',
+            led_row_3: 'SUPERFAST EXPRESS',
+            led_row_4: 'COACH B1'
+          }
+        },
+        {
+          id: 'fb-gjs-amrit',
+          name: 'Amrit Bharat',
+          description: 'DBG < > ANVT',
+          values: {
+            led_row_1: 'AMRIT BHARAT',
+            led_row_2: 'DBG < > ANVT',
+            led_row_3: 'SUPERFAST EXPRESS',
+            led_row_4: 'INDIAN RAILWAYS'
+          }
+        }
+      ];
+    }
+    return [];
+  }, [effectiveTemplate, activeTemplate]);
+
+  // Quick presets applicator
+  const applyPreset = (preset: QuickPreset) => {
+    if (!preset || !preset.values) return;
+    setValues((prev) => ({
+      ...prev,
+      ...preset.values
+    }));
   };
 
   const filteredTemplates = activeCategory === 'All'
@@ -712,31 +813,42 @@ export const UserBoardEditor: React.FC<UserBoardEditorProps> = ({
         </div>
 
         {/* Quick Presets */}
-        <div className="presets-row">
-          <span className="presets-title">
-            <Sparkles size={12} /> Quick Presets:
-          </span>
-          <div className="preset-buttons">
-            {activeTemplate.id.includes('amrit-bharat') ? (
-              <>
-                <button type="button" onClick={() => applyPreset('DELHI EXPRESS')}>
-                  Darbhanga - Delhi
-                </button>
-                <button type="button" onClick={() => applyPreset('HOWRAH EXPRESS')}>
-                  Howrah - Balurghat
-                </button>
-              </>
-            ) : activeTemplate.id.includes('gjs-productions') ? (
-              <button type="button" onClick={() => applyPreset('KARNATAKA')}>
-                Karnataka Express
-              </button>
-            ) : (
-              <button type="button" onClick={() => applyPreset('TAMIL NADU EXPRESS')}>
-                Tamil Nadu Exp
-              </button>
-            )}
+        {displayedPresets.length > 0 && (
+          <div className="presets-row">
+            <span className="presets-title">
+              <Sparkles size={12} /> Quick Presets:
+            </span>
+            <div className="preset-buttons">
+              {displayedPresets.map((preset) => {
+                const isActive =
+                  preset.values &&
+                  Object.keys(preset.values).length > 0 &&
+                  Object.entries(preset.values).every(([key, val]) => values[key] === val);
+                return (
+                  <button
+                    key={preset.id || preset.name}
+                    type="button"
+                    className={isActive ? 'active-preset' : ''}
+                    style={
+                      isActive
+                        ? {
+                            background: 'var(--rail-amber)',
+                            color: '#000',
+                            fontWeight: 700,
+                            borderColor: 'var(--rail-amber)'
+                          }
+                        : undefined
+                    }
+                    onClick={() => applyPreset(preset)}
+                    title={preset.description || `Apply ${preset.name} preset`}
+                  >
+                    {preset.name}
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Automatically Identified Fields List (Text & Pictures) */}
         <div className="fields-form">

@@ -194,6 +194,7 @@ class BoardTemplate(models.Model):
     fields = models.JSONField(default=list, blank=True, help_text="LED text slot definitions")
     fixed_graphics = models.JSONField(default=list, blank=True, help_text="Fixed graphics, borders, bolts, IR crests")
     variations = models.JSONField(default=list, blank=True, help_text="Style variations for this template designed by admin")
+    quick_presets = models.JSONField(default=list, blank=True, help_text="Quick preset train names and values designed by admin")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

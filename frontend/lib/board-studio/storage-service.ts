@@ -245,6 +245,7 @@ export const storageService = {
           unlockedViaAsset: item.unlocked_via_asset || null,
           bundledWithAssets: item.bundled_with_assets || [],
           variations: item.variations || [],
+          quickPresets: item.quick_presets || item.quickPresets || [],
           createdAt: item.created_at || new Date().toISOString(),
           updatedAt: item.updated_at || new Date().toISOString(),
           author: item.author || 'Admin'
@@ -336,7 +337,8 @@ export const storageService = {
         published: template.published !== false,
         fields: template.fields || [],
         fixed_graphics: template.fixedGraphics || [],
-        variations: cleanVariations
+        variations: cleanVariations,
+        quick_presets: template.quickPresets || []
       };
 
       const checkRes = await fetch(`${API_URL}/board-templates/${template.id}/`, {
