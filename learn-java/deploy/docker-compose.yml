@@ -1,0 +1,60 @@
+services:
+  # 1. PostgreSQL 16 Database
+  postgres-db:
+    image: postgres:16-alpine
+    container_name: msts-postgres
+    restart: always
+    environment:
+      POSTGRES_DB: msts_store
+      POSTGRES_USER: msts_admin
+      POSTGRES_PASSWORD: msts_secret_password_2026
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - msts-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U msts_admin -d msts_store"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # 2. Spring Boot 3 Java Backend
+  spring-backend:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    container_name: msts-spring-backend
+    restart: always
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      DATABASE_URL: jdbc:postgresql://postgres-db:5432/msts_store
+      DATABASE_USERNAME: msts_admin
+      DATABASE_PASSWORD: msts_secret_password_2026
+      JWT_SECRET: 404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
+      CORS_ALLOWED_ORIGINS: http://localhost:3000,https://gjs-store-4-msts.vercel.app
+    ports:
+      - "8080:8080"
+    networks:
+      - msts-network
+
+  # 3. Visual Database Manager (Adminer)
+  adminer:
+    image: adminer:latest
+    container_name: msts-adminer
+    restart: always
+    ports:
+      - "8081:8080"
+    networks:
+      - msts-network
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  msts-network:
+    driver: bridge
+
