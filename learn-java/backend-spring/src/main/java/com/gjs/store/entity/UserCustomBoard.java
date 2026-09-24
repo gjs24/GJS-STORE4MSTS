@@ -96,3 +96,4 @@ public class UserCustomBoard {
     public LocalDateTime getSavedAt() { return savedAt; }
     public void setSavedAt(LocalDateTime savedAt) { this.savedAt = savedAt; }
 }
+

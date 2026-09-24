@@ -92,3 +92,4 @@ public class Category {
     public List<Asset> getAssets() { return assets; }
     public void setAssets(List<Asset> assets) { this.assets = assets; }
 }
+

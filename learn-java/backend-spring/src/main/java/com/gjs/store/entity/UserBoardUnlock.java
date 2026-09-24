@@ -73,3 +73,4 @@ public class UserBoardUnlock {
     public LocalDateTime getUnlockedAt() { return unlockedAt; }
     public void setUnlockedAt(LocalDateTime unlockedAt) { this.unlockedAt = unlockedAt; }
 }
+
