@@ -144,6 +144,10 @@ export type SiteSettings = {
   festival_discount_percent?: number;
   festival_announcement_bar?: boolean;
   festival_popup_card?: boolean;
+  special_access_email_subject?: string;
+  special_access_email_heading?: string;
+  special_access_email_body?: string;
+  special_access_email_footer?: string;
   updated_at?: string;
 };
 
@@ -179,6 +183,11 @@ export const fallbackSiteSettings: SiteSettings = {
   festival_discount_percent: 0,
   festival_announcement_bar: true,
   festival_popup_card: false,
+  special_access_email_subject: "🎉 You've Received VIP Special Access - MSTS-GJS Production Store",
+  special_access_email_heading: "VIP Special Access Granted",
+  special_access_email_body:
+    "Great news! You have been granted exclusive Special Access on MSTS-GJS Production Store. You now have complimentary access to download premium Indian Railways train packs and simulator addons with VIP privileges. Log in to your account and explore the depot!",
+  special_access_email_footer: "Happy Simulating! — MSTS-GJS Production Team",
 };
 
 export const AUTH_CHANGE_EVENT = "gjs_auth_change";

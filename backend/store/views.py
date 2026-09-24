@@ -610,6 +610,213 @@ def send_otp_via_resend(email, subject, html_content, text_content, api_key):
         return False, str(exc)
 
 
+def send_email_message(email, subject, html_content, text_content):
+    """
+    Unified email dispatcher:
+    1. Brevo HTTPS API (bypasses Render SMTP port 587 block)
+    2. Resend HTTPS API
+    3. Django EmailMultiAlternatives SMTP fallback
+    Returns (success: bool, error_message: str).
+    """
+    if not email:
+        return False, "Recipient email address is missing."
+
+    # 1. Try Brevo HTTPS API if key present
+    brevo_key = getattr(settings, "BREVO_API_KEY", "") or os.environ.get("BREVO_API_KEY", "")
+    if brevo_key:
+        ok, err = send_otp_via_brevo(email, subject, html_content, text_content, brevo_key)
+        if ok:
+            return True, ""
+        logger.warning("Brevo API delivery failed: %s. Trying fallback...", err)
+
+    # 2. Try Resend HTTPS API if key present
+    resend_key = getattr(settings, "RESEND_API_KEY", "") or os.environ.get("RESEND_API_KEY", "")
+    if resend_key:
+        ok, err = send_otp_via_resend(email, subject, html_content, text_content, resend_key)
+        if ok:
+            return True, ""
+        logger.warning("Resend API delivery failed: %s. Trying fallback...", err)
+
+    # 3. Standard SMTP fallback
+    try:
+        from_email = getattr(settings, "DEFAULT_FROM_EMAIL", "noreply@msts-gjs.com")
+        msg = EmailMultiAlternatives(subject, text_content, from_email, [email])
+        msg.attach_alternative(html_content, "text/html")
+        msg.send(fail_silently=False)
+        return True, ""
+    except Exception as exc:
+        err_str = str(exc)
+        if "Network is unreachable" in err_str or "101" in err_str:
+            err_str = (
+                "Render free tier blocks SMTP port 587. "
+                "Please add a free BREVO_API_KEY or RESEND_API_KEY in Render Environment Variables to send emails via HTTPS port 443."
+            )
+        return False, err_str
+
+
+def send_special_access_email(user, special_access, custom_subject=None, custom_body=None):
+    """
+    Sends an announcement email to a special access recipient using the common SiteSetting template,
+    with dynamic variable replacement and custom overrides if provided.
+    Returns (success: bool, error_message: str).
+    """
+    if not user or not user.email:
+        return False, "User does not have an email address configured."
+
+    setting = SiteSetting.load()
+    raw_subject = (
+        custom_subject.strip()
+        if custom_subject and str(custom_subject).strip()
+        else (setting.special_access_email_subject or "🎉 You've Received VIP Special Access - MSTS-GJS Production Store")
+    )
+    raw_heading = setting.special_access_email_heading or "VIP Special Access Granted"
+    raw_body = (
+        custom_body.strip()
+        if custom_body and str(custom_body).strip()
+        else (setting.special_access_email_body or "Great news! You have been granted exclusive Special Access on MSTS-GJS Production Store.")
+    )
+    raw_footer = setting.special_access_email_footer or "Happy Simulating! — MSTS-GJS Production Team"
+
+    # Determine access type and items
+    if special_access.is_all_access_free:
+        access_type_label = "Storewide All-Access Pass (Everything Free)"
+        granted_items_label = "All Store Products, Train Packs, Routes & DDS Nameboards"
+    else:
+        access_type_label = "Specific VIP Products Pass"
+        asset_titles = list(special_access.granted_assets.values_list("title", flat=True))
+        granted_items_label = ", ".join(asset_titles) if asset_titles else "Selected VIP items"
+
+    # Expiry string
+    if special_access.expires_at:
+        expiry_info = special_access.expires_at.strftime("%d %b %Y, %I:%M %p UTC")
+    else:
+        expiry_info = "Permanent Access (Never Expires)"
+
+    store_url = getattr(settings, "FRONTEND_URL", "https://gjs-store-4-msts.vercel.app").rstrip("/")
+
+    # Replacements
+    placeholders = {
+        "{username}": user.username or "Railway Enthusiast",
+        "{access_type}": access_type_label,
+        "{granted_items}": granted_items_label,
+        "{expiry_info}": expiry_info,
+        "{store_url}": store_url,
+    }
+
+    subject = raw_subject
+    for k, v in placeholders.items():
+        subject = subject.replace(k, str(v))
+
+    heading = raw_heading
+    for k, v in placeholders.items():
+        heading = heading.replace(k, str(v))
+
+    body_text = raw_body
+    for k, v in placeholders.items():
+        body_text = body_text.replace(k, str(v))
+
+    footer_text = raw_footer
+    for k, v in placeholders.items():
+        footer_text = footer_text.replace(k, str(v))
+
+    import html as html_escape
+    escaped_body = html_escape.escape(body_text).replace("\n", "<br/>")
+
+    html_content = f"""<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>{html_escape.escape(subject)}</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #050608; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #f1f5f9;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #050608; padding: 36px 12px;">
+    <tr>
+      <td align="center">
+        <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 580px; background-color: #0f1015; border: 1px solid rgba(124,58,237,0.35); border-radius: 16px; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.8);">
+          <!-- Brand Header -->
+          <tr>
+            <td style="padding: 28px 32px 20px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.08); background: linear-gradient(180deg, rgba(124,58,237,0.15) 0%, rgba(15,16,21,0) 100%);">
+              <span style="display: inline-block; padding: 4px 14px; border-radius: 9999px; background: rgba(217,119,6,0.15); border: 1px solid rgba(245,158,11,0.4); color: #f59e0b; font-size: 11px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase;">
+                MSTS-GJS Production Store
+              </span>
+              <h1 style="margin: 14px 0 6px; font-size: 22px; font-weight: 800; color: #ffffff; letter-spacing: -0.02em;">
+                {html_escape.escape(heading)}
+              </h1>
+              <p style="margin: 0; font-size: 12px; color: #a78bfa; font-weight: 600;">
+                Exclusive VIP Member Announcement
+              </p>
+            </td>
+          </tr>
+
+          <!-- Main Content Area -->
+          <tr>
+            <td style="padding: 28px 32px 20px;">
+              <div style="font-size: 14px; line-height: 1.7; color: #cbd5e1; margin-bottom: 24px;">
+                {escaped_body}
+              </div>
+
+              <!-- Pass Summary Box -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #171821; border: 1px solid rgba(124,58,237,0.25); border-radius: 12px; margin-bottom: 26px;">
+                <tr>
+                  <td style="padding: 18px 20px;">
+                    <div style="font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; color: #a78bfa; margin-bottom: 12px;">
+                      ✦ VIP Access Summary
+                    </div>
+                    <table width="100%" cellpadding="4" cellspacing="0" style="font-size: 12px; color: #e2e8f0;">
+                      <tr>
+                        <td width="36%" style="color: #94a3b8; font-weight: 600;">Recipient:</td>
+                        <td style="font-weight: 700; color: #ffffff;">{html_escape.escape(user.username)}</td>
+                      </tr>
+                      <tr>
+                        <td style="color: #94a3b8; font-weight: 600;">Access Tier:</td>
+                        <td style="font-weight: 700; color: #f59e0b;">{html_escape.escape(access_type_label)}</td>
+                      </tr>
+                      <tr>
+                        <td style="color: #94a3b8; font-weight: 600;">Validity:</td>
+                        <td style="font-weight: 700; color: #10b981;">{html_escape.escape(expiry_info)}</td>
+                      </tr>
+                      <tr>
+                        <td style="color: #94a3b8; font-weight: 600; vertical-align: top;">Included Items:</td>
+                        <td style="font-weight: 600; color: #cbd5e1;">{html_escape.escape(granted_items_label)}</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Call to Action Button -->
+              <div style="text-align: center; margin-bottom: 16px;">
+                <a href="{store_url}/assets" target="_blank" style="display: inline-block; background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%); color: #ffffff; text-decoration: none; font-size: 13px; font-weight: 700; padding: 12px 30px; border-radius: 8px; box-shadow: 0 4px 14px rgba(124,58,237,0.4);">
+                  Explore Depot & Download Now &rarr;
+                </a>
+              </div>
+            </td>
+          </tr>
+
+          <!-- Footer Sign-off -->
+          <tr>
+            <td style="padding: 16px 32px 24px; text-align: center; border-top: 1px solid rgba(255,255,255,0.06); font-size: 11px; color: #64748b;">
+              <p style="margin: 0 0 6px; color: #94a3b8; font-weight: 600;">
+                {html_escape.escape(footer_text)}
+              </p>
+              <p style="margin: 0; font-size: 10px; color: #475569;">
+                MSTS-GJS Production Store &bull; Official Depot for Indian Railways Simulator Content
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>"""
+
+    text_content = f"{heading}\n\n{body_text}\n\nAccess Tier: {access_type_label}\nValidity: {expiry_info}\nItems: {granted_items_label}\n\nExplore at: {store_url}/assets\n\n{footer_text}"
+
+    return send_email_message(user.email, subject, html_content, text_content)
+
+
 class SendOTPView(APIView):
     permission_classes = [permissions.AllowAny]
 
@@ -1787,7 +1994,10 @@ class AdminUserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all().order_by("-date_joined")
     serializer_class = UserSerializer
     permission_classes = [permissions.IsAdminUser]
-    http_method_names = ["get", "patch", "head", "options"]
+    http_method_names = ["get", "patch", "post", "head", "options"]
+
+    def create(self, request, *args, **kwargs):
+        return Response({"detail": "Method not allowed."}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
     def get_queryset(self):
         qs = User.objects.annotate(
@@ -1882,12 +2092,16 @@ class AdminUserViewSet(viewsets.ModelViewSet):
     def special_access(self, request, pk=None):
         user = self.get_object()
         special_access, _ = UserSpecialAccess.objects.get_or_create(user=user)
+        email_status = None
 
         if request.method == "PATCH":
             is_all_access_free = request.data.get("is_all_access_free")
             admin_note = request.data.get("admin_note")
             expires_at = request.data.get("expires_at")
             granted_asset_ids = request.data.get("granted_asset_ids")
+            send_email_notification = request.data.get("send_email_notification", False)
+            custom_email_subject = request.data.get("custom_email_subject")
+            custom_email_body = request.data.get("custom_email_body")
 
             if is_all_access_free is not None:
                 special_access.is_all_access_free = bool(is_all_access_free)
@@ -1908,8 +2122,91 @@ class AdminUserViewSet(viewsets.ModelViewSet):
                 f"Updated special access for user {user.username} (All-Access: {special_access.is_all_access_free})"
             )
 
+            # Send announcement email if requested
+            if send_email_notification:
+                if user.email:
+                    sent, err = send_special_access_email(
+                        user,
+                        special_access,
+                        custom_subject=custom_email_subject,
+                        custom_body=custom_email_body,
+                    )
+                    if sent:
+                        email_status = {
+                            "sent": True,
+                            "recipient": user.email,
+                            "message": f"Special access announcement email sent to {user.email}.",
+                        }
+                        log_admin_activity(
+                            request,
+                            "Special access email sent",
+                            "User",
+                            user.id,
+                            f"Sent VIP announcement email to {user.email}"
+                        )
+                    else:
+                        email_status = {
+                            "sent": False,
+                            "recipient": user.email,
+                            "error": f"Failed to deliver email: {err}",
+                        }
+                else:
+                    email_status = {
+                        "sent": False,
+                        "recipient": None,
+                        "error": "User does not have an email address configured on their account.",
+                    }
+
         serializer = UserSpecialAccessSerializer(special_access, context={"request": request})
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        res_data = dict(serializer.data)
+        if email_status:
+            res_data["email_status"] = email_status
+        return Response(res_data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["post"], url_path="send-special-access-email")
+    def send_special_access_email_action(self, request, pk=None):
+        user = self.get_object()
+        special_access = getattr(user, "special_access", None)
+        if not special_access or not special_access.is_active():
+            return Response(
+                {"detail": "User does not have active special access. Please configure and enable special access first."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not user.email:
+            return Response(
+                {"detail": f"User '{user.username}' does not have an email address on file."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        custom_subject = request.data.get("custom_subject")
+        custom_body = request.data.get("custom_body")
+
+        sent, err = send_special_access_email(
+            user,
+            special_access,
+            custom_subject=custom_subject,
+            custom_body=custom_body,
+        )
+
+        if not sent:
+            return Response(
+                {"detail": f"Failed to deliver email: {err}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        log_admin_activity(
+            request,
+            "Special access email sent",
+            "User",
+            user.id,
+            f"Manually sent VIP announcement email to {user.email}"
+        )
+
+        return Response(
+            {"success": True, "message": f"Special access announcement email successfully delivered to {user.email}!"},
+            status=status.HTTP_200_OK,
+        )
 
 
 class AdminReviewViewSet(viewsets.ModelViewSet):

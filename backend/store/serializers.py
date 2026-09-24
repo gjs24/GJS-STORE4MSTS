@@ -914,6 +914,10 @@ class SiteSettingSerializer(serializers.ModelSerializer):
             "festival_discount_percent",
             "festival_announcement_bar",
             "festival_popup_card",
+            "special_access_email_subject",
+            "special_access_email_heading",
+            "special_access_email_body",
+            "special_access_email_footer",
             "updated_at",
         ]
         read_only_fields = ["updated_at"]

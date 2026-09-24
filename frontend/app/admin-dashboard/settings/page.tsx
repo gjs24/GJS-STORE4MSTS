@@ -2,7 +2,7 @@
 
 import { type FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
-import { Check, Clock, Copy, CreditCard, Database, ExternalLink, Eye, Image, Megaphone, MonitorDown, ShieldCheck, Tv, Wrench } from "lucide-react";
+import { Check, Clock, Copy, CreditCard, Database, ExternalLink, Eye, Image, Mail, Megaphone, MonitorDown, ShieldCheck, Sparkles, Tv, Wrench } from "lucide-react";
 import { AdminLoginNote } from "@/components/admin-login-note";
 import { AdminLayout } from "@/components/admin-table";
 import { adminGet, adminPatch, type AdminSettings } from "@/lib/admin-api";
@@ -579,6 +579,142 @@ export default function AdminSettingsPage() {
             />
             <div className="h-6 w-11 rounded-full bg-neutral-800 peer-focus:outline-none peer-checked:bg-rail-red after:absolute after:top-[2px] after:left-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
           </label>
+        </div>
+
+        {/* Special Access Announcement Email (Common Template) */}
+        <div className="border-t border-white/10 pt-6">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-purple-400">
+              <Mail size={20} />
+              <h2 className="font-semibold text-white">Special Access Announcement Email (Common Template)</h2>
+              <span className="rounded bg-purple-500/20 border border-purple-500/30 px-2 py-0.5 text-[10px] font-bold text-purple-300 uppercase tracking-wider">
+                VIP Notifications
+              </span>
+            </div>
+          </div>
+          <p className="mt-2 text-sm text-slate-400">
+            When you grant or update special free access for any user, a common announcement email can be automatically dispatched to announce their access. Customize the common email subject, banner heading, message content area, and sign-off footer below.
+          </p>
+        </div>
+
+        {/* Dynamic Placeholders Guide */}
+        <div className="rounded-xl border border-purple-500/20 bg-purple-950/20 p-4">
+          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-purple-300">
+            <Sparkles size={14} />
+            <span>Available Dynamic Placeholders (Auto-replaced for each user)</span>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-2 text-xs">
+            <code className="rounded bg-black/60 border border-purple-500/30 px-2 py-1 text-purple-200 font-mono">
+              {"{username}"} &rarr; User&apos;s name
+            </code>
+            <code className="rounded bg-black/60 border border-purple-500/30 px-2 py-1 text-purple-200 font-mono">
+              {"{access_type}"} &rarr; All-Access Pass or Specific Assets
+            </code>
+            <code className="rounded bg-black/60 border border-purple-500/30 px-2 py-1 text-purple-200 font-mono">
+              {"{granted_items}"} &rarr; All items / list of products
+            </code>
+            <code className="rounded bg-black/60 border border-purple-500/30 px-2 py-1 text-purple-200 font-mono">
+              {"{expiry_info}"} &rarr; Permanent or expiry date
+            </code>
+            <code className="rounded bg-black/60 border border-purple-500/30 px-2 py-1 text-purple-200 font-mono">
+              {"{store_url}"} &rarr; Store link
+            </code>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <label className="block text-sm font-semibold text-slate-200">
+            Email Subject Line
+            <input
+              value={siteForm.special_access_email_subject || ""}
+              onChange={(event) => updateSiteForm("special_access_email_subject", event.target.value)}
+              placeholder="🎉 You've Received VIP Special Access - MSTS-GJS Production Store"
+              className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-2 text-white outline-none focus:border-purple-400"
+            />
+            <span className="mt-1 block text-xs text-slate-500">
+              The subject displayed in the recipient&apos;s inbox. Supports placeholders like <code className="text-slate-400">{"{username}"}</code>.
+            </span>
+          </label>
+
+          <label className="block text-sm font-semibold text-slate-200">
+            Email Header Banner Title
+            <input
+              value={siteForm.special_access_email_heading || ""}
+              onChange={(event) => updateSiteForm("special_access_email_heading", event.target.value)}
+              placeholder="VIP Special Access Granted"
+              className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-2 text-white outline-none focus:border-purple-400"
+            />
+            <span className="mt-1 block text-xs text-slate-500">
+              The gold highlighted title inside the email banner.
+            </span>
+          </label>
+
+          <label className="block text-sm font-semibold text-slate-200">
+            Common Email Message Content Area
+            <textarea
+              rows={8}
+              value={siteForm.special_access_email_body || ""}
+              onChange={(event) => updateSiteForm("special_access_email_body", event.target.value)}
+              placeholder="Dear {username},&#10;&#10;We are pleased to inform you that special complimentary access has been activated for your account..."
+              className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-2 text-white font-mono text-xs leading-relaxed outline-none focus:border-purple-400"
+            />
+            <span className="mt-1 block text-xs text-slate-500">
+              This message content is common to all special access users. Supports line breaks and all dynamic placeholders.
+            </span>
+          </label>
+
+          <label className="block text-sm font-semibold text-slate-200">
+            Email Sign-Off / Footer Note
+            <input
+              value={siteForm.special_access_email_footer || ""}
+              onChange={(event) => updateSiteForm("special_access_email_footer", event.target.value)}
+              placeholder="Happy Simulating! — MSTS-GJS Production Team"
+              className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-2 text-white outline-none focus:border-purple-400"
+            />
+            <span className="mt-1 block text-xs text-slate-500">
+              Displayed at the bottom of the announcement email.
+            </span>
+          </label>
+        </div>
+
+        {/* Live Email Preview Box */}
+        <div className="rounded-xl border border-white/10 bg-black/50 p-5 space-y-3">
+          <div className="flex items-center justify-between border-b border-white/10 pb-3">
+            <div className="flex items-center gap-2">
+              <Eye size={16} className="text-purple-400" />
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-300">
+                Live Announcement Email Preview
+              </span>
+            </div>
+            <span className="text-[11px] text-slate-500">Simulated with sample user &ldquo;jebimercy&rdquo;</span>
+          </div>
+
+          <div className="rounded-lg border border-neutral-800 bg-[#0c0d12] p-5 font-sans text-slate-200 max-w-xl mx-auto shadow-inner">
+            <div className="border-b border-neutral-800 pb-3 mb-4">
+              <div className="text-[11px] text-slate-500">
+                Subject: <span className="font-semibold text-slate-200">{siteForm.special_access_email_subject || fallbackSiteSettings.special_access_email_subject}</span>
+              </div>
+            </div>
+            <div className="text-center pb-4 border-b border-neutral-800/80">
+              <div className="inline-block px-3 py-1 rounded bg-[#d97706]/15 border border-[#d97706]/30 text-[#f59e0b] text-xs font-black tracking-wider uppercase">
+                MSTS-GJS PRODUCTION STORE
+              </div>
+              <h3 className="mt-2 text-base font-bold text-white">
+                {siteForm.special_access_email_heading || fallbackSiteSettings.special_access_email_heading}
+              </h3>
+            </div>
+            <div className="py-4 text-xs leading-relaxed text-slate-300 whitespace-pre-line border-b border-neutral-800/80">
+              {(siteForm.special_access_email_body || fallbackSiteSettings.special_access_email_body || "")
+                .replace(/{username}/g, "jebimercy")
+                .replace(/{access_type}/g, "Storewide All-Access Pass (Everything Free)")
+                .replace(/{granted_items}/g, "All Store Products, Train Packs, Routes & DDS Nameboards")
+                .replace(/{expiry_info}/g, "Permanent Access (Never Expires)")
+                .replace(/{store_url}/g, "https://gjs-store-4-msts.vercel.app")}
+            </div>
+            <div className="pt-3 text-center text-[10px] text-slate-500">
+              {siteForm.special_access_email_footer || fallbackSiteSettings.special_access_email_footer}
+            </div>
+          </div>
         </div>
 
         <div className="flex items-center justify-between border-t border-white/10 pt-4">

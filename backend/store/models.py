@@ -473,6 +473,26 @@ class SiteSetting(models.Model):
     festival_discount_percent = models.PositiveSmallIntegerField(default=0)
     festival_announcement_bar = models.BooleanField(default=True)
     festival_popup_card = models.BooleanField(default=False)
+    # Special Access Announcement Email (Common Template)
+    special_access_email_subject = models.CharField(
+        max_length=200,
+        default="🎉 You've Received VIP Special Access - MSTS-GJS Production Store",
+        help_text="Default subject for special access email announcements",
+    )
+    special_access_email_heading = models.CharField(
+        max_length=200,
+        default="VIP Special Access Granted",
+        help_text="Header title inside the special access announcement email",
+    )
+    special_access_email_body = models.TextField(
+        default="Great news! You have been granted exclusive Special Access on MSTS-GJS Production Store. You now have complimentary access to download premium Indian Railways train packs and simulator addons with VIP privileges. Log in to your account and explore the depot!",
+        help_text="Common message body for special access announcement emails. Supports placeholders: {username}, {access_type}, {granted_items}, {expiry_info}, {store_url}",
+    )
+    special_access_email_footer = models.CharField(
+        max_length=255,
+        default="Happy Simulating! — MSTS-GJS Production Team",
+        help_text="Sign-off note at the bottom of the announcement email",
+    )
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:

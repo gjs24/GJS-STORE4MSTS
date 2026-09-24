@@ -5,6 +5,8 @@ import { useSearchParams, useRouter } from "next/navigation";
 import {
   AlertCircle,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   Edit,
   Eye,
   EyeOff,
@@ -14,6 +16,7 @@ import {
   Mail,
   Phone,
   Search,
+  Send,
   ShieldCheck,
   ShoppingBag,
   Sparkles,
@@ -27,7 +30,7 @@ import { AdminLayout } from "@/components/admin-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { adminGet, adminPatch, adminGetSpecialAccess, adminUpdateSpecialAccess, type AdminUser } from "@/lib/admin-api";
+import { adminGet, adminPatch, adminGetSpecialAccess, adminUpdateSpecialAccess, adminSendSpecialAccessEmail, type AdminUser } from "@/lib/admin-api";
 import { getStoredUser, type Asset, type CurrentUser } from "@/lib/api";
 
 type RoleFilter = "all" | "special" | "staff" | "user";
@@ -59,6 +62,12 @@ function UsersManagementContent() {
   const [availableAssets, setAvailableAssets] = useState<Asset[]>([]);
   const [savingSpecial, setSavingSpecial] = useState(false);
   const [specialFeedback, setSpecialFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [sendEmailNotification, setSendEmailNotification] = useState(true);
+  const [customEmailSubject, setCustomEmailSubject] = useState("");
+  const [customEmailBody, setCustomEmailBody] = useState("");
+  const [showEmailCustomizer, setShowEmailCustomizer] = useState(false);
+  const [sendingEmailDirectly, setSendingEmailDirectly] = useState(false);
+  const [emailDirectFeedback, setEmailDirectFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   // Edit User Details Modal State
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
@@ -142,6 +151,11 @@ function UsersManagementContent() {
   async function openSpecialModal(user: AdminUser) {
     setSpecialUser(user);
     setSpecialFeedback(null);
+    setEmailDirectFeedback(null);
+    setSendEmailNotification(Boolean(user.email));
+    setCustomEmailSubject("");
+    setCustomEmailBody("");
+    setShowEmailCustomizer(false);
     setSpecialAllAccess(Boolean(user.special_access?.is_all_access_free));
     setSpecialNote(user.special_access?.admin_note || "");
     setSpecialExpiresAt(user.special_access?.expires_at ? user.special_access.expires_at.slice(0, 16) : "");
@@ -170,16 +184,51 @@ function UsersManagementContent() {
     }
   }
 
+  async function handleSendEmailDirectly() {
+    if (!specialUser) return;
+    if (!specialUser.email) {
+      setEmailDirectFeedback({
+        type: "error",
+        message: "This user does not have an email address on file.",
+      });
+      return;
+    }
+
+    setSendingEmailDirectly(true);
+    setEmailDirectFeedback(null);
+    try {
+      const res = await adminSendSpecialAccessEmail(specialUser.id, {
+        custom_subject: customEmailSubject.trim() || undefined,
+        custom_body: customEmailBody.trim() || undefined,
+      });
+      setEmailDirectFeedback({
+        type: "success",
+        message: res.message || `Announcement email successfully sent to ${specialUser.email}!`,
+      });
+    } catch (error: any) {
+      setEmailDirectFeedback({
+        type: "error",
+        message: error?.message || "Failed to deliver announcement email.",
+      });
+    } finally {
+      setSendingEmailDirectly(false);
+    }
+  }
+
   async function handleSaveSpecialAccess() {
     if (!specialUser) return;
     setSavingSpecial(true);
     setSpecialFeedback(null);
+    setEmailDirectFeedback(null);
     try {
       const updated = await adminUpdateSpecialAccess(specialUser.id, {
         is_all_access_free: specialAllAccess,
         admin_note: specialNote.trim(),
         expires_at: specialExpiresAt ? new Date(specialExpiresAt).toISOString() : null,
         granted_asset_ids: specialGrantedAssets,
+        send_email_notification: sendEmailNotification && Boolean(specialUser.email),
+        custom_email_subject: customEmailSubject.trim() || undefined,
+        custom_email_body: customEmailBody.trim() || undefined,
       });
 
       setUsers((prev) =>
@@ -190,21 +239,31 @@ function UsersManagementContent() {
         )
       );
 
+      let msg = specialAllAccess
+        ? `🎉 Storewide Free All-Access Pass successfully granted to ${specialUser.username}!`
+        : `Special access permissions updated for ${specialUser.username}.`;
+
+      if (updated.email_status) {
+        if (updated.email_status.sent) {
+          msg += ` ✉️ Announcement email delivered to ${updated.email_status.recipient}.`;
+        } else if (updated.email_status.error) {
+          msg += ` (Note: Email delivery failed: ${updated.email_status.error})`;
+        }
+      }
+
       setSpecialFeedback({
         type: "success",
-        message: specialAllAccess
-          ? `🎉 Storewide Free All-Access Pass successfully granted to ${specialUser.username}!`
-          : `Special access permissions updated for ${specialUser.username}.`,
+        message: msg,
       });
 
       setFeedback({
         type: "success",
-        message: `Special access permissions updated for ${specialUser.username}.`,
+        message: msg,
       });
 
       setTimeout(() => {
         setSpecialUser(null);
-      }, 1200);
+      }, 1600);
     } catch (error: any) {
       setSpecialFeedback({
         type: "error",
@@ -682,7 +741,7 @@ function UsersManagementContent() {
       {/* Special Access Management Modal Dialog */}
       {specialUser ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-150">
-          <div className="relative w-full max-w-lg rounded-2xl border border-purple-500/40 bg-gradient-to-b from-zinc-900 via-zinc-950 to-black p-6 shadow-2xl space-y-5">
+          <div className="relative w-full max-w-lg max-h-[92vh] overflow-y-auto rounded-2xl border border-purple-500/40 bg-gradient-to-b from-zinc-900 via-zinc-950 to-black p-6 shadow-2xl space-y-5">
             {/* Modal Close Button */}
             <button
               type="button"
@@ -846,6 +905,123 @@ function UsersManagementContent() {
                     <span className="text-emerald-400 text-xs font-semibold px-2">Permanent (No Expiry)</span>
                   )}
                 </div>
+              </div>
+
+              {/* Email Notification Section */}
+              <div className="rounded-xl border border-purple-500/25 bg-purple-950/25 p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Mail size={16} className="text-purple-400" />
+                    <span className="font-bold text-white text-xs uppercase tracking-wider">
+                      Announcement Email Notification
+                    </span>
+                  </div>
+                  {specialUser.email ? (
+                    <span className="rounded-full bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 text-[10px] font-mono font-medium text-emerald-300">
+                      {specialUser.email}
+                    </span>
+                  ) : (
+                    <span className="rounded-full bg-amber-500/10 border border-amber-500/20 px-2.5 py-0.5 text-[10px] font-medium text-amber-300">
+                      No Email on File
+                    </span>
+                  )}
+                </div>
+
+                {specialUser.email ? (
+                  <>
+                    <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={sendEmailNotification}
+                        onChange={(e) => setSendEmailNotification(e.target.checked)}
+                        className="mt-0.5 rounded accent-purple-500"
+                      />
+                      <span className="text-xs text-slate-300">
+                        Automatically dispatch VIP announcement email to <strong className="text-white">{specialUser.email}</strong> upon saving.
+                      </span>
+                    </label>
+
+                    {/* Email Customizer Collapsible */}
+                    <div className="border-t border-purple-500/15 pt-2.5">
+                      <button
+                        type="button"
+                        onClick={() => setShowEmailCustomizer(!showEmailCustomizer)}
+                        className="flex items-center gap-1.5 text-[11px] font-semibold text-purple-300 hover:text-purple-200 transition"
+                      >
+                        {showEmailCustomizer ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                        <span>{showEmailCustomizer ? "Hide Custom Email Content" : "Customize Email Message Content (Optional)"}</span>
+                      </button>
+
+                      {showEmailCustomizer ? (
+                        <div className="mt-3 space-y-3 pt-1 text-xs">
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                              Custom Subject (Optional, overrides common template)
+                            </label>
+                            <input
+                              type="text"
+                              value={customEmailSubject}
+                              onChange={(e) => setCustomEmailSubject(e.target.value)}
+                              placeholder="Leave blank to use common store template"
+                              className="w-full rounded-lg border border-white/10 bg-black/60 px-3 py-1.5 text-xs text-white placeholder:text-slate-600 outline-none focus:border-purple-400"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                              Custom Content Area (Optional, overrides common template)
+                            </label>
+                            <textarea
+                              rows={5}
+                              value={customEmailBody}
+                              onChange={(e) => setCustomEmailBody(e.target.value)}
+                              placeholder="Leave blank to send the common message content configured in Store Settings. You can use {username}, {access_type}, {granted_items}, {expiry_info}."
+                              className="w-full rounded-lg border border-white/10 bg-black/60 px-3 py-1.5 text-xs text-white placeholder:text-slate-600 outline-none focus:border-purple-400 font-mono leading-relaxed"
+                            />
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+
+                    {/* Direct Send / Resend Button (if user already has active special access) */}
+                    {(specialUser.special_access?.is_all_access_free || (specialUser.special_access?.granted_assets?.length || 0) > 0) ? (
+                      <div className="border-t border-purple-500/15 pt-2.5 flex items-center justify-between gap-2">
+                        <span className="text-[11px] text-slate-400">
+                          User already has active special access.
+                        </span>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="secondary"
+                          disabled={sendingEmailDirectly}
+                          onClick={handleSendEmailDirectly}
+                          className="h-7 text-[11px] border-purple-500/30 text-purple-200 hover:bg-purple-500/20 hover:text-white"
+                        >
+                          <Send size={11} className="mr-1" />
+                          {sendingEmailDirectly ? "Sending Email..." : "Send Announcement Email Now"}
+                        </Button>
+                      </div>
+                    ) : null}
+
+                    {/* Direct Email Action Feedback */}
+                    {emailDirectFeedback ? (
+                      <div
+                        className={`flex items-center gap-2 rounded-lg border p-2 text-xs font-semibold ${
+                          emailDirectFeedback.type === "success"
+                            ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
+                            : "border-red-500/40 bg-red-500/10 text-red-300"
+                        }`}
+                      >
+                        {emailDirectFeedback.type === "success" ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
+                        <span>{emailDirectFeedback.message}</span>
+                      </div>
+                    ) : null}
+                  </>
+                ) : (
+                  <p className="text-xs text-amber-300/90 leading-relaxed">
+                    This user account does not have an email address configured. They will receive immediate on-site special access, but an announcement email notification cannot be sent.
+                  </p>
+                )}
               </div>
             </div>
 

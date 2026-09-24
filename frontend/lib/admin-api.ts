@@ -17,6 +17,13 @@ export type AdminStats = {
   monthly_sales?: { month: string; sales: number; revenue: number }[];
 };
 
+export type SpecialAccessEmailStatus = {
+  sent: boolean;
+  recipient?: string | null;
+  message?: string;
+  error?: string;
+};
+
 export type SpecialAccess = {
   id?: number;
   is_all_access_free: boolean;
@@ -26,6 +33,7 @@ export type SpecialAccess = {
   granted_asset_titles?: string[];
   created_at?: string;
   updated_at?: string;
+  email_status?: SpecialAccessEmailStatus;
 };
 
 export type AdminUser = {
@@ -219,7 +227,7 @@ export async function adminPost<T>(path: string, body?: unknown): Promise<T> {
       body: body ? JSON.stringify(body) : undefined
     });
   }
-  if (!res.ok) throw new Error("Action failed");
+  if (!res.ok) throw new Error(await parseAdminError(res, "Action failed"));
   return res.json();
 }
 
@@ -330,9 +338,25 @@ export async function adminUpdateSpecialAccess(
     admin_note?: string;
     expires_at?: string | null;
     granted_asset_ids?: number[];
+    send_email_notification?: boolean;
+    custom_email_subject?: string;
+    custom_email_body?: string;
   }
 ): Promise<SpecialAccess> {
   return adminPatch<SpecialAccess>(`/admin/users/${userId}/special-access/`, payload);
+}
+
+export async function adminSendSpecialAccessEmail(
+  userId: number,
+  payload?: {
+    custom_subject?: string;
+    custom_body?: string;
+  }
+): Promise<{ success: boolean; message?: string; detail?: string }> {
+  return adminPost<{ success: boolean; message?: string; detail?: string }>(
+    `/admin/users/${userId}/send-special-access-email/`,
+    payload || {}
+  );
 }
 
 export async function setAdminOrderAccess(
