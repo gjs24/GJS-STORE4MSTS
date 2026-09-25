@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { CheckCircle2, HardDriveDownload, ShieldCheck, Star, TrainFront } from "lucide-react";
 import { AssetActions } from "@/components/asset-actions";
+import { CountdownTimer } from "@/components/countdown-timer";
 import { PriceDisplay } from "@/components/price-display";
 import { ProductGallery } from "@/components/product-gallery";
 import { ReviewSection } from "@/components/review-section";
@@ -38,7 +39,12 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 export default async function AssetDetailPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const asset = await getAsset(slug);
-  const showDeal = Boolean(asset.deal_is_open && !asset.is_upcoming && !asset.is_free && Number(asset.discount_percent || 0) > 0);
+  const showDeal = Boolean(
+    asset.deal_is_open &&
+      !asset.is_upcoming &&
+      !asset.is_free &&
+      (Number(asset.discount_percent || 0) > 0 || asset.deal_starts_at || asset.deal_ends_at)
+  );
   const galleryUrlImages = (asset.gallery_image_urls || "")
     .split(/\r?\n/)
     .map((url, index) => ({ id: index + 1000, image: url.trim(), alt_text: `${asset.title} screenshot ${index + 1}`, sort_order: index + 1 }))
@@ -87,7 +93,7 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ sl
           </div>
           {asset.is_upcoming ? (
             asset.prebooking_enabled ? (
-              <div className="mt-6 rounded-lg border border-cyan-500/40 bg-gradient-to-br from-cyan-950/40 via-cyan-950/20 to-black/40 p-5 shadow-lg">
+              <div className="mt-6 rounded-lg border border-cyan-500/40 bg-gradient-to-br from-cyan-950/40 via-cyan-950/20 to-black/40 p-5 shadow-lg space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="rounded bg-cyan-500/20 border border-cyan-400/40 px-2.5 py-1 text-xs font-black uppercase tracking-wide text-cyan-300 flex items-center gap-1.5">
                     <span>🚀</span> {asset.prebooking_badge || "PRE-BOOKING OPEN"}
@@ -98,16 +104,53 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ sl
                     </span>
                   ) : null}
                 </div>
-                <h2 className="mt-3 text-2xl font-black text-white">
-                  {asset.coming_soon_banner_title || asset.title}
-                </h2>
-                <p className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-200">
-                  {asset.prebooking_message ||
-                    asset.coming_soon_message ||
-                    "Pre-book your copy now to lock in exclusive launch pricing and guarantee day-one access!"}
-                </p>
+                <div>
+                  <h2 className="text-2xl font-black text-white">
+                    {asset.coming_soon_banner_title || asset.title}
+                  </h2>
+                  <p className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-200">
+                    {asset.prebooking_message ||
+                      asset.coming_soon_message ||
+                      "Pre-book your copy now to lock in exclusive launch pricing and guarantee day-one access!"}
+                  </p>
+                </div>
 
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                {/* Live Pre-Booking Start / Close Countdown Timer */}
+                {asset.prebooking_starts_at || asset.prebooking_ends_at ? (
+                  <CountdownTimer
+                    startDate={asset.prebooking_starts_at}
+                    endDate={asset.prebooking_ends_at}
+                    startLabel="Pre-Booking Opens In"
+                    endLabel="Pre-Booking Closes In"
+                    completedLabel="Pre-Booking Window Closed"
+                    theme="cyan"
+                    icon="timer"
+                  />
+                ) : null}
+
+                {/* Live Pre-Booking Early Download Unlock Timer */}
+                {asset.prebooking_download_unlock_at ? (
+                  <CountdownTimer
+                    endDate={asset.prebooking_download_unlock_at}
+                    endLabel="Pre-Bookers Early Download Unlocks In"
+                    completedLabel="Pre-Booker Early Downloads Unlocked!"
+                    theme="cyan"
+                    icon="clock"
+                  />
+                ) : null}
+
+                {/* Live Scheduled Public Release Countdown Timer */}
+                {asset.release_date ? (
+                  <CountdownTimer
+                    endDate={asset.release_date}
+                    endLabel="Official Public Release In"
+                    completedLabel="Officially Released!"
+                    theme="amber"
+                    icon="rocket"
+                  />
+                ) : null}
+
+                <div className="grid gap-3 sm:grid-cols-2">
                   {asset.prebooking_price ? (
                     <div className="rounded border border-cyan-500/20 bg-black/40 p-3">
                       <p className="text-xs text-slate-400">Pre-Booking Offer Price</p>
@@ -152,17 +195,30 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ sl
                 </div>
               </div>
             ) : (
-              <div className="mt-6 rounded-lg border border-rail-amber/30 bg-rail-amber/10 p-5">
-                <p className="text-sm font-black uppercase tracking-wide text-rail-amber">
-                  {asset.coming_soon_badge || "COMING SOON"}
-                </p>
-                <h2 className="mt-2 text-2xl font-black text-white">
-                  {asset.coming_soon_banner_title || asset.title}
-                </h2>
-                <p className="mt-3 whitespace-pre-line text-sm leading-6 text-slate-200">
-                  {asset.coming_soon_message || asset.short_description}
-                </p>
-                <div className="mt-4 flex flex-wrap items-center gap-2">
+              <div className="mt-6 rounded-lg border border-rail-amber/30 bg-rail-amber/10 p-5 space-y-4">
+                <div>
+                  <p className="text-sm font-black uppercase tracking-wide text-rail-amber">
+                    {asset.coming_soon_badge || "COMING SOON"}
+                  </p>
+                  <h2 className="mt-2 text-2xl font-black text-white">
+                    {asset.coming_soon_banner_title || asset.title}
+                  </h2>
+                  <p className="mt-3 whitespace-pre-line text-sm leading-6 text-slate-200">
+                    {asset.coming_soon_message || asset.short_description}
+                  </p>
+                </div>
+
+                {asset.release_date ? (
+                  <CountdownTimer
+                    endDate={asset.release_date}
+                    endLabel="Official Release Countdown"
+                    completedLabel="Officially Released!"
+                    theme="amber"
+                    icon="rocket"
+                  />
+                ) : null}
+
+                <div className="flex flex-wrap items-center gap-2">
                   <p className="inline-flex rounded bg-black/40 px-3 py-2 text-sm font-semibold text-rail-amber">
                     {asset.coming_soon_status_text || "Release Date: To Be Announced"}
                   </p>
@@ -180,19 +236,42 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ sl
                 </div>
               </div>
             )
+          ) : asset.release_date ? (
+            <div className="mt-6">
+              <CountdownTimer
+                endDate={asset.release_date}
+                endLabel="Scheduled Release Countdown"
+                completedLabel="Officially Released!"
+                theme="amber"
+                icon="rocket"
+                hideWhenCompleted
+              />
+            </div>
           ) : null}
           {showDeal ? (
-            <div className="mt-6 rounded-lg border border-emerald-400/30 bg-emerald-400/10 p-5">
-              <p className="text-sm font-black uppercase tracking-wide text-emerald-300">{asset.deal_badge || "Limited Time"}</p>
-              <h2 className="mt-2 text-2xl font-black text-white">{asset.deal_title || "Launch Offer"}</h2>
-              <p className="mt-3 text-sm leading-6 text-slate-200">
-                {asset.deal_status_text || "Special launch pricing is currently open for this product."}
-                {asset.deal_ends_at ? ` Ends: ${new Date(asset.deal_ends_at).toLocaleString("en-IN")}.` : ""}
-              </p>
+            <div className="mt-6 rounded-lg border border-emerald-400/30 bg-emerald-400/10 p-5 space-y-4">
+              <div>
+                <p className="text-sm font-black uppercase tracking-wide text-emerald-300">{asset.deal_badge || "Limited Time"}</p>
+                <h2 className="mt-2 text-2xl font-black text-white">{asset.deal_title || "Launch Offer"}</h2>
+                <p className="mt-2 text-sm leading-6 text-slate-200">
+                  {asset.deal_status_text || "Special launch pricing is currently open for this product."}
+                </p>
+              </div>
+              {asset.deal_starts_at || asset.deal_ends_at ? (
+                <CountdownTimer
+                  startDate={asset.deal_starts_at}
+                  endDate={asset.deal_ends_at}
+                  startLabel="Special Offer Starts In"
+                  endLabel="Special Offer Ends In"
+                  completedLabel="Special Offer Has Ended"
+                  theme="emerald"
+                  icon="flame"
+                />
+              ) : null}
             </div>
           ) : null}
           {asset.early_access_enabled ? (
-            <div className="mt-6 rounded-lg border border-purple-500/40 bg-purple-950/20 p-5">
+            <div className="mt-6 rounded-lg border border-purple-500/40 bg-purple-950/20 p-5 space-y-4">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="rounded bg-purple-500/20 border border-purple-400/40 px-2.5 py-1 text-xs font-black uppercase tracking-wide text-purple-300">
                   {asset.early_access_badge || "VIP Early Access"}
@@ -202,35 +281,37 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ sl
                     {asset.early_access_discount_percent}% Loyalty Discount
                   </span>
                 ) : null}
-                {asset.early_access_starts_at ? (
-                  new Date(asset.early_access_starts_at) > new Date() ? (
-                    <span className="rounded bg-amber-500/20 border border-amber-400/40 px-2.5 py-1 text-xs font-semibold text-amber-300">
-                      ⏰ VIP Access Opens: {new Date(asset.early_access_starts_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}
-                    </span>
-                  ) : (
-                    <span className="rounded bg-emerald-500/20 border border-emerald-400/40 px-2.5 py-1 text-xs font-semibold text-emerald-300">
-                      🟢 VIP Access Active Now
-                    </span>
-                  )
-                ) : null}
               </div>
-              <h3 className="mt-2.5 text-xl font-bold text-white">
-                {asset.early_access_has_access && asset.early_access_has_discount
-                  ? "Early Access & Exclusive Discount Available"
-                  : asset.early_access_has_access
-                  ? "Early Access Available Before Release"
-                  : "Exclusive Customer Loyalty Discount Available"}
-              </h3>
-              <p className="mt-2 text-sm text-slate-300 leading-relaxed">
-                {asset.early_access_message ||
-                  `Special perks unlocked for customers who purchased ${
-                    asset.early_access_required_asset_titles && asset.early_access_required_asset_titles.length > 0
-                      ? asset.early_access_required_asset_titles.join(", ")
-                      : "any previously purchased store product"
-                  }.`}
-              </p>
+              <div>
+                <h3 className="text-xl font-bold text-white">
+                  {asset.early_access_has_access && asset.early_access_has_discount
+                    ? "Early Access & Exclusive Discount Available"
+                    : asset.early_access_has_access
+                    ? "Early Access Available Before Release"
+                    : "Exclusive Customer Loyalty Discount Available"}
+                </h3>
+                <p className="mt-2 text-sm text-slate-300 leading-relaxed">
+                  {asset.early_access_message ||
+                    `Special perks unlocked for customers who purchased ${
+                      asset.early_access_required_asset_titles && asset.early_access_required_asset_titles.length > 0
+                        ? asset.early_access_required_asset_titles.join(", ")
+                        : "any previously purchased store product"
+                    }.`}
+                </p>
+              </div>
+              {asset.early_access_starts_at || asset.early_access_ends_at ? (
+                <CountdownTimer
+                  startDate={asset.early_access_starts_at}
+                  endDate={asset.early_access_ends_at}
+                  startLabel="VIP Early Access Opens In"
+                  endLabel="VIP Early Access Ends In"
+                  completedLabel="VIP Early Access Window Ended"
+                  theme="purple"
+                  icon="sparkles"
+                />
+              ) : null}
               {asset.early_access_required_asset_titles && asset.early_access_required_asset_titles.length > 0 ? (
-                <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-purple-300">
+                <div className="flex flex-wrap items-center gap-2 text-xs text-purple-300">
                   <span className="font-semibold text-slate-400">Qualifying products:</span>
                   {asset.early_access_required_asset_titles.map((title) => (
                     <span key={title} className="rounded bg-purple-900/40 border border-purple-500/30 px-2 py-0.5 font-medium text-purple-200">

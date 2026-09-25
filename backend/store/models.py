@@ -49,6 +49,7 @@ class Asset(models.Model):
     deal_title = models.CharField(max_length=120, default="Launch Offer")
     deal_badge = models.CharField(max_length=60, default="Limited Time")
     deal_status_text = models.CharField(max_length=160, blank=True)
+    deal_starts_at = models.DateTimeField(blank=True, null=True)
     deal_ends_at = models.DateTimeField(blank=True, null=True)
     is_free = models.BooleanField(default=True)
     is_published = models.BooleanField(default=True)
@@ -97,6 +98,8 @@ class Asset(models.Model):
         blank=True,
         default="Pre-book your copy now to lock in exclusive launch pricing and guarantee day-one access!",
     )
+    prebooking_starts_at = models.DateTimeField(blank=True, null=True)
+    prebooking_ends_at = models.DateTimeField(blank=True, null=True)
     prebooking_download_unlock_at = models.DateTimeField(blank=True, null=True)
     prebooking_downloads_unlocked = models.BooleanField(default=False)
     prebooking_slots = models.PositiveIntegerField(default=0, blank=True)

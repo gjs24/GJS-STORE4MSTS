@@ -267,6 +267,7 @@ class AssetListSerializer(serializers.ModelSerializer):
             "deal_title",
             "deal_badge",
             "deal_status_text",
+            "deal_starts_at",
             "deal_ends_at",
             "discount_percent",
             "savings_amount",
@@ -296,6 +297,8 @@ class AssetListSerializer(serializers.ModelSerializer):
             "prebooking_price",
             "prebooking_badge",
             "prebooking_message",
+            "prebooking_starts_at",
+            "prebooking_ends_at",
             "prebooking_download_unlock_at",
             "prebooking_downloads_unlocked",
             "prebooking_slots",
@@ -571,7 +574,16 @@ class AssetWriteSerializer(serializers.ModelSerializer):
                     data["early_access_required_assets"] = [int(p.strip()) for p in val_str.split(",") if p.strip().isdigit()]
 
         # Convert empty strings for datetime fields to None
-        for dt_field in ("release_date", "early_access_starts_at", "early_access_ends_at", "deal_ends_at", "prebooking_download_unlock_at"):
+        for dt_field in (
+            "release_date",
+            "early_access_starts_at",
+            "early_access_ends_at",
+            "deal_starts_at",
+            "deal_ends_at",
+            "prebooking_starts_at",
+            "prebooking_ends_at",
+            "prebooking_download_unlock_at",
+        ):
             if dt_field in data:
                 val = data.get(dt_field) if hasattr(data, "get") else data[dt_field]
                 if not val or val == "" or str(val).lower() == "null":

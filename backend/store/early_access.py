@@ -33,7 +33,15 @@ def calculate_early_access_status(asset, user):
         is_early_access_active = False
 
     base_price = asset.price
-    is_prebooking = bool(getattr(asset, "prebooking_enabled", False))
+    is_prebooking_enabled = bool(getattr(asset, "prebooking_enabled", False))
+    prebooking_starts_at = getattr(asset, "prebooking_starts_at", None)
+    prebooking_ends_at = getattr(asset, "prebooking_ends_at", None)
+    is_prebooking = is_prebooking_enabled
+    if is_prebooking_enabled:
+        if prebooking_starts_at and now < prebooking_starts_at:
+            is_prebooking = False
+        if prebooking_ends_at and now >= prebooking_ends_at:
+            is_prebooking = False
     prebooking_price = getattr(asset, "prebooking_price", None)
     if is_prebooking and prebooking_price is not None and prebooking_price > Decimal("0.00"):
         base_price = prebooking_price

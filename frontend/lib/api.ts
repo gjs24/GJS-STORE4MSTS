@@ -25,6 +25,7 @@ export type Asset = {
   deal_title?: string;
   deal_badge?: string;
   deal_status_text?: string;
+  deal_starts_at?: string | null;
   deal_ends_at?: string | null;
   discount_percent?: number;
   savings_amount?: string;
@@ -60,6 +61,8 @@ export type Asset = {
   prebooking_price?: string | null;
   prebooking_badge?: string;
   prebooking_message?: string;
+  prebooking_starts_at?: string | null;
+  prebooking_ends_at?: string | null;
   prebooking_download_unlock_at?: string | null;
   prebooking_downloads_unlocked?: boolean;
   prebooking_slots?: number;

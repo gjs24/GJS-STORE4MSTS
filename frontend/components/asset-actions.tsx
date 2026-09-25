@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { load } from "@cashfreepayments/cashfree-js";
 import { CheckCircle2, Download, Lock, ShoppingCart, Sparkles } from "lucide-react";
+import { CountdownTimer } from "@/components/countdown-timer";
 import { getStoredUser, priceLabel, type Asset } from "@/lib/api";
 import { WishlistButton } from "@/components/wishlist-button";
 import { createOrder, downloadAsset, isLoggedIn, notifyMe, userGet, verifyPayment, type StoreOrder } from "@/lib/store-api";
@@ -21,6 +22,13 @@ export function AssetActions({ asset }: { asset: Asset }) {
   const [order, setOrder] = useState<StoreOrder | null>(null);
   const [utr, setUtr] = useState("");
   const [payerName, setPayerName] = useState("");
+  const [nowMs, setNowMs] = useState<number>(0);
+
+  useEffect(() => {
+    setNowMs(Date.now());
+    const timer = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     setCurrentAsset(asset);
@@ -34,10 +42,32 @@ export function AssetActions({ asset }: { asset: Asset }) {
   }, [asset.slug, asset]);
 
   const activeAsset = currentAsset;
-  const isUpcoming = Boolean(activeAsset.is_upcoming);
-  const isPrebooking = Boolean(activeAsset.prebooking_enabled && isUpcoming);
+  const releaseMs = activeAsset.release_date ? new Date(activeAsset.release_date).getTime() : NaN;
+  const isReleasedBySchedule = Boolean(nowMs > 0 && !Number.isNaN(releaseMs) && nowMs >= releaseMs);
+  const isUpcoming = Boolean(activeAsset.is_upcoming && !isReleasedBySchedule);
+
+  const pbStartsMs = activeAsset.prebooking_starts_at ? new Date(activeAsset.prebooking_starts_at).getTime() : NaN;
+  const pbEndsMs = activeAsset.prebooking_ends_at ? new Date(activeAsset.prebooking_ends_at).getTime() : NaN;
+  const isPrebookingPending = Boolean(
+    activeAsset.prebooking_enabled && isUpcoming && nowMs > 0 && !Number.isNaN(pbStartsMs) && nowMs < pbStartsMs
+  );
+  const isPrebookingClosed = Boolean(
+    activeAsset.prebooking_enabled && isUpcoming && nowMs > 0 && !Number.isNaN(pbEndsMs) && nowMs >= pbEndsMs
+  );
+  const isPrebooking = Boolean(
+    activeAsset.prebooking_enabled && isUpcoming && !isPrebookingPending && !isPrebookingClosed
+  );
+
   const hasPrebooked = Boolean(activeAsset.user_has_prebooked);
-  const downloadsReady = Boolean(activeAsset.can_download || activeAsset.prebooking_downloads_ready);
+  const pbUnlockMs = activeAsset.prebooking_download_unlock_at
+    ? new Date(activeAsset.prebooking_download_unlock_at).getTime()
+    : NaN;
+  const isUnlockedBySchedule = Boolean(
+    (nowMs > 0 && !Number.isNaN(pbUnlockMs) && nowMs >= pbUnlockMs) || isReleasedBySchedule
+  );
+  const downloadsReady = Boolean(
+    activeAsset.can_download || activeAsset.prebooking_downloads_ready || isUnlockedBySchedule
+  );
   const canEarlyAccess = Boolean(isUpcoming && activeAsset.user_can_access_early);
   const isUpcomingBlocked = Boolean(isUpcoming && !canEarlyAccess && !isPrebooking && !hasPrebooked);
   const isPrebookingSoldOut = Boolean(
@@ -243,6 +273,12 @@ export function AssetActions({ asset }: { asset: Asset }) {
       }
       return `🚀 Pre-Book Now for INR ${effectivePrice}`;
     }
+    if (isPrebookingPending) {
+      return `⏳ Pre-Booking Opens Soon (${activeAsset.coming_soon_button_text || "Notify Me"})`;
+    }
+    if (isPrebookingClosed && isUpcomingBlocked) {
+      return `Pre-Booking Closed (${activeAsset.coming_soon_button_text || "Notify Me"})`;
+    }
     if (isUpcomingBlocked) {
       return activeAsset.coming_soon_button_text || "Notify Me";
     }
@@ -264,7 +300,7 @@ export function AssetActions({ asset }: { asset: Asset }) {
       {hasPrebooked ? (
         <div className="rounded-lg border border-emerald-400/40 bg-emerald-950/30 p-4 text-xs text-emerald-200 flex items-start gap-3 shadow-sm">
           <CheckCircle2 className="mt-0.5 shrink-0 text-emerald-400" size={20} />
-          <div className="space-y-1">
+          <div className="space-y-2 flex-1">
             <p className="font-bold text-emerald-100 text-sm flex items-center gap-2">
               <span>✅ Pre-Booking Confirmed</span>
               <span className="rounded bg-emerald-500/20 px-2 py-0.5 text-[11px] font-semibold text-emerald-300">
@@ -276,26 +312,25 @@ export function AssetActions({ asset }: { asset: Asset }) {
                 🎉 Early access download is now unlocked! Click the download button below to get your package immediately.
               </p>
             ) : (
-              <div className="text-slate-300 space-y-1 leading-relaxed">
+              <div className="text-slate-300 space-y-2 leading-relaxed">
                 <p>
-                  Your pre-order has been secured. Your download package will automatically unlock on:
+                  Your pre-order has been secured. Your download package will automatically unlock on schedule:
                 </p>
-                <p className="text-sm font-bold text-white bg-black/40 border border-emerald-500/20 rounded px-2.5 py-1 inline-block">
-                  ⏰{" "}
-                  {activeAsset.prebooking_download_unlock_at
-                    ? new Date(activeAsset.prebooking_download_unlock_at).toLocaleString("en-IN", {
-                        dateStyle: "medium",
-                        timeStyle: "short",
-                      })
-                    : activeAsset.release_date
-                    ? new Date(activeAsset.release_date).toLocaleString("en-IN", {
-                        dateStyle: "medium",
-                        timeStyle: "short",
-                      })
-                    : "Scheduled Release Date"}
-                </p>
+                {activeAsset.prebooking_download_unlock_at || activeAsset.release_date ? (
+                  <CountdownTimer
+                    endDate={activeAsset.prebooking_download_unlock_at || activeAsset.release_date}
+                    endLabel="Your Pre-Order Download Unlocks In"
+                    completedLabel="Download Unlocked! Click below to download"
+                    theme="cyan"
+                    icon="clock"
+                  />
+                ) : (
+                  <p className="text-sm font-bold text-white bg-black/40 border border-emerald-500/20 rounded px-2.5 py-1 inline-block">
+                    ⏰ Scheduled Release Date
+                  </p>
+                )}
                 <p className="text-xs text-slate-400">
-                  You will be able to download your asset from this page as soon as the unlock time arrives.
+                  You will be able to download your asset from this page as soon as the unlock timer completes.
                 </p>
               </div>
             )}
@@ -304,13 +339,20 @@ export function AssetActions({ asset }: { asset: Asset }) {
       ) : null}
 
       {/* Pre-Booking Promotional Banner */}
-      {isPrebooking && !hasPrebooked ? (
+      {(isPrebooking || isPrebookingPending || isPrebookingClosed) && !hasPrebooked ? (
         <div className="rounded-lg border border-cyan-500/40 bg-cyan-950/30 p-4 text-xs text-cyan-200 flex items-start gap-3 shadow-sm">
           <Sparkles className="mt-0.5 shrink-0 text-cyan-400" size={20} />
-          <div className="space-y-1.5 flex-1">
+          <div className="space-y-2 flex-1">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="font-bold text-white text-sm flex items-center gap-2">
-                <span>🚀 {activeAsset.prebooking_badge || "PRE-BOOKING OPEN"}</span>
+                <span>
+                  🚀{" "}
+                  {isPrebookingClosed
+                    ? "PRE-BOOKING CLOSED"
+                    : isPrebookingPending
+                    ? "PRE-BOOKING OPENS SOON"
+                    : activeAsset.prebooking_badge || "PRE-BOOKING OPEN"}
+                </span>
                 {isPrebookingSoldOut ? (
                   <span className="rounded bg-red-500/20 text-red-300 px-2 py-0.5 text-xs font-semibold">
                     SOLD OUT
@@ -327,6 +369,20 @@ export function AssetActions({ asset }: { asset: Asset }) {
               {activeAsset.prebooking_message ||
                 "Pre-book your copy now to lock in exclusive launch pricing and guarantee day-one access!"}
             </p>
+            {activeAsset.prebooking_starts_at || activeAsset.prebooking_ends_at ? (
+              <div className="pt-0.5">
+                <CountdownTimer
+                  startDate={activeAsset.prebooking_starts_at}
+                  endDate={activeAsset.prebooking_ends_at}
+                  startLabel="Pre-Booking Opens In"
+                  endLabel="Pre-Booking Closes In"
+                  completedLabel="Pre-Booking Window Has Closed"
+                  variant="inline"
+                  theme="cyan"
+                  icon="timer"
+                />
+              </div>
+            ) : null}
             {activeAsset.user_has_early_discount && activeAsset.user_discount_percent ? (
               <p className="text-emerald-300 font-semibold">
                 🌟 VIP Loyalty Discount Applied: You get an additional {activeAsset.user_discount_percent}% off the pre-booking price!

@@ -39,6 +39,8 @@ export default function CreateAssetPage() {
   const [prebookingPrice, setPrebookingPrice] = useState<string>("");
   const [prebookingBadge, setPrebookingBadge] = useState("PRE-BOOKING OPEN");
   const [prebookingMessage, setPrebookingMessage] = useState("Pre-book your copy now to lock in exclusive launch pricing and guarantee day-one access!");
+  const [prebookingStartsAt, setPrebookingStartsAt] = useState<string>("");
+  const [prebookingEndsAt, setPrebookingEndsAt] = useState<string>("");
   const [prebookingDownloadUnlockAt, setPrebookingDownloadUnlockAt] = useState<string>("");
   const [prebookingDownloadsUnlocked, setPrebookingDownloadsUnlocked] = useState(false);
   const [prebookingSlots, setPrebookingSlots] = useState<number | "">("");
@@ -90,6 +92,8 @@ export default function CreateAssetPage() {
       }
       formData.set("prebooking_badge", prebookingBadge);
       formData.set("prebooking_message", prebookingMessage);
+      formData.set("prebooking_starts_at", prebookingStartsAt || "");
+      formData.set("prebooking_ends_at", prebookingEndsAt || "");
       formData.set("prebooking_download_unlock_at", prebookingDownloadUnlockAt || "");
       formData.set("prebooking_downloads_unlocked", String(prebookingDownloadsUnlocked));
       formData.set("prebooking_slots", String(prebookingSlots || 0));
@@ -107,6 +111,9 @@ export default function CreateAssetPage() {
       } else {
         formData.delete("board_template");
         formData.set("bundle_board_template_free", "false");
+      }
+      if (!formData.get("deal_starts_at")) {
+        formData.delete("deal_starts_at");
       }
       if (!formData.get("deal_ends_at")) {
         formData.delete("deal_ends_at");
@@ -307,9 +314,16 @@ export default function CreateAssetPage() {
               <span className="text-sm text-slate-300">Deal status text</span>
               <input name="deal_status_text" placeholder="Offer closes soon" className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-3" />
             </label>
+            <div className="hidden md:block" />
             <label className="block">
-              <span className="text-sm text-slate-300">Deal end date optional</span>
-              <input name="deal_ends_at" type="datetime-local" className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-3" />
+              <span className="text-sm text-emerald-300 font-medium">⏱️ Deal Starts At (Optional Countdown)</span>
+              <input name="deal_starts_at" type="datetime-local" className="mt-2 w-full rounded border border-emerald-400/30 bg-black/40 px-3 py-3" />
+              <span className="mt-1 block text-xs text-slate-400">Shows &quot;Special Offer Starts In&quot; countdown before the deal opens.</span>
+            </label>
+            <label className="block">
+              <span className="text-sm text-emerald-300 font-medium">⏳ Deal Closes At (Optional Countdown)</span>
+              <input name="deal_ends_at" type="datetime-local" className="mt-2 w-full rounded border border-emerald-400/30 bg-black/40 px-3 py-3" />
+              <span className="mt-1 block text-xs text-slate-400">Shows &quot;Special Offer Ends In&quot; countdown until the deal closes.</span>
             </label>
           </div>
         </div>
@@ -666,6 +680,39 @@ export default function CreateAssetPage() {
                   className="mt-1 w-full rounded border border-white/10 bg-black/40 px-3 py-2 text-sm"
                 />
               </label>
+
+              {/* Pre-Booking Open & Close Window */}
+              <div className="grid gap-4 md:grid-cols-2 rounded-lg border border-cyan-500/30 bg-cyan-950/30 p-3.5">
+                <label className="block">
+                  <span className="text-xs font-semibold text-cyan-200">
+                    🟢 Pre-Booking Opens At (Optional Start Timer)
+                  </span>
+                  <input
+                    type="datetime-local"
+                    value={prebookingStartsAt}
+                    onChange={(e) => setPrebookingStartsAt(e.target.value)}
+                    className="mt-1.5 w-full rounded border border-cyan-500/30 bg-black/50 px-3 py-2 text-sm text-cyan-100"
+                  />
+                  <span className="mt-1 block text-xs text-slate-400">
+                    Shows a &quot;Pre-Booking Opens In&quot; countdown before pre-orders open. Leave empty to open immediately.
+                  </span>
+                </label>
+
+                <label className="block">
+                  <span className="text-xs font-semibold text-cyan-200">
+                    🔴 Pre-Booking Closes At (Optional End Timer)
+                  </span>
+                  <input
+                    type="datetime-local"
+                    value={prebookingEndsAt}
+                    onChange={(e) => setPrebookingEndsAt(e.target.value)}
+                    className="mt-1.5 w-full rounded border border-cyan-500/30 bg-black/50 px-3 py-2 text-sm text-cyan-100"
+                  />
+                  <span className="mt-1 block text-xs text-slate-400">
+                    Shows a live &quot;Pre-Booking Closes In&quot; countdown and automatically closes pre-booking when expired.
+                  </span>
+                </label>
+              </div>
 
               {/* Scheduled Pre-booking Download Release Date & Time */}
               <div className="rounded-lg border border-cyan-500/30 bg-cyan-950/40 p-3.5 space-y-3">

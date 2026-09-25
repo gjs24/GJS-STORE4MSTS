@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { ArrowUpRight, Download, Star, TrainFront } from "lucide-react";
+import { AssetCardTimer } from "@/components/countdown-timer";
 import { PriceDisplay } from "@/components/price-display";
 import { WishlistButton } from "@/components/wishlist-button";
 import type { Asset } from "@/lib/api";
@@ -122,6 +123,10 @@ export function AssetCard({
           <p className="line-clamp-2 text-xs leading-relaxed text-slate-400">
             {asset.short_description}
           </p>
+
+          <div className="pt-0.5">
+            <AssetCardTimer asset={asset} />
+          </div>
         </div>
       </div>
 

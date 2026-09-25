@@ -1307,19 +1307,38 @@ class OrderCreateView(generics.CreateAPIView):
 
         asset = get_object_or_404(Asset, id=request.data.get("asset_id"), is_published=True)
         ea_status = get_cached_early_access_status(asset, request)
-        can_purchase = (
-            not asset.is_upcoming
-            or ea_status["can_access_early"]
-            or getattr(asset, "prebooking_enabled", False)
-        )
-        if not can_purchase:
-            return Response({"detail": "This asset is marked as upcoming and is not available for purchase or pre-booking yet."}, status=status.HTTP_400_BAD_REQUEST)
-        target_amount = ea_status["effective_price"]
+        now = timezone.now()
+        is_released_by_schedule = bool(asset.release_date and now >= asset.release_date)
+        is_upcoming_effective = bool(asset.is_upcoming and not is_released_by_schedule)
+
         existing_order = Order.objects.filter(
             user=request.user,
             asset=asset,
             status__in=[Order.Status.PENDING, Order.Status.VERIFICATION_PENDING, Order.Status.APPROVED, Order.Status.PAID],
         ).order_by("-id").first()
+
+        has_paid_existing = bool(
+            existing_order and existing_order.status in [Order.Status.APPROVED, Order.Status.PAID]
+        )
+
+        if is_upcoming_effective and not ea_status["can_access_early"] and not has_paid_existing:
+            if not getattr(asset, "prebooking_enabled", False):
+                return Response(
+                    {"detail": "This asset is marked as upcoming and is not available for purchase or pre-booking yet."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if asset.prebooking_starts_at and now < asset.prebooking_starts_at:
+                return Response(
+                    {"detail": "Pre-booking has not started yet for this product."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if asset.prebooking_ends_at and now >= asset.prebooking_ends_at:
+                return Response(
+                    {"detail": "Pre-booking has closed for this product."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        target_amount = ea_status["effective_price"]
 
         # A pending order is an unpaid checkout quote, not a price lock.  Do
         # not reuse it after an administrator changes the product price or discount.
