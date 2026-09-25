@@ -23,6 +23,8 @@ from .views import (
     AdminCategoryViewSet,
     AdminOrderViewSet,
     AdminReviewViewSet,
+    AdminSpecialAccessLinkViewSet,
+    AdminSpecialAccessRequestViewSet,
     AdminUserViewSet,
     AdminActivityLogView,
     AdminDownloadHistoryView,
@@ -35,6 +37,8 @@ from .views import (
     current_user,
     order_invoice,
     site_settings,
+    special_access_link_claim,
+    special_access_link_detail,
     verify_maintenance_bypass,
 )
 
@@ -48,12 +52,16 @@ router.register("admin/categories", AdminCategoryViewSet, basename="admin-catego
 router.register("admin/orders", AdminOrderViewSet, basename="admin-order")
 router.register("admin/users", AdminUserViewSet, basename="admin-user")
 router.register("admin/reviews", AdminReviewViewSet, basename="admin-review")
+router.register("admin/special-access-links", AdminSpecialAccessLinkViewSet, basename="admin-special-access-link")
+router.register("admin/special-access-requests", AdminSpecialAccessRequestViewSet, basename="admin-special-access-request")
 
 urlpatterns = [
     path("assets/<int:pk>/download/", asset_download_by_id, name="asset-download-by-id"),
     path("site-settings/", site_settings, name="site-settings"),
     path("community-stats/", community_stats, name="community-stats"),
     path("verify-maintenance-bypass/", verify_maintenance_bypass, name="verify-maintenance-bypass"),
+    path("special-access/link/<str:token>/", special_access_link_detail, name="special-access-link-detail"),
+    path("special-access/link/<str:token>/claim/", special_access_link_claim, name="special-access-link-claim"),
     path("", include(router.urls)),
     path("auth/register/", RegisterView.as_view(), name="register"),
     path("auth/login/", LoginView.as_view(), name="login"),

@@ -4,22 +4,28 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import {
   AlertCircle,
+  Check,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
+  Copy,
   Edit,
   Eye,
   EyeOff,
   Gift,
   KeyRound,
+  Link2,
   Lock,
   Mail,
   Phone,
+  Plus,
   Search,
   Send,
+  Share2,
   ShieldCheck,
   ShoppingBag,
   Sparkles,
+  Trash2,
   User,
   UserCheck,
   Users,
@@ -30,7 +36,23 @@ import { AdminLayout } from "@/components/admin-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { adminGet, adminPatch, adminGetSpecialAccess, adminUpdateSpecialAccess, adminSendSpecialAccessEmail, type AdminUser } from "@/lib/admin-api";
+import {
+  adminGet,
+  adminPatch,
+  adminGetSpecialAccess,
+  adminUpdateSpecialAccess,
+  adminSendSpecialAccessEmail,
+  adminGetSpecialAccessLinks,
+  adminCreateSpecialAccessLink,
+  adminUpdateSpecialAccessLink,
+  adminDeleteSpecialAccessLink,
+  adminGetSpecialAccessRequests,
+  adminApproveSpecialAccessRequest,
+  adminRejectSpecialAccessRequest,
+  type AdminUser,
+  type SpecialAccessInviteLink,
+  type SpecialAccessClaimRequest
+} from "@/lib/admin-api";
 import { getStoredUser, type Asset, type CurrentUser } from "@/lib/api";
 
 type RoleFilter = "all" | "special" | "staff" | "user";
@@ -69,6 +91,22 @@ function UsersManagementContent() {
   const [sendingEmailDirectly, setSendingEmailDirectly] = useState(false);
   const [emailDirectFeedback, setEmailDirectFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
+  // Special Access Link Generator & Requests State
+  const [showLinkGenerator, setShowLinkGenerator] = useState(false);
+  const [inviteLinks, setInviteLinks] = useState<SpecialAccessInviteLink[]>([]);
+  const [claimRequests, setClaimRequests] = useState<SpecialAccessClaimRequest[]>([]);
+  const [loadingLinks, setLoadingLinks] = useState(false);
+  const [creatingLink, setCreatingLink] = useState(false);
+  const [newLinkTitle, setNewLinkTitle] = useState("VIP Special Access Invite");
+  const [newLinkMode, setNewLinkMode] = useState<"APPROVAL" | "AUTO_GRANT">("APPROVAL");
+  const [newLinkAllAccess, setNewLinkAllAccess] = useState(true);
+  const [newLinkAssetIds, setNewLinkAssetIds] = useState<number[]>([]);
+  const [newLinkMaxUses, setNewLinkMaxUses] = useState<number>(1);
+  const [newLinkAccessExpiresAt, setNewLinkAccessExpiresAt] = useState("");
+  const [newLinkExpiresAt, setNewLinkExpiresAt] = useState("");
+  const [copiedToken, setCopiedToken] = useState<string | null>(null);
+  const [processingRequestId, setProcessingRequestId] = useState<number | null>(null);
+
   // Edit User Details Modal State
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
   const [editUsername, setEditUsername] = useState("");
@@ -83,9 +121,26 @@ function UsersManagementContent() {
   const [savingEdit, setSavingEdit] = useState(false);
   const [editFeedback, setEditFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
+  const loadLinksAndRequests = useCallback(async () => {
+    setLoadingLinks(true);
+    try {
+      const [linksData, reqsData] = await Promise.all([
+        adminGetSpecialAccessLinks(),
+        adminGetSpecialAccessRequests()
+      ]);
+      setInviteLinks(linksData);
+      setClaimRequests(reqsData);
+    } catch {
+      // ignore
+    } finally {
+      setLoadingLinks(false);
+    }
+  }, []);
+
   useEffect(() => {
     setCurrentUser(getStoredUser());
-  }, []);
+    loadLinksAndRequests();
+  }, [loadLinksAndRequests]);
 
   useEffect(() => {
     setPage(1);
@@ -411,6 +466,141 @@ function UsersManagementContent() {
     }
   }
 
+  function buildShareableUrl(tokenStr: string) {
+    const origin = typeof window !== "undefined" ? window.location.origin : "https://gjs-store.vercel.app";
+    return `${origin}/special-access?token=${encodeURIComponent(tokenStr)}`;
+  }
+
+  async function openLinkGeneratorModal() {
+    setShowLinkGenerator(true);
+    loadLinksAndRequests();
+    if (availableAssets.length === 0) {
+      try {
+        const data = await adminGet<any>("/admin/assets/?page_size=100", []);
+        const list = Array.isArray(data) ? data : Array.isArray(data?.results) ? data.results : [];
+        setAvailableAssets(list);
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  async function handleCreateInviteLink(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newLinkTitle.trim()) return;
+    setCreatingLink(true);
+    try {
+      const created = await adminCreateSpecialAccessLink({
+        title: newLinkTitle.trim(),
+        mode: newLinkMode,
+        is_all_access_free: newLinkAllAccess,
+        granted_asset_ids: newLinkAllAccess ? [] : newLinkAssetIds,
+        max_uses: Number(newLinkMaxUses) >= 0 ? Number(newLinkMaxUses) : 1,
+        access_expires_at: newLinkAccessExpiresAt ? new Date(newLinkAccessExpiresAt).toISOString() : null,
+        link_expires_at: newLinkExpiresAt ? new Date(newLinkExpiresAt).toISOString() : null,
+      });
+      setInviteLinks((prev) => [created, ...prev]);
+      copyInviteLink(created.token);
+      setFeedback({
+        type: "success",
+        message: `✨ Special Access link "${created.title}" generated and copied to clipboard!`,
+      });
+    } catch (err: any) {
+      setFeedback({
+        type: "error",
+        message: err?.message || "Failed to generate Special Access link.",
+      });
+    } finally {
+      setCreatingLink(false);
+    }
+  }
+
+  function copyInviteLink(tokenStr: string) {
+    const url = buildShareableUrl(tokenStr);
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      navigator.clipboard.writeText(url);
+      setCopiedToken(tokenStr);
+      setTimeout(() => setCopiedToken((curr) => (curr === tokenStr ? null : curr)), 2500);
+    }
+  }
+
+  function shareOnWhatsApp(link: SpecialAccessInviteLink) {
+    const url = buildShareableUrl(link.token);
+    const text =
+      link.mode === "AUTO_GRANT"
+        ? `🎉 You're invited to claim VIP Special Access on MSTS-GJS Production Store (${link.title})!\n\nClick the link below to unlock your complimentary access:\n${url}`
+        : `🚀 Request your VIP Special Access on MSTS-GJS Production Store (${link.title})!\n\nOpen the link below and submit your request so I can approve your access:\n${url}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
+  }
+
+  async function handleToggleLinkActive(link: SpecialAccessInviteLink) {
+    try {
+      const updated = await adminUpdateSpecialAccessLink(link.id, { is_active: !link.is_active });
+      setInviteLinks((prev) => prev.map((item) => (item.id === link.id ? updated : item)));
+    } catch (err: any) {
+      setFeedback({ type: "error", message: err?.message || "Could not update link status." });
+    }
+  }
+
+  async function handleDeleteLink(link: SpecialAccessInviteLink) {
+    if (!window.confirm(`Delete Special Access link "${link.title}"?`)) return;
+    try {
+      await adminDeleteSpecialAccessLink(link.id);
+      setInviteLinks((prev) => prev.filter((item) => item.id !== link.id));
+    } catch (err: any) {
+      setFeedback({ type: "error", message: err?.message || "Could not delete link." });
+    }
+  }
+
+  async function handleApproveRequest(req: SpecialAccessClaimRequest) {
+    setProcessingRequestId(req.id);
+    try {
+      const updated = await adminApproveSpecialAccessRequest(req.id, {
+        send_email_notification: true,
+      });
+      setClaimRequests((prev) => prev.map((r) => (r.id === req.id ? updated : r)));
+      loadUsers();
+      loadLinksAndRequests();
+      setFeedback({
+        type: "success",
+        message: `✅ Approved Special Access for ${req.user.username}! ${
+          updated.email_status?.sent ? `Confirmation email sent to ${updated.email_status.recipient}.` : ""
+        }`,
+      });
+    } catch (err: any) {
+      setFeedback({
+        type: "error",
+        message: err?.message || "Failed to approve Special Access request.",
+      });
+    } finally {
+      setProcessingRequestId(null);
+    }
+  }
+
+  async function handleRejectRequest(req: SpecialAccessClaimRequest) {
+    setProcessingRequestId(req.id);
+    try {
+      const updated = await adminRejectSpecialAccessRequest(req.id);
+      setClaimRequests((prev) => prev.map((r) => (r.id === req.id ? updated : r)));
+      setFeedback({
+        type: "success",
+        message: `Rejected Special Access request from ${req.user.username}.`,
+      });
+    } catch (err: any) {
+      setFeedback({
+        type: "error",
+        message: err?.message || "Failed to reject request.",
+      });
+    } finally {
+      setProcessingRequestId(null);
+    }
+  }
+
+  const pendingRequests = useMemo(
+    () => claimRequests.filter((r) => r.status === "PENDING"),
+    [claimRequests]
+  );
+
   return (
     <div className="space-y-6">
       <AdminLoginNote />
@@ -490,6 +680,119 @@ function UsersManagementContent() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Special Access Link Generator Callout Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-xl border border-amber-400/30 bg-gradient-to-r from-amber-500/10 via-purple-500/10 to-cyan-500/10 p-4">
+        <div className="space-y-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 text-sm font-black text-amber-300">
+              <Link2 size={17} /> 🔗 Special Access Link Generator & Request Manager
+            </span>
+            {pendingRequests.length > 0 ? (
+              <span className="animate-pulse rounded-full bg-amber-400 px-2.5 py-0.5 text-[11px] font-black text-black">
+                {pendingRequests.length} Pending {pendingRequests.length === 1 ? "Request" : "Requests"}
+              </span>
+            ) : null}
+          </div>
+          <p className="text-xs text-slate-300">
+            Generate a shareable link to send on WhatsApp/Discord. People can open your link to request Special Access (and you approve with 1 click) or claim instant VIP access!
+          </p>
+        </div>
+        <Button
+          type="button"
+          onClick={openLinkGeneratorModal}
+          className="shrink-0 bg-gradient-to-r from-amber-400 to-amber-500 text-black font-black hover:from-amber-300 hover:to-amber-400"
+        >
+          <Link2 size={16} className="mr-1.5" />
+          Generate / Manage Links ({inviteLinks.length})
+        </Button>
+      </div>
+
+      {/* Live Pending Special Access Requests Banner (if any) */}
+      {pendingRequests.length > 0 ? (
+        <div className="rounded-xl border border-cyan-400/40 bg-cyan-950/25 p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-black text-cyan-200 flex items-center gap-2">
+              <Sparkles size={16} className="text-cyan-400" />
+              <span>🔔 Pending Special Access Requests ({pendingRequests.length})</span>
+            </h3>
+            <button
+              type="button"
+              onClick={openLinkGeneratorModal}
+              className="text-xs font-semibold text-cyan-300 hover:underline"
+            >
+              View All Links & History →
+            </button>
+          </div>
+          <div className="grid gap-2.5">
+            {pendingRequests.map((req) => (
+              <div
+                key={req.id}
+                className="flex flex-col md:flex-row md:items-center justify-between gap-3 rounded-lg border border-white/10 bg-black/50 p-3"
+              >
+                <div className="space-y-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-bold text-white text-sm">{req.user.username}</span>
+                    {req.user.email ? (
+                      <span className="text-xs text-slate-400">({req.user.email})</span>
+                    ) : null}
+                    <span className="rounded bg-purple-500/20 border border-purple-400/30 px-2 py-0.5 text-[11px] font-semibold text-purple-200">
+                      Link: {req.invite_link_title}
+                    </span>
+                    <span className="rounded bg-emerald-500/15 border border-emerald-400/30 px-2 py-0.5 text-[11px] font-semibold text-emerald-300">
+                      {req.invite_is_all_access
+                        ? "Storewide Free Pass"
+                        : `${req.invite_granted_asset_titles?.length || 0} Selected Product(s)`}
+                    </span>
+                  </div>
+                  {req.user_note ? (
+                    <p className="text-xs text-amber-200">
+                      💬 Note from user: &ldquo;{req.user_note}&rdquo;
+                    </p>
+                  ) : null}
+                  <p className="text-[11px] text-slate-500">
+                    Requested on{" "}
+                    {new Date(req.created_at).toLocaleString("en-IN", {
+                      dateStyle: "medium",
+                      timeStyle: "short",
+                    })}
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={processingRequestId === req.id}
+                    onClick={() => handleApproveRequest(req)}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-black text-black hover:bg-emerald-400 disabled:opacity-50"
+                  >
+                    <Check size={14} />
+                    <span>
+                      {processingRequestId === req.id ? "Approving..." : "Approve & Grant Access"}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openSpecialModal(req.user)}
+                    className="inline-flex items-center gap-1 rounded-lg border border-purple-400/40 bg-purple-500/15 px-2.5 py-1.5 text-xs font-semibold text-purple-200 hover:bg-purple-500/25"
+                  >
+                    <Gift size={13} />
+                    <span>Customize</span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={processingRequestId === req.id}
+                    onClick={() => handleRejectRequest(req)}
+                    className="inline-flex items-center gap-1 rounded-lg border border-red-400/30 bg-red-500/10 px-2.5 py-1.5 text-xs font-semibold text-red-300 hover:bg-red-500/20 disabled:opacity-50"
+                  >
+                    <X size={13} />
+                    <span>Reject</span>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       {/* Filter and Search Bar */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_160px_160px_180px]">
@@ -1308,6 +1611,377 @@ function UsersManagementContent() {
           </div>
         </div>
       ) : null}
+
+      {/* Special Access Link Generator & Request Manager Modal */}
+      {showLinkGenerator ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+          <div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-amber-400/30 bg-[#0b1220] p-6 shadow-2xl space-y-6">
+            <div className="flex items-center justify-between border-b border-white/10 pb-4">
+              <div>
+                <h2 className="text-lg font-black text-amber-300 flex items-center gap-2">
+                  <Link2 size={20} />
+                  <span>🔗 Special Access Link Generator & Request Manager</span>
+                </h2>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Create shareable links to send to friends or customers. Choose whether they request access (and you approve) or get instant access!
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowLinkGenerator(false)}
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-white/10 hover:text-white"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Create New Link Form */}
+            <form
+              onSubmit={handleCreateInviteLink}
+              className="rounded-xl border border-amber-400/25 bg-amber-500/5 p-4 space-y-4"
+            >
+              <h3 className="text-sm font-bold text-amber-200 flex items-center gap-1.5">
+                <Plus size={16} /> Create New Shareable Special Access Link
+              </h3>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="block">
+                  <span className="text-xs font-semibold text-slate-300">Link Title / Label</span>
+                  <input
+                    type="text"
+                    required
+                    value={newLinkTitle}
+                    onChange={(e) => setNewLinkTitle(e.target.value)}
+                    placeholder="e.g. Vande Bharat Special Access Invite"
+                    className="mt-1 w-full rounded-lg border border-white/15 bg-black/60 px-3 py-2 text-xs text-white outline-none focus:border-amber-400"
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="text-xs font-semibold text-slate-300">How Should This Link Work?</span>
+                  <select
+                    value={newLinkMode}
+                    onChange={(e) => setNewLinkMode(e.target.value as "APPROVAL" | "AUTO_GRANT")}
+                    className="mt-1 w-full rounded-lg border border-white/15 bg-black/60 px-3 py-2 text-xs text-white outline-none focus:border-amber-400"
+                  >
+                    <option value="APPROVAL">🛡️ Request Mode (They Request → You Approve)</option>
+                    <option value="AUTO_GRANT">⚡ Instant Claim Mode (Auto-Grants Access on Click)</option>
+                  </select>
+                </label>
+              </div>
+
+              {/* Access Type Selection */}
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label
+                  className={`flex items-start gap-2.5 rounded-lg border p-3 cursor-pointer transition ${
+                    newLinkAllAccess
+                      ? "border-emerald-400/50 bg-emerald-950/30"
+                      : "border-white/10 bg-black/40 hover:bg-white/5"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="linkAccessType"
+                    checked={newLinkAllAccess}
+                    onChange={() => setNewLinkAllAccess(true)}
+                    className="mt-0.5 accent-emerald-400"
+                  />
+                  <div>
+                    <span className="block text-xs font-bold text-white">
+                      🌟 Storewide Free All-Access Pass
+                    </span>
+                    <span className="block text-[11px] text-slate-400">
+                      Grants complimentary access to all train packs & routes.
+                    </span>
+                  </div>
+                </label>
+
+                <label
+                  className={`flex items-start gap-2.5 rounded-lg border p-3 cursor-pointer transition ${
+                    !newLinkAllAccess
+                      ? "border-cyan-400/50 bg-cyan-950/30"
+                      : "border-white/10 bg-black/40 hover:bg-white/5"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="linkAccessType"
+                    checked={!newLinkAllAccess}
+                    onChange={() => setNewLinkAllAccess(false)}
+                    className="mt-0.5 accent-cyan-400"
+                  />
+                  <div>
+                    <span className="block text-xs font-bold text-white">
+                      🚂 Specific Selected Train Packs Only
+                    </span>
+                    <span className="block text-[11px] text-slate-400">
+                      Choose exact products this link unlocks.
+                    </span>
+                  </div>
+                </label>
+              </div>
+
+              {!newLinkAllAccess ? (
+                <div className="rounded-lg border border-white/10 bg-black/50 p-3 space-y-2">
+                  <span className="text-xs font-semibold text-cyan-200">
+                    Select Train Packs to Unlock ({newLinkAssetIds.length} selected):
+                  </span>
+                  <div className="max-h-36 overflow-y-auto grid gap-1.5 sm:grid-cols-2">
+                    {availableAssets.map((asset) => {
+                      const checked = newLinkAssetIds.includes(asset.id);
+                      return (
+                        <label
+                          key={asset.id}
+                          className={`flex items-center gap-2 rounded px-2.5 py-1.5 text-xs cursor-pointer ${
+                            checked ? "bg-cyan-900/40 text-cyan-200 border border-cyan-500/40" : "text-slate-300 hover:bg-white/5"
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setNewLinkAssetIds([...newLinkAssetIds, asset.id]);
+                              } else {
+                                setNewLinkAssetIds(newLinkAssetIds.filter((id) => id !== asset.id));
+                              }
+                            }}
+                            className="rounded accent-cyan-400"
+                          />
+                          <span className="truncate">{asset.title}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
+
+              {/* Limits & Expirations */}
+              <div className="grid gap-4 sm:grid-cols-3">
+                <label className="block">
+                  <span className="text-xs font-semibold text-slate-300">
+                    Max People Allowed (0 = Unlimited)
+                  </span>
+                  <input
+                    type="number"
+                    min={0}
+                    value={newLinkMaxUses}
+                    onChange={(e) => setNewLinkMaxUses(Number(e.target.value))}
+                    className="mt-1 w-full rounded-lg border border-white/15 bg-black/60 px-3 py-2 text-xs text-white outline-none focus:border-amber-400"
+                  />
+                  <span className="mt-0.5 block text-[10px] text-slate-500">
+                    Set 1 for a single person, or 0 for a group link.
+                  </span>
+                </label>
+
+                <label className="block">
+                  <span className="text-xs font-semibold text-slate-300">
+                    Link Expires At (Optional)
+                  </span>
+                  <input
+                    type="datetime-local"
+                    value={newLinkExpiresAt}
+                    onChange={(e) => setNewLinkExpiresAt(e.target.value)}
+                    className="mt-1 w-full rounded-lg border border-white/15 bg-black/60 px-3 py-2 text-xs text-white outline-none focus:border-amber-400"
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="text-xs font-semibold text-slate-300">
+                    User&apos;s VIP Access Expires At (Optional)
+                  </span>
+                  <input
+                    type="datetime-local"
+                    value={newLinkAccessExpiresAt}
+                    onChange={(e) => setNewLinkAccessExpiresAt(e.target.value)}
+                    className="mt-1 w-full rounded-lg border border-white/15 bg-black/60 px-3 py-2 text-xs text-white outline-none focus:border-amber-400"
+                  />
+                </label>
+              </div>
+
+              <div className="flex justify-end">
+                <Button
+                  type="submit"
+                  disabled={creatingLink}
+                  className="bg-amber-400 text-black font-black hover:bg-amber-300"
+                >
+                  <Link2 size={15} className="mr-1.5" />
+                  {creatingLink ? "Generating Link..." : "✨ Generate & Copy Shareable Link"}
+                </Button>
+              </div>
+            </form>
+
+            {/* Generated Invite Links List */}
+            <div className="space-y-3">
+              <h3 className="text-sm font-bold text-white flex items-center justify-between">
+                <span>Generated Shareable Links ({inviteLinks.length})</span>
+                {loadingLinks ? <span className="text-xs text-slate-400">Refreshing...</span> : null}
+              </h3>
+
+              {inviteLinks.length === 0 ? (
+                <p className="rounded-xl border border-white/10 bg-black/40 p-4 text-center text-xs text-slate-400">
+                  No Special Access links created yet. Generate one above to share with users!
+                </p>
+              ) : (
+                <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
+                  {inviteLinks.map((link) => {
+                    const fullUrl = buildShareableUrl(link.token);
+                    const isCopied = copiedToken === link.token;
+                    return (
+                      <div
+                        key={link.id}
+                        className={`rounded-xl border p-3.5 space-y-2.5 ${
+                          link.is_valid
+                            ? "border-white/15 bg-black/50"
+                            : "border-white/5 bg-black/25 opacity-70"
+                        }`}
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-bold text-sm text-white">{link.title}</span>
+                            <Badge variant={link.mode === "AUTO_GRANT" ? "warning" : "muted"}>
+                              {link.mode === "AUTO_GRANT" ? "⚡ Instant Claim" : "🛡️ Request & Approve"}
+                            </Badge>
+                            <Badge variant={link.is_valid ? "success" : "muted"}>
+                              {link.is_valid
+                                ? "Active"
+                                : !link.is_active
+                                ? "Disabled"
+                                : link.is_exhausted
+                                ? "Max Uses Reached"
+                                : "Expired"}
+                            </Badge>
+                            <span className="text-xs text-slate-400">
+                              Uses: <strong className="text-white">{link.uses_count}</strong> /{" "}
+                              {link.max_uses === 0 ? "∞" : link.max_uses}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => copyInviteLink(link.token)}
+                              className="inline-flex items-center gap-1 rounded-lg bg-amber-400/20 border border-amber-400/40 px-2.5 py-1 text-xs font-bold text-amber-200 hover:bg-amber-400/30"
+                            >
+                              {isCopied ? <Check size={13} /> : <Copy size={13} />}
+                              <span>{isCopied ? "Copied!" : "Copy Link"}</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => shareOnWhatsApp(link)}
+                              className="inline-flex items-center gap-1 rounded-lg bg-emerald-500/20 border border-emerald-400/40 px-2.5 py-1 text-xs font-bold text-emerald-200 hover:bg-emerald-500/30"
+                            >
+                              <Share2 size={13} />
+                              <span>WhatsApp</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleToggleLinkActive(link)}
+                              className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-xs text-slate-300 hover:bg-white/10"
+                            >
+                              {link.is_active ? "Disable" : "Enable"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteLink(link)}
+                              className="rounded-lg border border-red-500/30 bg-red-500/10 p-1 text-red-300 hover:bg-red-500/20"
+                              title="Delete Link"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/60 px-3 py-1.5">
+                          <span className="truncate font-mono text-[11px] text-amber-200 select-all flex-1">
+                            {fullUrl}
+                          </span>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-400">
+                          <span>
+                            Grants:{" "}
+                            <strong className="text-slate-200">
+                              {link.is_all_access_free
+                                ? "Storewide Free All-Access Pass"
+                                : link.granted_asset_titles?.join(", ") || "Custom Selected Assets"}
+                            </strong>
+                          </span>
+                          {link.pending_requests_count ? (
+                            <span className="text-amber-300 font-bold">
+                              • {link.pending_requests_count} Pending Request(s)
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Requests History Section */}
+            {claimRequests.length > 0 ? (
+              <div className="space-y-3 border-t border-white/10 pt-4">
+                <h3 className="text-sm font-bold text-white">
+                  Recent Requests & Claims ({claimRequests.length})
+                </h3>
+                <div className="max-h-60 overflow-y-auto space-y-2 pr-1">
+                  {claimRequests.map((req) => (
+                    <div
+                      key={req.id}
+                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-lg border border-white/10 bg-black/40 p-3 text-xs"
+                    >
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <strong className="text-white">{req.user.username}</strong>
+                          <span className="text-slate-400">{req.user.email}</span>
+                          <Badge
+                            variant={
+                              req.status === "APPROVED"
+                                ? "success"
+                                : req.status === "PENDING"
+                                ? "warning"
+                                : "default"
+                            }
+                          >
+                            {req.status}
+                          </Badge>
+                          <span className="text-slate-400">via {req.invite_link_title}</span>
+                        </div>
+                        {req.user_note ? (
+                          <p className="mt-1 text-amber-200">Note: &ldquo;{req.user_note}&rdquo;</p>
+                        ) : null}
+                      </div>
+
+                      {req.status === "PENDING" ? (
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            type="button"
+                            disabled={processingRequestId === req.id}
+                            onClick={() => handleApproveRequest(req)}
+                            className="rounded-lg bg-emerald-500 px-3 py-1.5 font-black text-black hover:bg-emerald-400"
+                          >
+                            {processingRequestId === req.id ? "Approving..." : "Approve & Grant"}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={processingRequestId === req.id}
+                            onClick={() => handleRejectRequest(req)}
+                            className="rounded-lg border border-red-400/40 bg-red-500/10 px-2.5 py-1.5 font-semibold text-red-300 hover:bg-red-500/20"
+                          >
+                            Reject
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -1321,3 +1995,4 @@ export default function AdminUsersPage() {
     </AdminLayout>
   );
 }
+

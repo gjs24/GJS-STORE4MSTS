@@ -360,3 +360,67 @@ export async function notifyMe(assetSlug: string): Promise<{ detail: string; cre
   if (!res.ok) throw new Error(await parseError(res, "Could not save notification request."));
   return res.json();
 }
+
+export type PublicSpecialAccessLink = {
+  id: number;
+  token: string;
+  title: string;
+  mode: "APPROVAL" | "AUTO_GRANT";
+  is_all_access_free: boolean;
+  granted_asset_titles: string[];
+  access_expires_at?: string | null;
+  link_expires_at?: string | null;
+  max_uses: number;
+  uses_count: number;
+  is_valid: boolean;
+  invalid_reason?: string | null;
+  my_request?: {
+    id: number;
+    status: "PENDING" | "APPROVED" | "REJECTED";
+    user_note?: string;
+    created_at: string;
+    reviewed_at?: string | null;
+  } | null;
+  user_has_active_special_access?: boolean;
+};
+
+export async function getSpecialAccessLink(tokenStr: string): Promise<PublicSpecialAccessLink> {
+  if (isLoggedIn()) {
+    await validAccessToken();
+  }
+  const res = await fetch(`${API_URL}/special-access/link/${encodeURIComponent(tokenStr)}/`, {
+    headers: authHeaders(),
+    cache: "no-store"
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || "This Special Access invite link is invalid or expired.");
+  }
+  return res.json();
+}
+
+export async function claimSpecialAccessLink(
+  tokenStr: string,
+  userNote?: string
+): Promise<{
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  detail: string;
+  my_request: NonNullable<PublicSpecialAccessLink["my_request"]>;
+}> {
+  await validAccessToken();
+  let res = await fetch(`${API_URL}/special-access/link/${encodeURIComponent(tokenStr)}/claim/`, {
+    method: "POST",
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify({ user_note: userNote || "" })
+  });
+  if (res.status === 401 && await refreshAccessToken()) {
+    res = await fetch(`${API_URL}/special-access/link/${encodeURIComponent(tokenStr)}/claim/`, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ user_note: userNote || "" })
+    });
+  }
+  if (!res.ok) throw new Error(await parseError(res, "Could not submit Special Access request."));
+  return res.json();
+}
+

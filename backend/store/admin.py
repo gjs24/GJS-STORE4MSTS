@@ -14,6 +14,8 @@ from .models import (
     Payment,
     Review,
     SiteSetting,
+    SpecialAccessClaimRequest,
+    SpecialAccessInviteLink,
     UpdateLog,
     UserBoardUnlock,
     UserCustomBoard,
@@ -107,3 +109,6 @@ admin.site.register(SiteSetting)
 admin.site.register(NotifyRequest)
 admin.site.register(AdminActivityLog)
 admin.site.register(UserSpecialAccess)
+admin.site.register(SpecialAccessInviteLink)
+admin.site.register(SpecialAccessClaimRequest)
+

@@ -22,6 +22,8 @@ from .models import (
     Payment,
     Review,
     SiteSetting,
+    SpecialAccessClaimRequest,
+    SpecialAccessInviteLink,
     UpdateLog,
     UserBoardUnlock,
     UserCustomBoard,
@@ -933,3 +935,133 @@ class SiteSettingSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ["updated_at"]
+
+
+class SpecialAccessInviteLinkSerializer(serializers.ModelSerializer):
+    granted_asset_titles = serializers.SerializerMethodField()
+    granted_asset_ids = serializers.ListField(
+        child=serializers.IntegerField(),
+        write_only=True,
+        required=False,
+    )
+    is_valid = serializers.SerializerMethodField()
+    is_expired = serializers.SerializerMethodField()
+    is_exhausted = serializers.SerializerMethodField()
+    pending_requests_count = serializers.SerializerMethodField()
+    approved_requests_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = SpecialAccessInviteLink
+        fields = [
+            "id",
+            "token",
+            "title",
+            "mode",
+            "is_all_access_free",
+            "granted_assets",
+            "granted_asset_ids",
+            "granted_asset_titles",
+            "max_uses",
+            "uses_count",
+            "access_expires_at",
+            "link_expires_at",
+            "admin_note",
+            "is_active",
+            "is_valid",
+            "is_expired",
+            "is_exhausted",
+            "pending_requests_count",
+            "approved_requests_count",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["token", "uses_count", "created_at", "updated_at"]
+
+    def get_granted_asset_titles(self, obj):
+        try:
+            return list(obj.granted_assets.values_list("title", flat=True))
+        except Exception:
+            return []
+
+    def get_is_valid(self, obj):
+        return obj.is_valid()
+
+    def get_is_expired(self, obj):
+        return obj.is_expired()
+
+    def get_is_exhausted(self, obj):
+        return obj.is_exhausted()
+
+    def get_pending_requests_count(self, obj):
+        try:
+            return obj.requests.filter(status="PENDING").count()
+        except Exception:
+            return 0
+
+    def get_approved_requests_count(self, obj):
+        try:
+            return obj.requests.filter(status="APPROVED").count()
+        except Exception:
+            return 0
+
+    def create(self, validated_data):
+        asset_ids = validated_data.pop("granted_asset_ids", None)
+        validated_data.pop("granted_assets", None)
+        link = SpecialAccessInviteLink.objects.create(**validated_data)
+        if asset_ids is not None:
+            link.granted_assets.set(Asset.objects.filter(id__in=asset_ids))
+        return link
+
+    def update(self, instance, validated_data):
+        asset_ids = validated_data.pop("granted_asset_ids", None)
+        validated_data.pop("granted_assets", None)
+        instance = super().update(instance, validated_data)
+        if asset_ids is not None:
+            instance.granted_assets.set(Asset.objects.filter(id__in=asset_ids))
+        return instance
+
+
+class SpecialAccessClaimRequestSerializer(serializers.ModelSerializer):
+    user = UserSerializer(read_only=True)
+    invite_link_title = serializers.CharField(source="invite_link.title", read_only=True)
+    invite_link_token = serializers.CharField(source="invite_link.token", read_only=True)
+    invite_link_mode = serializers.CharField(source="invite_link.mode", read_only=True)
+    invite_is_all_access = serializers.BooleanField(source="invite_link.is_all_access_free", read_only=True)
+    invite_granted_asset_ids = serializers.SerializerMethodField()
+    invite_granted_asset_titles = serializers.SerializerMethodField()
+    invite_access_expires_at = serializers.DateTimeField(source="invite_link.access_expires_at", read_only=True)
+
+    class Meta:
+        model = SpecialAccessClaimRequest
+        fields = [
+            "id",
+            "invite_link",
+            "invite_link_title",
+            "invite_link_token",
+            "invite_link_mode",
+            "invite_is_all_access",
+            "invite_granted_asset_ids",
+            "invite_granted_asset_titles",
+            "invite_access_expires_at",
+            "user",
+            "user_note",
+            "status",
+            "admin_note",
+            "reviewed_at",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["invite_link", "user", "status", "reviewed_at", "created_at", "updated_at"]
+
+    def get_invite_granted_asset_ids(self, obj):
+        try:
+            return list(obj.invite_link.granted_assets.values_list("id", flat=True))
+        except Exception:
+            return []
+
+    def get_invite_granted_asset_titles(self, obj):
+        try:
+            return list(obj.invite_link.granted_assets.values_list("title", flat=True))
+        except Exception:
+            return []
+

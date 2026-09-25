@@ -614,3 +614,134 @@ class UserProfile(models.Model):
 def ensure_user_profile(sender, instance, created, **kwargs):
     UserProfile.objects.get_or_create(user=instance)
 
+
+class SpecialAccessInviteLink(models.Model):
+    class Mode(models.TextChoices):
+        APPROVAL = "APPROVAL", "Request Mode (Admin Approves)"
+        AUTO_GRANT = "AUTO_GRANT", "Instant Claim (Auto-Grant Access)"
+
+    token = models.CharField(max_length=64, unique=True, db_index=True, blank=True)
+    title = models.CharField(max_length=160, default="VIP Special Access Invite")
+    mode = models.CharField(
+        max_length=24,
+        choices=Mode.choices,
+        default=Mode.APPROVAL,
+    )
+    is_all_access_free = models.BooleanField(
+        default=True,
+        help_text="When true, grants Storewide Free All-Access Pass.",
+    )
+    granted_assets = models.ManyToManyField(
+        Asset,
+        blank=True,
+        related_name="special_access_invite_links",
+        help_text="Specific assets granted if all-access is false.",
+    )
+    max_uses = models.PositiveIntegerField(
+        default=1,
+        help_text="Maximum number of approved claims allowed (0 = unlimited).",
+    )
+    uses_count = models.PositiveIntegerField(default=0)
+    access_expires_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        help_text="Optional expiration date for the user's granted special access.",
+    )
+    link_expires_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        help_text="Optional expiration date for this invite link itself.",
+    )
+    admin_note = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="Internal note for admins.",
+    )
+    is_active = models.BooleanField(default=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="created_special_access_links",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name = "Special access invite link"
+        verbose_name_plural = "Special access invite links"
+
+    def save(self, *args, **kwargs):
+        if not self.token:
+            import secrets
+            self.token = f"gjs-vip-{secrets.token_urlsafe(12)}"
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.title} ({self.token})"
+
+    def is_expired(self):
+        if self.link_expires_at:
+            from django.utils import timezone
+            return timezone.now() > self.link_expires_at
+        return False
+
+    def is_exhausted(self):
+        return self.max_uses > 0 and self.uses_count >= self.max_uses
+
+    def is_valid(self):
+        return self.is_active and not self.is_expired() and not self.is_exhausted()
+
+
+class SpecialAccessClaimRequest(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "PENDING", "Pending Approval"
+        APPROVED = "APPROVED", "Approved & Granted"
+        REJECTED = "REJECTED", "Rejected"
+
+    invite_link = models.ForeignKey(
+        SpecialAccessInviteLink,
+        related_name="requests",
+        on_delete=models.CASCADE,
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        related_name="special_access_requests",
+        on_delete=models.CASCADE,
+    )
+    user_note = models.CharField(
+        max_length=300,
+        blank=True,
+        default="",
+        help_text="Message or note submitted by the requester.",
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDING,
+    )
+    admin_note = models.CharField(max_length=255, blank=True, default="")
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="reviewed_special_access_requests",
+    )
+    reviewed_at = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        unique_together = [("invite_link", "user")]
+        verbose_name = "Special access claim request"
+        verbose_name_plural = "Special access claim requests"
+
+    def __str__(self):
+        return f"{self.user.username} -> {self.invite_link.title} ({self.status})"
+
+

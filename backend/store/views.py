@@ -48,6 +48,8 @@ from .models import (
     Payment,
     Review,
     SiteSetting,
+    SpecialAccessClaimRequest,
+    SpecialAccessInviteLink,
     UserBoardUnlock,
     UserCustomBoard,
     UserProfile,
@@ -71,6 +73,8 @@ from .serializers import (
     ReviewSerializer,
     SendOTPSerializer,
     SiteSettingSerializer,
+    SpecialAccessClaimRequestSerializer,
+    SpecialAccessInviteLinkSerializer,
     UserCustomBoardSerializer,
     UserSerializer,
     UserSpecialAccessSerializer,
@@ -2794,4 +2798,330 @@ def cashfree_webhook(request):
     except Exception as exc:
         logger.exception("Cashfree webhook processing failed")
         return Response({"status": "error", "detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class AdminSpecialAccessLinkViewSet(viewsets.ModelViewSet):
+    serializer_class = SpecialAccessInviteLinkSerializer
+    permission_classes = [permissions.IsAdminUser]
+    queryset = SpecialAccessInviteLink.objects.prefetch_related("granted_assets", "requests").order_by("-created_at")
+
+    def perform_create(self, serializer):
+        link = serializer.save(created_by=self.request.user)
+        log_admin_activity(
+            self.request,
+            "Special access link created",
+            "SpecialAccessInviteLink",
+            link.id,
+            f"Created special access invite link '{link.title}' ({link.mode})",
+        )
+
+    def perform_update(self, serializer):
+        link = serializer.save()
+        log_admin_activity(
+            self.request,
+            "Special access link updated",
+            "SpecialAccessInviteLink",
+            link.id,
+            f"Updated special access invite link '{link.title}' (Active: {link.is_active})",
+        )
+
+    def perform_destroy(self, instance):
+        link_id = instance.id
+        title = instance.title
+        instance.delete()
+        log_admin_activity(
+            self.request,
+            "Special access link deleted",
+            "SpecialAccessInviteLink",
+            link_id,
+            f"Deleted special access invite link '{title}'",
+        )
+
+
+class AdminSpecialAccessRequestViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = SpecialAccessClaimRequestSerializer
+    permission_classes = [permissions.IsAdminUser]
+
+    def get_queryset(self):
+        qs = SpecialAccessClaimRequest.objects.select_related(
+            "invite_link", "user", "user__special_access", "user__profile"
+        ).prefetch_related("invite_link__granted_assets").order_by("-created_at")
+        status_param = self.request.query_params.get("status")
+        if status_param:
+            qs = qs.filter(status=status_param.upper())
+        link_id = self.request.query_params.get("invite_link")
+        if link_id:
+            qs = qs.filter(invite_link_id=link_id)
+        return qs
+
+    @action(detail=True, methods=["post"])
+    def approve(self, request, pk=None):
+        claim_req = self.get_object()
+        link = claim_req.invite_link
+        target_user = claim_req.user
+
+        is_all_access = request.data.get("is_all_access_free", link.is_all_access_free)
+        granted_asset_ids = request.data.get("granted_asset_ids")
+        expires_at = request.data.get("expires_at", link.access_expires_at)
+        admin_note = request.data.get("admin_note")
+        send_email = request.data.get("send_email_notification", True)
+
+        special_access, _ = UserSpecialAccess.objects.get_or_create(user=target_user)
+        special_access.is_all_access_free = bool(is_all_access)
+        if expires_at is not None:
+            special_access.expires_at = expires_at or None
+        if admin_note is not None:
+            special_access.admin_note = str(admin_note).strip()
+        elif not special_access.admin_note:
+            special_access.admin_note = f"Approved via invite link: {link.title}"
+        special_access.save()
+
+        if granted_asset_ids is not None and isinstance(granted_asset_ids, list):
+            special_access.granted_assets.set(Asset.objects.filter(id__in=granted_asset_ids))
+        else:
+            for asset_item in link.granted_assets.all():
+                special_access.granted_assets.add(asset_item)
+
+        was_already_approved = claim_req.status == SpecialAccessClaimRequest.Status.APPROVED
+        claim_req.status = SpecialAccessClaimRequest.Status.APPROVED
+        if admin_note is not None:
+            claim_req.admin_note = str(admin_note).strip()
+        claim_req.reviewed_by = request.user
+        claim_req.reviewed_at = timezone.now()
+        claim_req.save()
+
+        if not was_already_approved:
+            link.uses_count = (link.uses_count or 0) + 1
+            link.save(update_fields=["uses_count"])
+
+        email_status = None
+        if send_email and target_user.email:
+            sent, err = send_special_access_email(target_user, special_access)
+            email_status = {
+                "sent": sent,
+                "recipient": target_user.email,
+                "message": f"Special access email sent to {target_user.email}." if sent else None,
+                "error": err if not sent else None,
+            }
+
+        log_admin_activity(
+            request,
+            "Special access request approved",
+            "SpecialAccessClaimRequest",
+            claim_req.id,
+            f"Approved special access request for {target_user.username} via link '{link.title}'",
+        )
+
+        data = SpecialAccessClaimRequestSerializer(claim_req, context={"request": request}).data
+        if email_status:
+            data["email_status"] = email_status
+        return Response(data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["post"])
+    def reject(self, request, pk=None):
+        claim_req = self.get_object()
+        admin_note = request.data.get("admin_note", "")
+        claim_req.status = SpecialAccessClaimRequest.Status.REJECTED
+        if admin_note:
+            claim_req.admin_note = str(admin_note).strip()
+        claim_req.reviewed_by = request.user
+        claim_req.reviewed_at = timezone.now()
+        claim_req.save()
+
+        log_admin_activity(
+            request,
+            "Special access request rejected",
+            "SpecialAccessClaimRequest",
+            claim_req.id,
+            f"Rejected special access request for {claim_req.user.username}",
+        )
+        return Response(
+            SpecialAccessClaimRequestSerializer(claim_req, context={"request": request}).data,
+            status=status.HTTP_200_OK,
+        )
+
+
+@api_view(["GET"])
+@permission_classes([permissions.AllowAny])
+def special_access_link_detail(request, token):
+    link = SpecialAccessInviteLink.objects.prefetch_related("granted_assets").filter(token=token).first()
+    if not link:
+        return Response(
+            {"detail": "This Special Access invite link was not found or has been removed."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    invalid_reason = None
+    if not link.is_active:
+        invalid_reason = "This Special Access link has been deactivated by the administrator."
+    elif link.is_expired():
+        invalid_reason = "This Special Access link has expired."
+    elif link.is_exhausted():
+        invalid_reason = "This Special Access link has reached its maximum number of uses."
+
+    my_request_data = None
+    has_active_access = False
+    if request.user and request.user.is_authenticated:
+        existing = SpecialAccessClaimRequest.objects.filter(invite_link=link, user=request.user).first()
+        if existing:
+            my_request_data = {
+                "id": existing.id,
+                "status": existing.status,
+                "user_note": existing.user_note,
+                "created_at": existing.created_at,
+                "reviewed_at": existing.reviewed_at,
+            }
+        sa = getattr(request.user, "special_access", None)
+        if sa and sa.is_active():
+            has_active_access = True
+
+    return Response(
+        {
+            "id": link.id,
+            "token": link.token,
+            "title": link.title,
+            "mode": link.mode,
+            "is_all_access_free": link.is_all_access_free,
+            "granted_asset_titles": list(link.granted_assets.values_list("title", flat=True)),
+            "access_expires_at": link.access_expires_at,
+            "link_expires_at": link.link_expires_at,
+            "max_uses": link.max_uses,
+            "uses_count": link.uses_count,
+            "is_valid": link.is_valid(),
+            "invalid_reason": invalid_reason,
+            "my_request": my_request_data,
+            "user_has_active_special_access": has_active_access,
+        },
+        status=status.HTTP_200_OK,
+    )
+
+
+@api_view(["POST"])
+@permission_classes([permissions.IsAuthenticated])
+def special_access_link_claim(request, token):
+    link = SpecialAccessInviteLink.objects.prefetch_related("granted_assets").filter(token=token).first()
+    if not link:
+        return Response(
+            {"detail": "This Special Access invite link was not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    existing = SpecialAccessClaimRequest.objects.filter(invite_link=link, user=request.user).first()
+    if existing and existing.status == SpecialAccessClaimRequest.Status.APPROVED:
+        return Response(
+            {
+                "status": "APPROVED",
+                "detail": "🎉 You have already claimed and unlocked VIP Special Access from this link!",
+                "my_request": {
+                    "id": existing.id,
+                    "status": existing.status,
+                    "user_note": existing.user_note,
+                    "created_at": existing.created_at,
+                    "reviewed_at": existing.reviewed_at,
+                },
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    if not link.is_active:
+        return Response(
+            {"detail": "This Special Access link has been deactivated by the administrator."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    if link.is_expired():
+        return Response(
+            {"detail": "This Special Access link has expired."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    if link.is_exhausted():
+        return Response(
+            {"detail": "This Special Access link has reached its maximum number of claims."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    user_note = str(request.data.get("user_note") or "").strip()[:300]
+
+    if link.mode == SpecialAccessInviteLink.Mode.AUTO_GRANT:
+        special_access, _ = UserSpecialAccess.objects.get_or_create(user=request.user)
+        if link.is_all_access_free:
+            special_access.is_all_access_free = True
+        if link.access_expires_at:
+            special_access.expires_at = link.access_expires_at
+        if not special_access.admin_note:
+            special_access.admin_note = f"Auto-claimed via invite link: {link.title}"
+        special_access.save()
+
+        for asset_item in link.granted_assets.all():
+            special_access.granted_assets.add(asset_item)
+
+        claim_req, _ = SpecialAccessClaimRequest.objects.update_or_create(
+            invite_link=link,
+            user=request.user,
+            defaults={
+                "user_note": user_note,
+                "status": SpecialAccessClaimRequest.Status.APPROVED,
+                "reviewed_at": timezone.now(),
+            },
+        )
+        link.uses_count = (link.uses_count or 0) + 1
+        link.save(update_fields=["uses_count"])
+
+        if request.user.email:
+            send_special_access_email(request.user, special_access)
+
+        log_admin_activity(
+            request,
+            "Special access claimed via link",
+            "User",
+            request.user.id,
+            f"User {request.user.username} auto-claimed special access via link '{link.title}'",
+        )
+
+        return Response(
+            {
+                "status": "APPROVED",
+                "detail": "🎉 VIP Special Access has been activated on your account! You can now download your unlocked train packs for free.",
+                "my_request": {
+                    "id": claim_req.id,
+                    "status": claim_req.status,
+                    "user_note": claim_req.user_note,
+                    "created_at": claim_req.created_at,
+                    "reviewed_at": claim_req.reviewed_at,
+                },
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    claim_req, _ = SpecialAccessClaimRequest.objects.update_or_create(
+        invite_link=link,
+        user=request.user,
+        defaults={
+            "user_note": user_note,
+            "status": SpecialAccessClaimRequest.Status.PENDING,
+        },
+    )
+
+    log_admin_activity(
+        request,
+        "Special access requested via link",
+        "User",
+        request.user.id,
+        f"User {request.user.username} requested special access via link '{link.title}'",
+    )
+
+    return Response(
+        {
+            "status": "PENDING",
+            "detail": "✅ Your Special Access request has been submitted! Once the admin approves your request, your VIP access will be unlocked and you will receive an email confirmation.",
+            "my_request": {
+                "id": claim_req.id,
+                "status": claim_req.status,
+                "user_note": claim_req.user_note,
+                "created_at": claim_req.created_at,
+                "reviewed_at": claim_req.reviewed_at,
+            },
+        },
+        status=status.HTTP_200_OK,
+    )
+
 

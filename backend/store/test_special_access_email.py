@@ -105,3 +105,58 @@ class StoreTimersAndSpecialAccessTests(TestCase):
         )
         ok, err = send_special_access_email(self.user, access)
         self.assertTrue(ok, err)
+
+    def test_special_access_invite_link_request_and_approval(self):
+        from rest_framework.test import APIClient
+        from .models import SpecialAccessInviteLink
+
+        admin = User.objects.create_superuser(
+            username="admin_link_tester",
+            email="admin@example.com",
+            password="password123",
+        )
+        client = APIClient()
+
+        client.force_authenticate(user=admin)
+        create_res = client.post(
+            "/api/admin/special-access-links/",
+            {
+                "title": "Vande Bharat Friend Access",
+                "mode": "APPROVAL",
+                "is_all_access_free": True,
+                "max_uses": 2,
+            },
+            format="json",
+        )
+        self.assertEqual(create_res.status_code, 201, create_res.data)
+        token = create_res.data["token"]
+        self.assertTrue(token.startswith("gjs-vip-"))
+
+        client.force_authenticate(user=self.user)
+        detail_res = client.get(f"/api/special-access/link/{token}/")
+        self.assertEqual(detail_res.status_code, 200)
+        self.assertTrue(detail_res.data["is_valid"])
+
+        claim_res = client.post(
+            f"/api/special-access/link/{token}/claim/",
+            {"user_note": "Hi, I am your friend from WhatsApp"},
+            format="json",
+        )
+        self.assertEqual(claim_res.status_code, 200)
+        self.assertEqual(claim_res.data["status"], "PENDING")
+        req_id = claim_res.data["my_request"]["id"]
+
+        client.force_authenticate(user=admin)
+        approve_res = client.post(
+            f"/api/admin/special-access-requests/{req_id}/approve/",
+            {"send_email_notification": True},
+            format="json",
+        )
+        self.assertEqual(approve_res.status_code, 200, approve_res.data)
+        self.assertEqual(approve_res.data["status"], "APPROVED")
+
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.special_access.is_all_access_free)
+        link_obj = SpecialAccessInviteLink.objects.get(token=token)
+        self.assertEqual(link_obj.uses_count, 1)
+

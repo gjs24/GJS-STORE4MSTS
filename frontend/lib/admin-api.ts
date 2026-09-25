@@ -359,6 +359,116 @@ export async function adminSendSpecialAccessEmail(
   );
 }
 
+export type SpecialAccessInviteLink = {
+  id: number;
+  token: string;
+  title: string;
+  mode: "APPROVAL" | "AUTO_GRANT";
+  is_all_access_free: boolean;
+  granted_assets?: number[];
+  granted_asset_titles?: string[];
+  max_uses: number;
+  uses_count: number;
+  access_expires_at?: string | null;
+  link_expires_at?: string | null;
+  admin_note?: string;
+  is_active: boolean;
+  is_valid?: boolean;
+  is_expired?: boolean;
+  is_exhausted?: boolean;
+  pending_requests_count?: number;
+  approved_requests_count?: number;
+  created_at: string;
+  updated_at?: string;
+};
+
+export type SpecialAccessClaimRequest = {
+  id: number;
+  invite_link: number;
+  invite_link_title: string;
+  invite_link_token: string;
+  invite_link_mode: "APPROVAL" | "AUTO_GRANT";
+  invite_is_all_access: boolean;
+  invite_granted_asset_ids?: number[];
+  invite_granted_asset_titles?: string[];
+  invite_access_expires_at?: string | null;
+  user: AdminUser;
+  user_note?: string;
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  admin_note?: string;
+  reviewed_at?: string | null;
+  created_at: string;
+  updated_at?: string;
+  email_status?: SpecialAccessEmailStatus;
+};
+
+export async function adminGetSpecialAccessLinks(): Promise<SpecialAccessInviteLink[]> {
+  const data = await adminGet<any>("/admin/special-access-links/", []);
+  return Array.isArray(data) ? data : Array.isArray(data?.results) ? data.results : [];
+}
+
+export async function adminCreateSpecialAccessLink(payload: {
+  title: string;
+  mode: "APPROVAL" | "AUTO_GRANT";
+  is_all_access_free: boolean;
+  granted_asset_ids?: number[];
+  max_uses: number;
+  access_expires_at?: string | null;
+  link_expires_at?: string | null;
+  admin_note?: string;
+}): Promise<SpecialAccessInviteLink> {
+  return adminPost<SpecialAccessInviteLink>("/admin/special-access-links/", payload);
+}
+
+export async function adminUpdateSpecialAccessLink(
+  id: number,
+  payload: Partial<{
+    title: string;
+    mode: "APPROVAL" | "AUTO_GRANT";
+    is_all_access_free: boolean;
+    granted_asset_ids: number[];
+    max_uses: number;
+    access_expires_at: string | null;
+    link_expires_at: string | null;
+    admin_note: string;
+    is_active: boolean;
+  }>
+): Promise<SpecialAccessInviteLink> {
+  return adminPatch<SpecialAccessInviteLink>(`/admin/special-access-links/${id}/`, payload);
+}
+
+export async function adminDeleteSpecialAccessLink(id: number): Promise<void> {
+  return adminDelete(`/admin/special-access-links/${id}/`);
+}
+
+export async function adminGetSpecialAccessRequests(status?: string): Promise<SpecialAccessClaimRequest[]> {
+  const path = status ? `/admin/special-access-requests/?status=${encodeURIComponent(status)}` : "/admin/special-access-requests/";
+  const data = await adminGet<any>(path, []);
+  return Array.isArray(data) ? data : Array.isArray(data?.results) ? data.results : [];
+}
+
+export async function adminApproveSpecialAccessRequest(
+  requestId: number,
+  payload?: {
+    is_all_access_free?: boolean;
+    granted_asset_ids?: number[];
+    expires_at?: string | null;
+    admin_note?: string;
+    send_email_notification?: boolean;
+  }
+): Promise<SpecialAccessClaimRequest> {
+  return adminPost<SpecialAccessClaimRequest>(`/admin/special-access-requests/${requestId}/approve/`, payload || {});
+}
+
+export async function adminRejectSpecialAccessRequest(
+  requestId: number,
+  adminNote?: string
+): Promise<SpecialAccessClaimRequest> {
+  return adminPost<SpecialAccessClaimRequest>(`/admin/special-access-requests/${requestId}/reject/`, {
+    admin_note: adminNote || ""
+  });
+}
+
 export async function setAdminOrderAccess(
   orderId: number,
   payload: {
@@ -385,3 +495,4 @@ export const fallbackStats: AdminStats = {
   premium_assets: 0,
   monthly_sales: []
 };
+
