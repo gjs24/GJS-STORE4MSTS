@@ -234,22 +234,24 @@ export default function AdminBoardTemplatesPage() {
         ? currentBoards.filter((id) => id !== tpl.id)
         : [...currentBoards, tpl.id];
 
-      const updatedUser = await adminUpdateSpecialAccess(user.id, {
+      const updatedAccess = await adminUpdateSpecialAccess(user.id, {
         is_all_access_free: Boolean(currentAccess?.is_all_access_free),
         granted_asset_ids: currentAssets,
         granted_board_template_ids: nextBoards,
         admin_note: currentAccess?.admin_note || `Nameboard Access: ${tpl.name}`,
         expires_at: currentAccess?.expires_at || null,
-        send_notification_email: !isCurrentlyGranted && sendNotifyEmail
+        send_email_notification: !isCurrentlyGranted && sendNotifyEmail
       });
 
-      setAdminUsers((prev) => prev.map((u) => (u.id === user.id ? updatedUser : u)));
+      setAdminUsers((prev) =>
+        prev.map((u) => (u.id === user.id ? { ...u, special_access: updatedAccess } : u))
+      );
       setSpecialModalFeedback({
         type: "success",
         message: isCurrentlyGranted
           ? `Revoked "${tpl.name}" special access from ${user.username}.`
           : `Granted free access to "${tpl.name}" for ${user.username}!${
-              updatedUser.special_access_email?.sent ? " (Email notification sent)" : ""
+              updatedAccess.email_status?.sent ? " (Email notification sent)" : ""
             }`
       });
     } catch (err) {
@@ -297,8 +299,7 @@ export default function AdminBoardTemplatesPage() {
         is_all_access_free: false,
         granted_asset_ids: [],
         granted_board_template_ids: [specialTemplate.id],
-        max_uses: Math.max(0, Number(newLinkMaxUses) || 0),
-        is_active: true
+        max_uses: Math.max(0, Number(newLinkMaxUses) || 0)
       });
       setTemplateLinks((prev) => [created, ...prev]);
       await copyShareableLink(created.token);
@@ -1144,7 +1145,7 @@ export default function AdminBoardTemplatesPage() {
                           return (
                             u.username.toLowerCase().includes(q) ||
                             (u.email || "").toLowerCase().includes(q) ||
-                            (u.name || "").toLowerCase().includes(q)
+                            `${u.first_name || ""} ${u.last_name || ""}`.toLowerCase().includes(q)
                           );
                         })
                         .sort((a, b) => {

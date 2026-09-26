@@ -54,6 +54,7 @@ import {
   type SpecialAccessClaimRequest
 } from "@/lib/admin-api";
 import { getStoredUser, type Asset, type CurrentUser } from "@/lib/api";
+import { storageService } from "@/lib/board-studio/storage-service";
 
 type RoleFilter = "all" | "special" | "staff" | "user";
 type StatusFilter = "all" | "active" | "disabled";
@@ -103,7 +104,7 @@ function UsersManagementContent() {
   const [creatingLink, setCreatingLink] = useState(false);
   const [newLinkTitle, setNewLinkTitle] = useState("VIP Special Access Invite");
   const [newLinkMode, setNewLinkMode] = useState<"APPROVAL" | "AUTO_GRANT">("APPROVAL");
-  const [newLinkAllAccess, setNewLinkAllAccess] = useState(true);
+  const [newLinkAllAccess, setNewLinkAllAccess] = useState(false);
   const [newLinkAssetIds, setNewLinkAssetIds] = useState<number[]>([]);
   const [newLinkBoardIds, setNewLinkBoardIds] = useState<string[]>([]);
   const [newLinkMaxUses, setNewLinkMaxUses] = useState<number>(1);
@@ -176,15 +177,46 @@ function UsersManagementContent() {
   }, [loadUsers]);
 
   const loadBoardTemplatesIfNeeded = useCallback(async () => {
-    if (availableBoardTemplates.length > 0) return;
+    const localTemplates = storageService.getAllTemplates();
+    const localMapped = localTemplates.map((t) => ({
+      id: t.id,
+      name: t.name,
+      category: t.category,
+      is_paid: Boolean(t.isPaid),
+      price: t.price ?? 0,
+    }));
+
+    if (localMapped.length > 0 && availableBoardTemplates.length === 0) {
+      setAvailableBoardTemplates(localMapped);
+    }
+
     try {
       const data = await adminGet<any>("/board-templates/?page_size=100", []);
-      const list = Array.isArray(data) ? data : Array.isArray(data?.results) ? data.results : [];
-      setAvailableBoardTemplates(list);
+      const cloudList: Array<{ id: string; name: string; category?: string; is_paid?: boolean; price?: string | number }> =
+        Array.isArray(data) ? data : Array.isArray(data?.results) ? data.results : [];
+
+      const cloudIds = new Set(cloudList.map((c) => c.id));
+      const merged = [...cloudList];
+      for (const loc of localMapped) {
+        if (!cloudIds.has(loc.id)) {
+          merged.push(loc);
+          const fullLocal = localTemplates.find((t) => t.id === loc.id);
+          if (fullLocal) {
+            storageService.syncCloudTemplate(fullLocal).catch(() => {});
+          }
+        }
+      }
+      setAvailableBoardTemplates(merged);
     } catch {
-      // ignore
+      if (localMapped.length > 0) {
+        setAvailableBoardTemplates(localMapped);
+      }
     }
   }, [availableBoardTemplates.length]);
+
+  useEffect(() => {
+    loadBoardTemplatesIfNeeded();
+  }, [loadBoardTemplatesIfNeeded]);
 
   const stats = useMemo(() => {
     const total = users.length;
@@ -307,6 +339,16 @@ function UsersManagementContent() {
     setSpecialFeedback(null);
     setEmailDirectFeedback(null);
     try {
+      if (!specialAllAccess && specialGrantedBoards.length > 0) {
+        const localAll = storageService.getAllTemplates();
+        await Promise.all(
+          specialGrantedBoards.map((boardId) => {
+            const found = localAll.find((t) => t.id === boardId);
+            return found ? storageService.syncCloudTemplate(found).catch(() => {}) : Promise.resolve();
+          })
+        );
+      }
+
       const updated = await adminUpdateSpecialAccess(specialUser.id, {
         is_all_access_free: specialAllAccess,
         admin_note: specialNote.trim(),
@@ -523,6 +565,16 @@ function UsersManagementContent() {
     if (!newLinkTitle.trim()) return;
     setCreatingLink(true);
     try {
+      if (!newLinkAllAccess && newLinkBoardIds.length > 0) {
+        const localAll = storageService.getAllTemplates();
+        await Promise.all(
+          newLinkBoardIds.map((boardId) => {
+            const found = localAll.find((t) => t.id === boardId);
+            return found ? storageService.syncCloudTemplate(found).catch(() => {}) : Promise.resolve();
+          })
+        );
+      }
+
       const created = await adminCreateSpecialAccessLink({
         title: newLinkTitle.trim(),
         mode: newLinkMode,
@@ -1172,12 +1224,19 @@ function UsersManagementContent() {
                 </div>
               </div>
 
-              {/* Specific Products Selection (if all-access is false) */}
-              {!specialAllAccess && availableAssets.length > 0 ? (
-                <div className="space-y-2 rounded-xl border border-white/10 bg-black/40 p-3.5">
-                  <label className="font-bold uppercase tracking-wider text-slate-300 text-[11px]">
-                    🚂 Select Specific Free Train Packs ({specialGrantedAssets.length} selected):
-                  </label>
+              {/* Specific Products Selection */}
+              <div className="space-y-2 rounded-xl border border-white/10 bg-black/40 p-3.5">
+                <label className="font-bold uppercase tracking-wider text-slate-300 text-[11px] flex items-center justify-between">
+                  <span>🚂 Select Specific Free Train Packs ({specialGrantedAssets.length} selected):</span>
+                  {specialAllAccess ? (
+                    <span className="text-[10px] font-semibold text-purple-300">
+                      All unlocked via Storewide Pass (click any item to switch to Specific)
+                    </span>
+                  ) : null}
+                </label>
+                {availableAssets.length === 0 ? (
+                  <p className="text-xs text-slate-400 py-2">Loading train packs...</p>
+                ) : (
                   <div className="max-h-36 overflow-y-auto space-y-1.5 pr-1 text-xs">
                     {availableAssets.map((asset) => {
                       const isSelected = specialGrantedAssets.includes(asset.id);
@@ -1195,6 +1254,7 @@ function UsersManagementContent() {
                             type="checkbox"
                             checked={isSelected}
                             onChange={(e) => {
+                              if (specialAllAccess) setSpecialAllAccess(false);
                               if (e.target.checked) {
                                 setSpecialGrantedAssets([...specialGrantedAssets, asset.id]);
                               } else {
@@ -1207,17 +1267,23 @@ function UsersManagementContent() {
                       );
                     })}
                   </div>
-                </div>
-              ) : null}
+                )}
+              </div>
 
-              {/* Specific Nameboard Templates Selection (if all-access is false) */}
-              {!specialAllAccess && availableBoardTemplates.length > 0 ? (
-                <div className="space-y-2 rounded-xl border border-amber-400/25 bg-black/40 p-3.5">
-                  <label className="font-bold uppercase tracking-wider text-amber-200 text-[11px] flex items-center justify-between">
-                    <span>🎨 Select Specific Nameboard Templates ({specialGrantedBoards.length} selected):</span>
-                    <span className="text-[10px] text-amber-300/80 font-normal">Railway Board Studio</span>
-                  </label>
-                  <div className="max-h-36 overflow-y-auto space-y-1.5 pr-1 text-xs">
+              {/* Specific Nameboard Templates Selection */}
+              <div className="space-y-2 rounded-xl border border-amber-400/30 bg-black/40 p-3.5">
+                <label className="font-bold uppercase tracking-wider text-amber-200 text-[11px] flex items-center justify-between">
+                  <span>🎨 Select Specific Nameboard Templates ({specialGrantedBoards.length} selected):</span>
+                  <span className="text-[10px] text-amber-300/80 font-normal">
+                    {specialAllAccess ? "All unlocked via Storewide Pass" : "Railway Board Studio"}
+                  </span>
+                </label>
+                {availableBoardTemplates.length === 0 ? (
+                  <p className="text-xs text-slate-400 py-2">
+                    No Nameboard Templates found yet. Create templates in Admin → Board Templates.
+                  </p>
+                ) : (
+                  <div className="max-h-40 overflow-y-auto space-y-1.5 pr-1 text-xs">
                     {availableBoardTemplates.map((board) => {
                       const isSelected = specialGrantedBoards.includes(board.id);
                       return (
@@ -1245,6 +1311,7 @@ function UsersManagementContent() {
                             type="checkbox"
                             checked={isSelected}
                             onChange={(e) => {
+                              if (specialAllAccess) setSpecialAllAccess(false);
                               if (e.target.checked) {
                                 setSpecialGrantedBoards([...specialGrantedBoards, board.id]);
                               } else {
@@ -1257,8 +1324,8 @@ function UsersManagementContent() {
                       );
                     })}
                   </div>
-                </div>
-              ) : null}
+                )}
+              </div>
 
               {/* Internal Admin Note */}
               <div className="space-y-1.5">
@@ -1816,82 +1883,98 @@ function UsersManagementContent() {
                 </label>
               </div>
 
-              {!newLinkAllAccess ? (
-                <div className="space-y-3">
-                  <div className="rounded-lg border border-white/10 bg-black/50 p-3 space-y-2">
+              <div className="space-y-3">
+                <div className="rounded-lg border border-white/10 bg-black/50 p-3 space-y-2">
+                  <div className="flex items-center justify-between">
                     <span className="text-xs font-semibold text-cyan-200">
                       🚂 Select Train Packs to Unlock ({newLinkAssetIds.length} selected):
                     </span>
+                    {newLinkAllAccess ? (
+                      <span className="text-[10px] text-emerald-300 font-semibold">
+                        All unlocked via Storewide Pass (click any item to switch to Specific)
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="max-h-36 overflow-y-auto grid gap-1.5 sm:grid-cols-2">
+                    {availableAssets.map((asset) => {
+                      const checked = newLinkAssetIds.includes(asset.id);
+                      return (
+                        <label
+                          key={asset.id}
+                          className={`flex items-center gap-2 rounded px-2.5 py-1.5 text-xs cursor-pointer ${
+                            checked ? "bg-cyan-900/40 text-cyan-200 border border-cyan-500/40" : "text-slate-300 hover:bg-white/5"
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) => {
+                              if (newLinkAllAccess) setNewLinkAllAccess(false);
+                              if (e.target.checked) {
+                                setNewLinkAssetIds([...newLinkAssetIds, asset.id]);
+                              } else {
+                                setNewLinkAssetIds(newLinkAssetIds.filter((id) => id !== asset.id));
+                              }
+                            }}
+                            className="rounded accent-cyan-400"
+                          />
+                          <span className="truncate">{asset.title}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-amber-400/30 bg-black/50 p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-amber-200">
+                      🎨 Select Nameboard Templates to Unlock ({newLinkBoardIds.length} selected):
+                    </span>
+                    <span className="text-[10px] text-amber-300/80">
+                      {newLinkAllAccess ? "All unlocked via Storewide Pass" : "Railway Board Studio"}
+                    </span>
+                  </div>
+                  {availableBoardTemplates.length === 0 ? (
+                    <p className="text-xs text-slate-400 py-1">
+                      No Nameboard Templates found yet. Create templates in Admin → Board Templates.
+                    </p>
+                  ) : (
                     <div className="max-h-36 overflow-y-auto grid gap-1.5 sm:grid-cols-2">
-                      {availableAssets.map((asset) => {
-                        const checked = newLinkAssetIds.includes(asset.id);
+                      {availableBoardTemplates.map((board) => {
+                        const checked = newLinkBoardIds.includes(board.id);
                         return (
                           <label
-                            key={asset.id}
-                            className={`flex items-center gap-2 rounded px-2.5 py-1.5 text-xs cursor-pointer ${
-                              checked ? "bg-cyan-900/40 text-cyan-200 border border-cyan-500/40" : "text-slate-300 hover:bg-white/5"
+                            key={board.id}
+                            className={`flex items-center justify-between gap-2 rounded px-2.5 py-1.5 text-xs cursor-pointer ${
+                              checked ? "bg-amber-900/40 text-amber-200 border border-amber-500/40" : "text-slate-300 hover:bg-white/5"
                             }`}
                           >
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  setNewLinkAssetIds([...newLinkAssetIds, asset.id]);
-                                } else {
-                                  setNewLinkAssetIds(newLinkAssetIds.filter((id) => id !== asset.id));
-                                }
-                              }}
-                              className="rounded accent-cyan-400"
-                            />
-                            <span className="truncate">{asset.title}</span>
+                            <span className="flex items-center gap-2 truncate">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={(e) => {
+                                  if (newLinkAllAccess) setNewLinkAllAccess(false);
+                                  if (e.target.checked) {
+                                    setNewLinkBoardIds([...newLinkBoardIds, board.id]);
+                                  } else {
+                                    setNewLinkBoardIds(newLinkBoardIds.filter((id) => id !== board.id));
+                                  }
+                                }}
+                                className="rounded accent-amber-400"
+                              />
+                              <span className="truncate">{board.name}</span>
+                            </span>
+                            <span className="shrink-0 text-[10px] font-bold text-amber-300">
+                              {board.is_paid ? `₹${board.price}` : "Free"}
+                            </span>
                           </label>
                         );
                       })}
                     </div>
-                  </div>
-
-                  {availableBoardTemplates.length > 0 ? (
-                    <div className="rounded-lg border border-amber-400/25 bg-black/50 p-3 space-y-2">
-                      <span className="text-xs font-semibold text-amber-200">
-                        🎨 Select Nameboard Templates to Unlock ({newLinkBoardIds.length} selected):
-                      </span>
-                      <div className="max-h-36 overflow-y-auto grid gap-1.5 sm:grid-cols-2">
-                        {availableBoardTemplates.map((board) => {
-                          const checked = newLinkBoardIds.includes(board.id);
-                          return (
-                            <label
-                              key={board.id}
-                              className={`flex items-center justify-between gap-2 rounded px-2.5 py-1.5 text-xs cursor-pointer ${
-                                checked ? "bg-amber-900/40 text-amber-200 border border-amber-500/40" : "text-slate-300 hover:bg-white/5"
-                              }`}
-                            >
-                              <span className="flex items-center gap-2 truncate">
-                                <input
-                                  type="checkbox"
-                                  checked={checked}
-                                  onChange={(e) => {
-                                    if (e.target.checked) {
-                                      setNewLinkBoardIds([...newLinkBoardIds, board.id]);
-                                    } else {
-                                      setNewLinkBoardIds(newLinkBoardIds.filter((id) => id !== board.id));
-                                    }
-                                  }}
-                                  className="rounded accent-amber-400"
-                                />
-                                <span className="truncate">{board.name}</span>
-                              </span>
-                              <span className="shrink-0 text-[10px] font-bold text-amber-300">
-                                {board.is_paid ? `₹${board.price}` : "Free"}
-                              </span>
-                            </label>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ) : null}
+                  )}
                 </div>
-              ) : null}
+              </div>
 
               {/* Limits & Expirations */}
               <div className="grid gap-4 sm:grid-cols-3">
