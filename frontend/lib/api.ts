@@ -113,6 +113,15 @@ export type CurrentUser = {
   is_staff: boolean;
   is_active: boolean;
   date_joined?: string;
+  special_access?: {
+    id?: number;
+    is_all_access_free: boolean;
+    expires_at?: string | null;
+    granted_assets?: number[];
+    granted_asset_titles?: string[];
+    granted_board_templates?: string[];
+    granted_board_template_names?: string[];
+  } | null;
 };
 
 export type SiteSettings = {

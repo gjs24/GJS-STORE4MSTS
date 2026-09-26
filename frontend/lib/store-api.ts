@@ -368,6 +368,8 @@ export type PublicSpecialAccessLink = {
   mode: "APPROVAL" | "AUTO_GRANT";
   is_all_access_free: boolean;
   granted_asset_titles: string[];
+  granted_board_template_ids?: string[];
+  granted_board_template_names?: string[];
   access_expires_at?: string | null;
   link_expires_at?: string | null;
   max_uses: number;

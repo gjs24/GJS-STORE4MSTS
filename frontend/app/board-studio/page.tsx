@@ -49,6 +49,13 @@ export default function BoardStudioPage() {
         const fresh = await userGet<CurrentUser>('/auth/me/');
         setStoredUser(fresh);
         setCurrentUser(fresh);
+        if (fresh?.special_access) {
+          const sa = fresh.special_access;
+          const notExpired = !sa.expires_at || new Date(sa.expires_at).getTime() > Date.now();
+          if (notExpired && Array.isArray(sa.granted_board_templates) && sa.granted_board_templates.length > 0) {
+            setUnlockedIds((prev) => Array.from(new Set([...prev, ...(sa.granted_board_templates || [])])));
+          }
+        }
       } catch (err) {
         if (!stored) {
           clearAuth();

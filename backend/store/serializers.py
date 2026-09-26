@@ -36,6 +36,7 @@ from .special_access import user_has_special_access
 
 class UserSpecialAccessSerializer(serializers.ModelSerializer):
     granted_asset_titles = serializers.SerializerMethodField()
+    granted_board_template_names = serializers.SerializerMethodField()
 
     class Meta:
         model = UserSpecialAccess
@@ -46,6 +47,8 @@ class UserSpecialAccessSerializer(serializers.ModelSerializer):
             "expires_at",
             "granted_assets",
             "granted_asset_titles",
+            "granted_board_templates",
+            "granted_board_template_names",
             "created_at",
             "updated_at",
         ]
@@ -53,6 +56,12 @@ class UserSpecialAccessSerializer(serializers.ModelSerializer):
     def get_granted_asset_titles(self, obj):
         try:
             return list(obj.granted_assets.values_list("title", flat=True))
+        except Exception:
+            return []
+
+    def get_granted_board_template_names(self, obj):
+        try:
+            return list(obj.granted_board_templates.values_list("name", flat=True))
         except Exception:
             return []
 
@@ -944,6 +953,12 @@ class SpecialAccessInviteLinkSerializer(serializers.ModelSerializer):
         write_only=True,
         required=False,
     )
+    granted_board_template_names = serializers.SerializerMethodField()
+    granted_board_template_ids = serializers.ListField(
+        child=serializers.CharField(),
+        write_only=True,
+        required=False,
+    )
     is_valid = serializers.SerializerMethodField()
     is_expired = serializers.SerializerMethodField()
     is_exhausted = serializers.SerializerMethodField()
@@ -961,6 +976,9 @@ class SpecialAccessInviteLinkSerializer(serializers.ModelSerializer):
             "granted_assets",
             "granted_asset_ids",
             "granted_asset_titles",
+            "granted_board_templates",
+            "granted_board_template_ids",
+            "granted_board_template_names",
             "max_uses",
             "uses_count",
             "access_expires_at",
@@ -980,6 +998,12 @@ class SpecialAccessInviteLinkSerializer(serializers.ModelSerializer):
     def get_granted_asset_titles(self, obj):
         try:
             return list(obj.granted_assets.values_list("title", flat=True))
+        except Exception:
+            return []
+
+    def get_granted_board_template_names(self, obj):
+        try:
+            return list(obj.granted_board_templates.values_list("name", flat=True))
         except Exception:
             return []
 
@@ -1006,18 +1030,26 @@ class SpecialAccessInviteLinkSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         asset_ids = validated_data.pop("granted_asset_ids", None)
+        board_ids = validated_data.pop("granted_board_template_ids", None)
         validated_data.pop("granted_assets", None)
+        validated_data.pop("granted_board_templates", None)
         link = SpecialAccessInviteLink.objects.create(**validated_data)
         if asset_ids is not None:
             link.granted_assets.set(Asset.objects.filter(id__in=asset_ids))
+        if board_ids is not None:
+            link.granted_board_templates.set(BoardTemplate.objects.filter(id__in=board_ids))
         return link
 
     def update(self, instance, validated_data):
         asset_ids = validated_data.pop("granted_asset_ids", None)
+        board_ids = validated_data.pop("granted_board_template_ids", None)
         validated_data.pop("granted_assets", None)
+        validated_data.pop("granted_board_templates", None)
         instance = super().update(instance, validated_data)
         if asset_ids is not None:
             instance.granted_assets.set(Asset.objects.filter(id__in=asset_ids))
+        if board_ids is not None:
+            instance.granted_board_templates.set(BoardTemplate.objects.filter(id__in=board_ids))
         return instance
 
 
@@ -1029,6 +1061,8 @@ class SpecialAccessClaimRequestSerializer(serializers.ModelSerializer):
     invite_is_all_access = serializers.BooleanField(source="invite_link.is_all_access_free", read_only=True)
     invite_granted_asset_ids = serializers.SerializerMethodField()
     invite_granted_asset_titles = serializers.SerializerMethodField()
+    invite_granted_board_template_ids = serializers.SerializerMethodField()
+    invite_granted_board_template_names = serializers.SerializerMethodField()
     invite_access_expires_at = serializers.DateTimeField(source="invite_link.access_expires_at", read_only=True)
 
     class Meta:
@@ -1042,6 +1076,8 @@ class SpecialAccessClaimRequestSerializer(serializers.ModelSerializer):
             "invite_is_all_access",
             "invite_granted_asset_ids",
             "invite_granted_asset_titles",
+            "invite_granted_board_template_ids",
+            "invite_granted_board_template_names",
             "invite_access_expires_at",
             "user",
             "user_note",
@@ -1062,6 +1098,18 @@ class SpecialAccessClaimRequestSerializer(serializers.ModelSerializer):
     def get_invite_granted_asset_titles(self, obj):
         try:
             return list(obj.invite_link.granted_assets.values_list("title", flat=True))
+        except Exception:
+            return []
+
+    def get_invite_granted_board_template_ids(self, obj):
+        try:
+            return list(obj.invite_link.granted_board_templates.values_list("id", flat=True))
+        except Exception:
+            return []
+
+    def get_invite_granted_board_template_names(self, obj):
+        try:
+            return list(obj.invite_link.granted_board_templates.values_list("name", flat=True))
         except Exception:
             return []
 

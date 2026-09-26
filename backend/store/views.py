@@ -686,9 +686,11 @@ def send_special_access_email(user, special_access, custom_subject=None, custom_
         access_type_label = "Storewide All-Access Pass (Everything Free)"
         granted_items_label = "All Store Products, Train Packs, Routes & DDS Nameboards"
     else:
-        access_type_label = "Specific VIP Products Pass"
+        access_type_label = "Specific VIP Products & Nameboards Pass"
         asset_titles = list(special_access.granted_assets.values_list("title", flat=True))
-        granted_items_label = ", ".join(asset_titles) if asset_titles else "Selected VIP items"
+        board_names = [f"Nameboard: {n}" for n in special_access.granted_board_templates.values_list("name", flat=True)]
+        combined_items = asset_titles + board_names
+        granted_items_label = ", ".join(combined_items) if combined_items else "Selected VIP items"
 
     # Expiry string
     if special_access.expires_at:
@@ -2122,6 +2124,7 @@ class AdminUserViewSet(viewsets.ModelViewSet):
             admin_note = request.data.get("admin_note")
             expires_at = request.data.get("expires_at")
             granted_asset_ids = request.data.get("granted_asset_ids")
+            granted_board_template_ids = request.data.get("granted_board_template_ids")
             send_email_notification = request.data.get("send_email_notification", False)
             custom_email_subject = request.data.get("custom_email_subject")
             custom_email_body = request.data.get("custom_email_body")
@@ -2134,6 +2137,8 @@ class AdminUserViewSet(viewsets.ModelViewSet):
                 special_access.expires_at = expires_at or None
             if granted_asset_ids is not None and isinstance(granted_asset_ids, list):
                 special_access.granted_assets.set(Asset.objects.filter(id__in=granted_asset_ids))
+            if granted_board_template_ids is not None and isinstance(granted_board_template_ids, list):
+                special_access.granted_board_templates.set(BoardTemplate.objects.filter(id__in=granted_board_template_ids))
 
             special_access.save()
 
@@ -2803,7 +2808,9 @@ def cashfree_webhook(request):
 class AdminSpecialAccessLinkViewSet(viewsets.ModelViewSet):
     serializer_class = SpecialAccessInviteLinkSerializer
     permission_classes = [permissions.IsAdminUser]
-    queryset = SpecialAccessInviteLink.objects.prefetch_related("granted_assets", "requests").order_by("-created_at")
+    queryset = SpecialAccessInviteLink.objects.prefetch_related(
+        "granted_assets", "granted_board_templates", "requests"
+    ).order_by("-created_at")
 
     def perform_create(self, serializer):
         link = serializer.save(created_by=self.request.user)
@@ -2845,7 +2852,9 @@ class AdminSpecialAccessRequestViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         qs = SpecialAccessClaimRequest.objects.select_related(
             "invite_link", "user", "user__special_access", "user__profile"
-        ).prefetch_related("invite_link__granted_assets").order_by("-created_at")
+        ).prefetch_related(
+            "invite_link__granted_assets", "invite_link__granted_board_templates"
+        ).order_by("-created_at")
         status_param = self.request.query_params.get("status")
         if status_param:
             qs = qs.filter(status=status_param.upper())
@@ -2862,6 +2871,7 @@ class AdminSpecialAccessRequestViewSet(viewsets.ReadOnlyModelViewSet):
 
         is_all_access = request.data.get("is_all_access_free", link.is_all_access_free)
         granted_asset_ids = request.data.get("granted_asset_ids")
+        granted_board_template_ids = request.data.get("granted_board_template_ids")
         expires_at = request.data.get("expires_at", link.access_expires_at)
         admin_note = request.data.get("admin_note")
         send_email = request.data.get("send_email_notification", True)
@@ -2881,6 +2891,14 @@ class AdminSpecialAccessRequestViewSet(viewsets.ReadOnlyModelViewSet):
         else:
             for asset_item in link.granted_assets.all():
                 special_access.granted_assets.add(asset_item)
+
+        if granted_board_template_ids is not None and isinstance(granted_board_template_ids, list):
+            special_access.granted_board_templates.set(
+                BoardTemplate.objects.filter(id__in=granted_board_template_ids)
+            )
+        else:
+            for board_item in link.granted_board_templates.all():
+                special_access.granted_board_templates.add(board_item)
 
         was_already_approved = claim_req.status == SpecialAccessClaimRequest.Status.APPROVED
         claim_req.status = SpecialAccessClaimRequest.Status.APPROVED
@@ -2944,7 +2962,9 @@ class AdminSpecialAccessRequestViewSet(viewsets.ReadOnlyModelViewSet):
 @api_view(["GET"])
 @permission_classes([permissions.AllowAny])
 def special_access_link_detail(request, token):
-    link = SpecialAccessInviteLink.objects.prefetch_related("granted_assets").filter(token=token).first()
+    link = SpecialAccessInviteLink.objects.prefetch_related(
+        "granted_assets", "granted_board_templates"
+    ).filter(token=token).first()
     if not link:
         return Response(
             {"detail": "This Special Access invite link was not found or has been removed."},
@@ -2983,6 +3003,8 @@ def special_access_link_detail(request, token):
             "mode": link.mode,
             "is_all_access_free": link.is_all_access_free,
             "granted_asset_titles": list(link.granted_assets.values_list("title", flat=True)),
+            "granted_board_template_ids": list(link.granted_board_templates.values_list("id", flat=True)),
+            "granted_board_template_names": list(link.granted_board_templates.values_list("name", flat=True)),
             "access_expires_at": link.access_expires_at,
             "link_expires_at": link.link_expires_at,
             "max_uses": link.max_uses,
@@ -2999,7 +3021,9 @@ def special_access_link_detail(request, token):
 @api_view(["POST"])
 @permission_classes([permissions.IsAuthenticated])
 def special_access_link_claim(request, token):
-    link = SpecialAccessInviteLink.objects.prefetch_related("granted_assets").filter(token=token).first()
+    link = SpecialAccessInviteLink.objects.prefetch_related(
+        "granted_assets", "granted_board_templates"
+    ).filter(token=token).first()
     if not link:
         return Response(
             {"detail": "This Special Access invite link was not found."},
@@ -3053,6 +3077,8 @@ def special_access_link_claim(request, token):
 
         for asset_item in link.granted_assets.all():
             special_access.granted_assets.add(asset_item)
+        for board_item in link.granted_board_templates.all():
+            special_access.granted_board_templates.add(board_item)
 
         claim_req, _ = SpecialAccessClaimRequest.objects.update_or_create(
             invite_link=link,
@@ -3080,7 +3106,7 @@ def special_access_link_claim(request, token):
         return Response(
             {
                 "status": "APPROVED",
-                "detail": "🎉 VIP Special Access has been activated on your account! You can now download your unlocked train packs for free.",
+                "detail": "🎉 VIP Special Access has been activated on your account! You can now download your unlocked train packs and customize unlocked nameboard templates for free.",
                 "my_request": {
                     "id": claim_req.id,
                     "status": claim_req.status,

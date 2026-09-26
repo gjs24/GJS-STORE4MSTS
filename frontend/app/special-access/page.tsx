@@ -243,13 +243,14 @@ function SpecialAccessContent() {
                     {linkData.is_all_access_free ? (
                       <p className="mt-1.5 flex items-center gap-2 text-sm font-bold text-emerald-300">
                         <Sparkles size={16} className="shrink-0 text-amber-400" />
-                        <span>Storewide Free All-Access Pass (All Premium Train Packs & Addons)</span>
+                        <span>Storewide Free All-Access Pass (All Premium Train Packs &amp; Nameboards)</span>
                       </p>
-                    ) : linkData.granted_asset_titles && linkData.granted_asset_titles.length > 0 ? (
-                      <div className="mt-2 space-y-1.5">
-                        <p className="text-xs text-slate-300">Complimentary access to selected products:</p>
+                    ) : (linkData.granted_asset_titles && linkData.granted_asset_titles.length > 0) ||
+                      (linkData.granted_board_template_names && linkData.granted_board_template_names.length > 0) ? (
+                      <div className="mt-2 space-y-2">
+                        <p className="text-xs text-slate-300">Complimentary access to selected items:</p>
                         <div className="flex flex-wrap gap-1.5">
-                          {linkData.granted_asset_titles.map((title) => (
+                          {(linkData.granted_asset_titles || []).map((title) => (
                             <span
                               key={title}
                               className="inline-flex items-center gap-1 rounded-md border border-cyan-400/30 bg-cyan-950/50 px-2.5 py-1 text-xs font-semibold text-cyan-200"
@@ -257,11 +258,19 @@ function SpecialAccessContent() {
                               <TrainFront size={12} /> {title}
                             </span>
                           ))}
+                          {(linkData.granted_board_template_names || []).map((name) => (
+                            <span
+                              key={name}
+                              className="inline-flex items-center gap-1 rounded-md border border-amber-400/30 bg-amber-950/50 px-2.5 py-1 text-xs font-semibold text-amber-200"
+                            >
+                              🎨 Nameboard: {name}
+                            </span>
+                          ))}
                         </div>
                       </div>
                     ) : (
                       <p className="mt-1 text-xs text-slate-300">
-                        Administrator will assign your complimentary train packs upon approval.
+                        Administrator will assign your complimentary train packs &amp; nameboards upon approval.
                       </p>
                     )}
                   </div>
@@ -320,7 +329,7 @@ function SpecialAccessContent() {
                           🎉 VIP Special Access Active on Your Account!
                         </p>
                         <p className="mt-1 text-xs text-slate-300 leading-relaxed">
-                          Your account (<strong className="text-white">{user?.username || user?.email}</strong>) has been granted Special Access. You can now download your unlocked train packs directly from the store!
+                          Your account (<strong className="text-white">{user?.username || user?.email}</strong>) has been granted Special Access. You can now download your unlocked train packs or customize your Nameboard Templates!
                         </p>
                       </div>
                     </div>
@@ -330,7 +339,14 @@ function SpecialAccessContent() {
                         className="inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-5 py-2.5 text-sm font-black text-black transition hover:bg-emerald-400"
                       >
                         <TrainFront size={16} />
-                        <span>Browse & Download Addons</span>
+                        <span>Browse &amp; Download Addons</span>
+                      </Link>
+                      <Link
+                        href="/board-studio"
+                        className="inline-flex items-center gap-2 rounded-xl bg-amber-400 px-5 py-2.5 text-sm font-black text-black transition hover:bg-amber-300"
+                      >
+                        <Sparkles size={16} />
+                        <span>Open Railway Board Studio</span>
                       </Link>
                       <Link
                         href="/dashboard"

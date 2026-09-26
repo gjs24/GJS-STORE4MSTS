@@ -47,7 +47,21 @@ export const HomePage: React.FC<HomePageProps> = ({
   unlockedTemplateIds = []
 }) => {
   const currentUser = typeof window !== 'undefined' ? getStoredUser() : null;
-  const isTemplateUnlocked = (id: string, isPaid?: boolean) => !isPaid || unlockedTemplateIds.includes(id);
+  const isTemplateUnlocked = (id: string, isPaid?: boolean) => {
+    if (!isPaid) return true;
+    if (unlockedTemplateIds.includes(id)) return true;
+    if (currentUser?.is_staff) return true;
+    const sa = currentUser?.special_access;
+    if (sa) {
+      const notExpired = !sa.expires_at || new Date(sa.expires_at).getTime() > Date.now();
+      if (notExpired && (sa.is_all_access_free || sa.granted_board_templates?.includes(id))) {
+        return true;
+      }
+    }
+    const tplObj = templates.find((t) => t.id === id);
+    if (tplObj?.isUnlocked) return true;
+    return false;
+  };
   const openPurchaseModal = (tpl: BoardTemplate) => {
     if (onOpenPurchaseModal) onOpenPurchaseModal(tpl);
   };

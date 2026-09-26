@@ -5,6 +5,7 @@ import { BoardTemplate, UserBoardValues, QuickPreset } from '@/lib/board-studio/
 import { BoardCanvas } from './board-canvas';
 import { exportBoardToPNG, exportBoardToDDS, printBoard } from '@/lib/board-studio/export-utils';
 import { storageService } from '@/lib/board-studio/storage-service';
+import { getStoredUser } from '@/lib/api';
 import {
   Download,
   Printer,
@@ -48,7 +49,19 @@ export const UserBoardEditor: React.FC<UserBoardEditorProps> = ({
   onOpenPurchaseModal,
   unlockedTemplateIds = []
 }) => {
-  const isUnlocked = !activeTemplate.isPaid || activeTemplate.isUnlocked || unlockedTemplateIds.includes(activeTemplate.id);
+  const currentUser = typeof window !== 'undefined' ? getStoredUser() : null;
+  const hasSpecialUnlock = (() => {
+    if (currentUser?.is_staff) return true;
+    const sa = currentUser?.special_access;
+    if (!sa) return false;
+    const notExpired = !sa.expires_at || new Date(sa.expires_at).getTime() > Date.now();
+    return Boolean(notExpired && (sa.is_all_access_free || sa.granted_board_templates?.includes(activeTemplate.id)));
+  })();
+  const isUnlocked =
+    !activeTemplate.isPaid ||
+    activeTemplate.isUnlocked ||
+    hasSpecialUnlock ||
+    unlockedTemplateIds.includes(activeTemplate.id);
   const openPurchaseModal = (tpl: BoardTemplate) => {
     if (onOpenPurchaseModal) onOpenPurchaseModal(tpl);
   };

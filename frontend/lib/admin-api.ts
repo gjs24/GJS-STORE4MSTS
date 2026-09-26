@@ -31,6 +31,8 @@ export type SpecialAccess = {
   expires_at?: string | null;
   granted_assets?: number[];
   granted_asset_titles?: string[];
+  granted_board_templates?: string[];
+  granted_board_template_names?: string[];
   created_at?: string;
   updated_at?: string;
   email_status?: SpecialAccessEmailStatus;
@@ -338,6 +340,7 @@ export async function adminUpdateSpecialAccess(
     admin_note?: string;
     expires_at?: string | null;
     granted_asset_ids?: number[];
+    granted_board_template_ids?: string[];
     send_email_notification?: boolean;
     custom_email_subject?: string;
     custom_email_body?: string;
@@ -367,6 +370,8 @@ export type SpecialAccessInviteLink = {
   is_all_access_free: boolean;
   granted_assets?: number[];
   granted_asset_titles?: string[];
+  granted_board_templates?: string[];
+  granted_board_template_names?: string[];
   max_uses: number;
   uses_count: number;
   access_expires_at?: string | null;
@@ -391,6 +396,8 @@ export type SpecialAccessClaimRequest = {
   invite_is_all_access: boolean;
   invite_granted_asset_ids?: number[];
   invite_granted_asset_titles?: string[];
+  invite_granted_board_template_ids?: string[];
+  invite_granted_board_template_names?: string[];
   invite_access_expires_at?: string | null;
   user: AdminUser;
   user_note?: string;
@@ -412,6 +419,7 @@ export async function adminCreateSpecialAccessLink(payload: {
   mode: "APPROVAL" | "AUTO_GRANT";
   is_all_access_free: boolean;
   granted_asset_ids?: number[];
+  granted_board_template_ids?: string[];
   max_uses: number;
   access_expires_at?: string | null;
   link_expires_at?: string | null;
@@ -427,6 +435,7 @@ export async function adminUpdateSpecialAccessLink(
     mode: "APPROVAL" | "AUTO_GRANT";
     is_all_access_free: boolean;
     granted_asset_ids: number[];
+    granted_board_template_ids: string[];
     max_uses: number;
     access_expires_at: string | null;
     link_expires_at: string | null;
@@ -452,6 +461,7 @@ export async function adminApproveSpecialAccessRequest(
   payload?: {
     is_all_access_free?: boolean;
     granted_asset_ids?: number[];
+    granted_board_template_ids?: string[];
     expires_at?: string | null;
     admin_note?: string;
     send_email_notification?: boolean;

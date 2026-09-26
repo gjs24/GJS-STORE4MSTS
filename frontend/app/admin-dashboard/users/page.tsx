@@ -81,7 +81,11 @@ function UsersManagementContent() {
   const [specialNote, setSpecialNote] = useState("");
   const [specialExpiresAt, setSpecialExpiresAt] = useState("");
   const [specialGrantedAssets, setSpecialGrantedAssets] = useState<number[]>([]);
+  const [specialGrantedBoards, setSpecialGrantedBoards] = useState<string[]>([]);
   const [availableAssets, setAvailableAssets] = useState<Asset[]>([]);
+  const [availableBoardTemplates, setAvailableBoardTemplates] = useState<
+    Array<{ id: string; name: string; category?: string; is_paid?: boolean; price?: string | number }>
+  >([]);
   const [savingSpecial, setSavingSpecial] = useState(false);
   const [specialFeedback, setSpecialFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [sendEmailNotification, setSendEmailNotification] = useState(true);
@@ -101,6 +105,7 @@ function UsersManagementContent() {
   const [newLinkMode, setNewLinkMode] = useState<"APPROVAL" | "AUTO_GRANT">("APPROVAL");
   const [newLinkAllAccess, setNewLinkAllAccess] = useState(true);
   const [newLinkAssetIds, setNewLinkAssetIds] = useState<number[]>([]);
+  const [newLinkBoardIds, setNewLinkBoardIds] = useState<string[]>([]);
   const [newLinkMaxUses, setNewLinkMaxUses] = useState<number>(1);
   const [newLinkAccessExpiresAt, setNewLinkAccessExpiresAt] = useState("");
   const [newLinkExpiresAt, setNewLinkExpiresAt] = useState("");
@@ -170,19 +175,42 @@ function UsersManagementContent() {
     loadUsers();
   }, [loadUsers]);
 
+  const loadBoardTemplatesIfNeeded = useCallback(async () => {
+    if (availableBoardTemplates.length > 0) return;
+    try {
+      const data = await adminGet<any>("/board-templates/?page_size=100", []);
+      const list = Array.isArray(data) ? data : Array.isArray(data?.results) ? data.results : [];
+      setAvailableBoardTemplates(list);
+    } catch {
+      // ignore
+    }
+  }, [availableBoardTemplates.length]);
+
   const stats = useMemo(() => {
     const total = users.length;
     const staffCount = users.filter((u) => u.is_staff).length;
     const activeCount = users.filter((u) => u.is_active).length;
     const buyersCount = users.filter((u) => (u.paid_orders_count || 0) > 0).length;
-    const specialCount = users.filter((u) => Boolean(u.special_access?.is_all_access_free || (u.special_access?.granted_assets && u.special_access.granted_assets.length > 0))).length;
+    const specialCount = users.filter((u) =>
+      Boolean(
+        u.special_access?.is_all_access_free ||
+          (u.special_access?.granted_assets && u.special_access.granted_assets.length > 0) ||
+          (u.special_access?.granted_board_templates && u.special_access.granted_board_templates.length > 0)
+      )
+    ).length;
     return { total, staffCount, activeCount, buyersCount, specialCount };
   }, [users]);
 
   const sortedUsers = useMemo(() => {
     let list = [...users];
     if (roleFilter === "special") {
-      list = list.filter((u) => Boolean(u.special_access?.is_all_access_free || (u.special_access?.granted_assets && u.special_access.granted_assets.length > 0)));
+      list = list.filter((u) =>
+        Boolean(
+          u.special_access?.is_all_access_free ||
+            (u.special_access?.granted_assets && u.special_access.granted_assets.length > 0) ||
+            (u.special_access?.granted_board_templates && u.special_access.granted_board_templates.length > 0)
+        )
+      );
     }
     if (sortOrder === "oldest") {
       list.sort((a, b) => new Date(a.date_joined).getTime() - new Date(b.date_joined).getTime());
@@ -215,6 +243,7 @@ function UsersManagementContent() {
     setSpecialNote(user.special_access?.admin_note || "");
     setSpecialExpiresAt(user.special_access?.expires_at ? user.special_access.expires_at.slice(0, 16) : "");
     setSpecialGrantedAssets(user.special_access?.granted_assets || []);
+    setSpecialGrantedBoards(user.special_access?.granted_board_templates || []);
 
     if (availableAssets.length === 0) {
       try {
@@ -225,6 +254,7 @@ function UsersManagementContent() {
         // ignore
       }
     }
+    loadBoardTemplatesIfNeeded();
 
     try {
       const fresh = await adminGetSpecialAccess(user.id);
@@ -233,6 +263,7 @@ function UsersManagementContent() {
         setSpecialNote(fresh.admin_note || "");
         setSpecialExpiresAt(fresh.expires_at ? fresh.expires_at.slice(0, 16) : "");
         setSpecialGrantedAssets(fresh.granted_assets || []);
+        setSpecialGrantedBoards(fresh.granted_board_templates || []);
       }
     } catch {
       // ignore
@@ -281,6 +312,7 @@ function UsersManagementContent() {
         admin_note: specialNote.trim(),
         expires_at: specialExpiresAt ? new Date(specialExpiresAt).toISOString() : null,
         granted_asset_ids: specialGrantedAssets,
+        granted_board_template_ids: specialGrantedBoards,
         send_email_notification: sendEmailNotification && Boolean(specialUser.email),
         custom_email_subject: customEmailSubject.trim() || undefined,
         custom_email_body: customEmailBody.trim() || undefined,
@@ -483,6 +515,7 @@ function UsersManagementContent() {
         // ignore
       }
     }
+    loadBoardTemplatesIfNeeded();
   }
 
   async function handleCreateInviteLink(e: React.FormEvent) {
@@ -495,6 +528,7 @@ function UsersManagementContent() {
         mode: newLinkMode,
         is_all_access_free: newLinkAllAccess,
         granted_asset_ids: newLinkAllAccess ? [] : newLinkAssetIds,
+        granted_board_template_ids: newLinkAllAccess ? [] : newLinkBoardIds,
         max_uses: Number(newLinkMaxUses) >= 0 ? Number(newLinkMaxUses) : 1,
         access_expires_at: newLinkAccessExpiresAt ? new Date(newLinkAccessExpiresAt).toISOString() : null,
         link_expires_at: newLinkExpiresAt ? new Date(newLinkExpiresAt).toISOString() : null,
@@ -742,7 +776,16 @@ function UsersManagementContent() {
                     <span className="rounded bg-emerald-500/15 border border-emerald-400/30 px-2 py-0.5 text-[11px] font-semibold text-emerald-300">
                       {req.invite_is_all_access
                         ? "Storewide Free Pass"
-                        : `${req.invite_granted_asset_titles?.length || 0} Selected Product(s)`}
+                        : [
+                            req.invite_granted_asset_titles?.length
+                              ? `${req.invite_granted_asset_titles.length} Product(s)`
+                              : null,
+                            req.invite_granted_board_template_names?.length
+                              ? `${req.invite_granted_board_template_names.length} Nameboard(s)`
+                              : null,
+                          ]
+                            .filter(Boolean)
+                            .join(" + ") || "Custom VIP Access"}
                     </span>
                   </div>
                   {req.user_note ? (
@@ -872,6 +915,8 @@ function UsersManagementContent() {
             const isSelf = currentUser?.username === user.username;
             const hasSpecial = Boolean(user.special_access?.is_all_access_free);
             const grantedCount = user.special_access?.granted_assets?.length || 0;
+            const grantedBoardsCount = user.special_access?.granted_board_templates?.length || 0;
+            const hasAnySpecial = hasSpecial || grantedCount > 0 || grantedBoardsCount > 0;
 
             return (
               <div
@@ -924,10 +969,10 @@ function UsersManagementContent() {
                       <Sparkles size={10} className="text-purple-300" />
                       Free All-Access
                     </span>
-                  ) : grantedCount > 0 ? (
+                  ) : grantedCount > 0 || grantedBoardsCount > 0 ? (
                     <span className="inline-flex items-center gap-1 rounded-full bg-purple-500/20 border border-purple-400/40 px-2 py-0.5 text-[10px] font-bold text-purple-300">
                       <Gift size={10} />
-                      {grantedCount} Free items
+                      {grantedCount + grantedBoardsCount} Free item{grantedCount + grantedBoardsCount > 1 ? "s" : ""}
                     </span>
                   ) : null}
                 </div>
@@ -959,17 +1004,17 @@ function UsersManagementContent() {
 
                   <Button
                     size="sm"
-                    variant={hasSpecial ? "default" : "secondary"}
+                    variant={hasAnySpecial ? "default" : "secondary"}
                     onClick={() => openSpecialModal(user)}
                     className={`h-8 text-xs font-semibold ${
-                      hasSpecial
+                      hasAnySpecial
                         ? "bg-purple-600 hover:bg-purple-500 text-white border border-purple-400/40 shadow-sm"
                         : "hover:border-purple-400/50 hover:text-purple-300"
                     }`}
                     title="Grant or configure special free download permissions"
                   >
                     <Gift size={13} className="mr-1 text-purple-300" />
-                    <span>{hasSpecial ? "VIP Pass" : "Special Access"}</span>
+                    <span>{hasAnySpecial ? "VIP Pass" : "Special Access"}</span>
                   </Button>
 
                   <Button
@@ -1068,7 +1113,7 @@ function UsersManagementContent() {
                   </span>
                 </h3>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Configure complimentary free download access for user{" "}
+                  Configure complimentary free download & nameboard access for user{" "}
                   <strong className="text-white">{specialUser.username}</strong> ({specialUser.email || "no email"}).
                 </p>
                 <p className="text-[11px] text-purple-300/80 mt-1 flex items-center gap-1">
@@ -1110,7 +1155,7 @@ function UsersManagementContent() {
                       Storewide All-Access Pass (Everything Free)
                     </span>
                     <p className="text-slate-400 text-xs max-w-md leading-relaxed">
-                      When enabled, this user can download <strong className="text-white">ANY product</strong> across the entire store for free with standard 1-click downloads.
+                      When enabled, this user can download <strong className="text-white">ANY product</strong> and customize <strong className="text-white">ANY Nameboard Template</strong> across the entire store for free.
                     </p>
                   </div>
                   <div
@@ -1131,7 +1176,7 @@ function UsersManagementContent() {
               {!specialAllAccess && availableAssets.length > 0 ? (
                 <div className="space-y-2 rounded-xl border border-white/10 bg-black/40 p-3.5">
                   <label className="font-bold uppercase tracking-wider text-slate-300 text-[11px]">
-                    Or Select Specific Free Products:
+                    🚂 Select Specific Free Train Packs ({specialGrantedAssets.length} selected):
                   </label>
                   <div className="max-h-36 overflow-y-auto space-y-1.5 pr-1 text-xs">
                     {availableAssets.map((asset) => {
@@ -1157,6 +1202,56 @@ function UsersManagementContent() {
                               }
                             }}
                             className="rounded accent-purple-500"
+                          />
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
+
+              {/* Specific Nameboard Templates Selection (if all-access is false) */}
+              {!specialAllAccess && availableBoardTemplates.length > 0 ? (
+                <div className="space-y-2 rounded-xl border border-amber-400/25 bg-black/40 p-3.5">
+                  <label className="font-bold uppercase tracking-wider text-amber-200 text-[11px] flex items-center justify-between">
+                    <span>🎨 Select Specific Nameboard Templates ({specialGrantedBoards.length} selected):</span>
+                    <span className="text-[10px] text-amber-300/80 font-normal">Railway Board Studio</span>
+                  </label>
+                  <div className="max-h-36 overflow-y-auto space-y-1.5 pr-1 text-xs">
+                    {availableBoardTemplates.map((board) => {
+                      const isSelected = specialGrantedBoards.includes(board.id);
+                      return (
+                        <label
+                          key={board.id}
+                          className={`flex items-center justify-between rounded-lg border p-2 cursor-pointer transition ${
+                            isSelected
+                              ? "border-amber-400/60 bg-amber-500/20 text-white font-medium"
+                              : "border-white/5 bg-white/[0.02] text-slate-300 hover:bg-white/[0.05]"
+                          }`}
+                        >
+                          <div className="truncate pr-2 flex items-center gap-2">
+                            <span className="truncate">{board.name}</span>
+                            {board.is_paid ? (
+                              <span className="rounded bg-amber-400/20 px-1.5 py-0.5 text-[10px] font-bold text-amber-300">
+                                ₹{board.price}
+                              </span>
+                            ) : (
+                              <span className="rounded bg-emerald-500/20 px-1.5 py-0.5 text-[10px] font-bold text-emerald-300">
+                                Free
+                              </span>
+                            )}
+                          </div>
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSpecialGrantedBoards([...specialGrantedBoards, board.id]);
+                              } else {
+                                setSpecialGrantedBoards(specialGrantedBoards.filter((id) => id !== board.id));
+                              }
+                            }}
+                            className="rounded accent-amber-400"
                           />
                         </label>
                       );
@@ -1691,7 +1786,7 @@ function UsersManagementContent() {
                       🌟 Storewide Free All-Access Pass
                     </span>
                     <span className="block text-[11px] text-slate-400">
-                      Grants complimentary access to all train packs & routes.
+                      Grants complimentary access to all train packs &amp; nameboards.
                     </span>
                   </div>
                 </label>
@@ -1712,47 +1807,89 @@ function UsersManagementContent() {
                   />
                   <div>
                     <span className="block text-xs font-bold text-white">
-                      🚂 Specific Selected Train Packs Only
+                      🚂🎨 Specific Train Packs &amp; Nameboards
                     </span>
                     <span className="block text-[11px] text-slate-400">
-                      Choose exact products this link unlocks.
+                      Choose exact products &amp; nameboards this link unlocks.
                     </span>
                   </div>
                 </label>
               </div>
 
               {!newLinkAllAccess ? (
-                <div className="rounded-lg border border-white/10 bg-black/50 p-3 space-y-2">
-                  <span className="text-xs font-semibold text-cyan-200">
-                    Select Train Packs to Unlock ({newLinkAssetIds.length} selected):
-                  </span>
-                  <div className="max-h-36 overflow-y-auto grid gap-1.5 sm:grid-cols-2">
-                    {availableAssets.map((asset) => {
-                      const checked = newLinkAssetIds.includes(asset.id);
-                      return (
-                        <label
-                          key={asset.id}
-                          className={`flex items-center gap-2 rounded px-2.5 py-1.5 text-xs cursor-pointer ${
-                            checked ? "bg-cyan-900/40 text-cyan-200 border border-cyan-500/40" : "text-slate-300 hover:bg-white/5"
-                          }`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setNewLinkAssetIds([...newLinkAssetIds, asset.id]);
-                              } else {
-                                setNewLinkAssetIds(newLinkAssetIds.filter((id) => id !== asset.id));
-                              }
-                            }}
-                            className="rounded accent-cyan-400"
-                          />
-                          <span className="truncate">{asset.title}</span>
-                        </label>
-                      );
-                    })}
+                <div className="space-y-3">
+                  <div className="rounded-lg border border-white/10 bg-black/50 p-3 space-y-2">
+                    <span className="text-xs font-semibold text-cyan-200">
+                      🚂 Select Train Packs to Unlock ({newLinkAssetIds.length} selected):
+                    </span>
+                    <div className="max-h-36 overflow-y-auto grid gap-1.5 sm:grid-cols-2">
+                      {availableAssets.map((asset) => {
+                        const checked = newLinkAssetIds.includes(asset.id);
+                        return (
+                          <label
+                            key={asset.id}
+                            className={`flex items-center gap-2 rounded px-2.5 py-1.5 text-xs cursor-pointer ${
+                              checked ? "bg-cyan-900/40 text-cyan-200 border border-cyan-500/40" : "text-slate-300 hover:bg-white/5"
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setNewLinkAssetIds([...newLinkAssetIds, asset.id]);
+                                } else {
+                                  setNewLinkAssetIds(newLinkAssetIds.filter((id) => id !== asset.id));
+                                }
+                              }}
+                              className="rounded accent-cyan-400"
+                            />
+                            <span className="truncate">{asset.title}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
                   </div>
+
+                  {availableBoardTemplates.length > 0 ? (
+                    <div className="rounded-lg border border-amber-400/25 bg-black/50 p-3 space-y-2">
+                      <span className="text-xs font-semibold text-amber-200">
+                        🎨 Select Nameboard Templates to Unlock ({newLinkBoardIds.length} selected):
+                      </span>
+                      <div className="max-h-36 overflow-y-auto grid gap-1.5 sm:grid-cols-2">
+                        {availableBoardTemplates.map((board) => {
+                          const checked = newLinkBoardIds.includes(board.id);
+                          return (
+                            <label
+                              key={board.id}
+                              className={`flex items-center justify-between gap-2 rounded px-2.5 py-1.5 text-xs cursor-pointer ${
+                                checked ? "bg-amber-900/40 text-amber-200 border border-amber-500/40" : "text-slate-300 hover:bg-white/5"
+                              }`}
+                            >
+                              <span className="flex items-center gap-2 truncate">
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setNewLinkBoardIds([...newLinkBoardIds, board.id]);
+                                    } else {
+                                      setNewLinkBoardIds(newLinkBoardIds.filter((id) => id !== board.id));
+                                    }
+                                  }}
+                                  className="rounded accent-amber-400"
+                                />
+                                <span className="truncate">{board.name}</span>
+                              </span>
+                              <span className="shrink-0 text-[10px] font-bold text-amber-300">
+                                {board.is_paid ? `₹${board.price}` : "Free"}
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
 
@@ -1904,7 +2041,10 @@ function UsersManagementContent() {
                             <strong className="text-slate-200">
                               {link.is_all_access_free
                                 ? "Storewide Free All-Access Pass"
-                                : link.granted_asset_titles?.join(", ") || "Custom Selected Assets"}
+                                : [
+                                    ...(link.granted_asset_titles || []),
+                                    ...(link.granted_board_template_names || []).map((n) => `🎨 ${n}`),
+                                  ].join(", ") || "Custom Selected Access"}
                             </strong>
                           </span>
                           {link.pending_requests_count ? (

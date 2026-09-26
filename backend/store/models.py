@@ -214,6 +214,9 @@ class BoardTemplate(models.Model):
             return False
         if user.is_staff or user.is_superuser:
             return True
+        from .special_access import user_has_special_access
+        if user_has_special_access(user, board_template=self):
+            return True
         if UserBoardUnlock.objects.filter(user=user, template=self).exists():
             return True
         from .models import Order
@@ -554,7 +557,13 @@ class UserSpecialAccess(models.Model):
         Asset,
         blank=True,
         related_name="special_access_users",
-        help_text="Specific assets granted for free if all-access is false."
+        help_text="Specific assets granted for free if all-access is false.",
+    )
+    granted_board_templates = models.ManyToManyField(
+        BoardTemplate,
+        blank=True,
+        related_name="special_access_users",
+        help_text="Specific nameboard templates granted for free if all-access is false.",
     )
     admin_note = models.CharField(
         max_length=255,
@@ -578,7 +587,11 @@ class UserSpecialAccess(models.Model):
         return f"Special Access for {self.user.username} (All-Access: {self.is_all_access_free})"
 
     def is_active(self):
-        if not self.is_all_access_free and not self.granted_assets.exists():
+        if (
+            not self.is_all_access_free
+            and not self.granted_assets.exists()
+            and not self.granted_board_templates.exists()
+        ):
             return False
         if self.expires_at:
             from django.utils import timezone
@@ -636,6 +649,12 @@ class SpecialAccessInviteLink(models.Model):
         blank=True,
         related_name="special_access_invite_links",
         help_text="Specific assets granted if all-access is false.",
+    )
+    granted_board_templates = models.ManyToManyField(
+        BoardTemplate,
+        blank=True,
+        related_name="special_access_invite_links",
+        help_text="Specific nameboard templates granted if all-access is false.",
     )
     max_uses = models.PositiveIntegerField(
         default=1,

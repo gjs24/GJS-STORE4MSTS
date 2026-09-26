@@ -21,7 +21,13 @@ import {
   ArrowLeft,
   Lock,
   Unlock,
-  Check
+  Check,
+  Gift,
+  Link2,
+  Copy,
+  Share2,
+  Users,
+  Mail
 } from "lucide-react";
 import { AdminLayout } from "@/components/admin-table";
 import { Badge } from "@/components/ui/badge";
@@ -30,7 +36,17 @@ import { Card, CardContent } from "@/components/ui/card";
 import { storageService } from "@/lib/board-studio/storage-service";
 import { BoardTemplate, BoardCategory } from "@/lib/board-studio/types";
 import { AdminTemplateStudio } from "@/components/board-studio/admin-template-studio";
-import { adminGet, adminPatch, type AdminSettings } from "@/lib/admin-api";
+import {
+  adminGet,
+  adminPatch,
+  adminUpdateSpecialAccess,
+  adminGetSpecialAccessLinks,
+  adminCreateSpecialAccessLink,
+  adminDeleteSpecialAccessLink,
+  type AdminSettings,
+  type AdminUser,
+  type SpecialAccessInviteLink
+} from "@/lib/admin-api";
 import { convertGoogleDriveUrl } from "@/lib/board-studio/image-utils";
 import "@/styles/board-studio.css";
 
@@ -47,6 +63,20 @@ export default function AdminBoardTemplatesPage() {
 
   // Visual studio active template
   const [visualStudioTemplate, setVisualStudioTemplate] = useState<BoardTemplate | null>(null);
+
+  // Special Access Modal state for a specific Nameboard Template
+  const [specialTemplate, setSpecialTemplate] = useState<BoardTemplate | null>(null);
+  const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [userSearch, setUserSearch] = useState("");
+  const [sendNotifyEmail, setSendNotifyEmail] = useState(true);
+  const [togglingUserId, setTogglingUserId] = useState<number | null>(null);
+  const [specialModalFeedback, setSpecialModalFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [templateLinks, setTemplateLinks] = useState<SpecialAccessInviteLink[]>([]);
+  const [newLinkMode, setNewLinkMode] = useState<"APPROVAL" | "AUTO_GRANT">("AUTO_GRANT");
+  const [newLinkMaxUses, setNewLinkMaxUses] = useState<number>(1);
+  const [creatingLink, setCreatingLink] = useState(false);
+  const [copiedToken, setCopiedToken] = useState<string | null>(null);
 
   // Create / Edit modal state
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -161,6 +191,138 @@ export default function AdminBoardTemplatesPage() {
     await storageService.deleteCloudTemplate(tpl.id);
     setTemplates((prev) => prev.filter((item) => item.id !== tpl.id));
     showFeedback("success", `Deleted "${tpl.name}".`);
+  };
+
+  // Open Special Access Assign & Link Modal for a Nameboard Template
+  const handleOpenSpecialAccess = async (tpl: BoardTemplate) => {
+    setSpecialTemplate(tpl);
+    setSpecialModalFeedback(null);
+    setUserSearch("");
+    setLoadingUsers(true);
+    try {
+      // Ensure this template is synced to the backend DB so its ID exists for M2M relations
+      await storageService.syncCloudTemplate(tpl);
+      const [usersData, linksData] = await Promise.all([
+        adminGet<AdminUser[]>("/admin/users/", []),
+        adminGetSpecialAccessLinks()
+      ]);
+      setAdminUsers(Array.isArray(usersData) ? usersData : []);
+      setTemplateLinks(
+        (Array.isArray(linksData) ? linksData : []).filter(
+          (l) => l.is_all_access_free || (l.granted_board_templates || []).includes(tpl.id)
+        )
+      );
+    } catch (err) {
+      setSpecialModalFeedback({
+        type: "error",
+        message: "Could not load users or special access links."
+      });
+    } finally {
+      setLoadingUsers(false);
+    }
+  };
+
+  const handleToggleUserBoardAccess = async (user: AdminUser, tpl: BoardTemplate) => {
+    setTogglingUserId(user.id);
+    setSpecialModalFeedback(null);
+    try {
+      const currentAccess = user.special_access;
+      const currentBoards = currentAccess?.granted_board_templates || [];
+      const currentAssets = currentAccess?.granted_assets || [];
+      const isCurrentlyGranted = currentBoards.includes(tpl.id);
+      const nextBoards = isCurrentlyGranted
+        ? currentBoards.filter((id) => id !== tpl.id)
+        : [...currentBoards, tpl.id];
+
+      const updatedUser = await adminUpdateSpecialAccess(user.id, {
+        is_all_access_free: Boolean(currentAccess?.is_all_access_free),
+        granted_asset_ids: currentAssets,
+        granted_board_template_ids: nextBoards,
+        admin_note: currentAccess?.admin_note || `Nameboard Access: ${tpl.name}`,
+        expires_at: currentAccess?.expires_at || null,
+        send_notification_email: !isCurrentlyGranted && sendNotifyEmail
+      });
+
+      setAdminUsers((prev) => prev.map((u) => (u.id === user.id ? updatedUser : u)));
+      setSpecialModalFeedback({
+        type: "success",
+        message: isCurrentlyGranted
+          ? `Revoked "${tpl.name}" special access from ${user.username}.`
+          : `Granted free access to "${tpl.name}" for ${user.username}!${
+              updatedUser.special_access_email?.sent ? " (Email notification sent)" : ""
+            }`
+      });
+    } catch (err) {
+      setSpecialModalFeedback({
+        type: "error",
+        message: err instanceof Error ? err.message : "Failed to update user special access."
+      });
+    } finally {
+      setTogglingUserId(null);
+    }
+  };
+
+  const buildShareableUrl = (token: string) => {
+    const origin =
+      typeof window !== "undefined" ? window.location.origin : "https://gjs-msts-store.vercel.app";
+    return `${origin}/special-access?token=${encodeURIComponent(token)}`;
+  };
+
+  const copyShareableLink = async (token: string) => {
+    const url = buildShareableUrl(token);
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedToken(token);
+      setTimeout(() => setCopiedToken(null), 2500);
+    } catch {
+      // ignore
+    }
+  };
+
+  const shareLinkOnWhatsApp = (link: SpecialAccessInviteLink, tpl: BoardTemplate) => {
+    const url = buildShareableUrl(link.token);
+    const text = `🎁 *MSTS-GJS Railway Board Studio Special Access*\nYou are invited to unlock complimentary VIP access to Nameboard Template *${tpl.name}*:\n${url}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
+  };
+
+  const handleCreateTemplateLink = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!specialTemplate) return;
+    setCreatingLink(true);
+    setSpecialModalFeedback(null);
+    try {
+      const created = await adminCreateSpecialAccessLink({
+        title: `Nameboard VIP Access: ${specialTemplate.name}`,
+        mode: newLinkMode,
+        is_all_access_free: false,
+        granted_asset_ids: [],
+        granted_board_template_ids: [specialTemplate.id],
+        max_uses: Math.max(0, Number(newLinkMaxUses) || 0),
+        is_active: true
+      });
+      setTemplateLinks((prev) => [created, ...prev]);
+      await copyShareableLink(created.token);
+      setSpecialModalFeedback({
+        type: "success",
+        message: "Shareable Special Access link generated & copied to clipboard!"
+      });
+    } catch (err) {
+      setSpecialModalFeedback({
+        type: "error",
+        message: err instanceof Error ? err.message : "Failed to generate invite link."
+      });
+    } finally {
+      setCreatingLink(false);
+    }
+  };
+
+  const handleDeleteTemplateLink = async (link: SpecialAccessInviteLink) => {
+    try {
+      await adminDeleteSpecialAccessLink(link.id);
+      setTemplateLinks((prev) => prev.filter((item) => item.id !== link.id));
+    } catch {
+      // ignore
+    }
   };
 
   // Open Create Modal
@@ -586,6 +748,16 @@ export default function AdminBoardTemplatesPage() {
                           <Button
                             size="sm"
                             variant="secondary"
+                            onClick={() => handleOpenSpecialAccess(tpl)}
+                            className="h-8 border-purple-400/40 bg-purple-500/15 text-purple-200 hover:bg-purple-500/25 gap-1.5 text-xs font-bold"
+                            title="Assign Free Special Access to Users or Generate Shareable Invite Link"
+                          >
+                            <Gift className="h-3.5 w-3.5 text-purple-300" /> Special Access
+                          </Button>
+
+                          <Button
+                            size="sm"
+                            variant="secondary"
                             onClick={() => setVisualStudioTemplate(tpl)}
                             className="h-8 border-rail-amber/30 text-rail-amber hover:bg-rail-amber/10 gap-1.5 text-xs"
                             title="Open Visual UV Coordinate Editor"
@@ -876,6 +1048,296 @@ export default function AdminBoardTemplatesPage() {
                   </Button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* Special Access Assign & Invite Link Modal for Nameboard Template */}
+        {specialTemplate && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
+            <div className="w-full max-w-2xl max-h-[90vh] my-auto bg-[#0b0f17] border border-purple-500/40 rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in-0 zoom-in-95">
+              {/* Header */}
+              <div className="flex items-center justify-between p-4 sm:p-5 border-b border-white/10 bg-gradient-to-r from-purple-900/30 via-slate-900 to-amber-900/20 shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-purple-400/40 bg-purple-500/20 text-purple-300">
+                    <Gift className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-white text-base flex items-center gap-2">
+                      <span>Nameboard Special Access</span>
+                      <span className="rounded bg-amber-400/20 border border-amber-400/40 px-2 py-0.5 text-[10px] font-black uppercase text-amber-300">
+                        {specialTemplate.isPaid ? `₹${specialTemplate.price}` : "Free"}
+                      </span>
+                    </h3>
+                    <p className="text-xs text-slate-300 mt-0.5">
+                      Template: <strong className="text-amber-300">{specialTemplate.name}</strong>{" "}
+                      <span className="font-mono text-[11px] text-slate-500">({specialTemplate.id})</span>
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSpecialTemplate(null)}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              {/* Body */}
+              <div className="p-4 sm:p-5 space-y-5 overflow-y-auto flex-1">
+                {specialModalFeedback && (
+                  <div
+                    className={`p-3 rounded-lg flex items-center gap-2 text-xs font-semibold border ${
+                      specialModalFeedback.type === "success"
+                        ? "bg-emerald-950/50 border-emerald-500/40 text-emerald-300"
+                        : "bg-red-950/50 border-red-500/40 text-red-300"
+                    }`}
+                  >
+                    {specialModalFeedback.type === "success" ? (
+                      <CheckCircle2 className="h-4 w-4 shrink-0" />
+                    ) : (
+                      <AlertCircle className="h-4 w-4 shrink-0" />
+                    )}
+                    <span>{specialModalFeedback.message}</span>
+                  </div>
+                )}
+
+                {/* Section 1: Assign Directly to Specific Users */}
+                <div className="rounded-xl border border-white/10 bg-slate-900/60 p-4 space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h4 className="text-xs font-black uppercase tracking-wider text-purple-300 flex items-center gap-1.5">
+                      <Users className="h-4 w-4" />
+                      <span>1. Assign Free Access to Users</span>
+                    </h4>
+                    <label className="flex items-center gap-1.5 text-xs text-slate-300 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={sendNotifyEmail}
+                        onChange={(e) => setSendNotifyEmail(e.target.checked)}
+                        className="rounded accent-purple-500"
+                      />
+                      <Mail className="h-3.5 w-3.5 text-purple-300" />
+                      <span>Send VIP Email Notification on Grant</span>
+                    </label>
+                  </div>
+
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                    <input
+                      type="text"
+                      value={userSearch}
+                      onChange={(e) => setUserSearch(e.target.value)}
+                      placeholder="Search user by username or email..."
+                      className="w-full pl-8 pr-3 py-2 rounded-lg bg-black/60 border border-white/15 text-xs text-white focus:outline-none focus:border-purple-400"
+                    />
+                  </div>
+
+                  {loadingUsers ? (
+                    <p className="text-center py-6 text-xs text-slate-400">Loading users...</p>
+                  ) : (
+                    <div className="max-h-52 overflow-y-auto space-y-1.5 pr-1">
+                      {adminUsers
+                        .filter((u) => {
+                          if (!userSearch.trim()) return true;
+                          const q = userSearch.toLowerCase();
+                          return (
+                            u.username.toLowerCase().includes(q) ||
+                            (u.email || "").toLowerCase().includes(q) ||
+                            (u.name || "").toLowerCase().includes(q)
+                          );
+                        })
+                        .sort((a, b) => {
+                          const aHas =
+                            Boolean(a.special_access?.is_all_access_free) ||
+                            Boolean(a.special_access?.granted_board_templates?.includes(specialTemplate.id));
+                          const bHas =
+                            Boolean(b.special_access?.is_all_access_free) ||
+                            Boolean(b.special_access?.granted_board_templates?.includes(specialTemplate.id));
+                          return Number(bHas) - Number(aHas);
+                        })
+                        .map((u) => {
+                          const isAllAccess = Boolean(u.special_access?.is_all_access_free);
+                          const isDirectlyGranted = Boolean(
+                            u.special_access?.granted_board_templates?.includes(specialTemplate.id)
+                          );
+                          const hasAccess = isAllAccess || isDirectlyGranted;
+                          return (
+                            <div
+                              key={u.id}
+                              className={`flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-xs ${
+                                hasAccess
+                                  ? "border-purple-500/40 bg-purple-950/30"
+                                  : "border-white/5 bg-black/40"
+                              }`}
+                            >
+                              <div className="truncate">
+                                <div className="flex items-center gap-2">
+                                  <strong className="text-white">{u.username}</strong>
+                                  <span className="text-slate-400 truncate">{u.email}</span>
+                                </div>
+                                {isAllAccess ? (
+                                  <span className="inline-block mt-0.5 text-[10px] font-bold text-emerald-300">
+                                    🌟 Has Storewide All-Access Pass
+                                  </span>
+                                ) : isDirectlyGranted ? (
+                                  <span className="inline-block mt-0.5 text-[10px] font-bold text-purple-300">
+                                    ✓ Unlocked via Nameboard Special Access
+                                  </span>
+                                ) : null}
+                              </div>
+
+                              <button
+                                type="button"
+                                disabled={togglingUserId === u.id || isAllAccess}
+                                onClick={() => handleToggleUserBoardAccess(u, specialTemplate)}
+                                className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-bold transition ${
+                                  isAllAccess
+                                    ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 cursor-default"
+                                    : isDirectlyGranted
+                                    ? "bg-red-500/15 text-red-300 border border-red-500/30 hover:bg-red-500/25"
+                                    : "bg-purple-500 text-white hover:bg-purple-400"
+                                }`}
+                              >
+                                {togglingUserId === u.id
+                                  ? "Saving..."
+                                  : isAllAccess
+                                  ? "All-Access Active"
+                                  : isDirectlyGranted
+                                  ? "Revoke"
+                                  : "+ Grant Free Access"}
+                              </button>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Section 2: Generate Shareable Invite Link for this Nameboard Template */}
+                <div className="rounded-xl border border-amber-400/30 bg-amber-950/10 p-4 space-y-3">
+                  <h4 className="text-xs font-black uppercase tracking-wider text-amber-300 flex items-center gap-1.5">
+                    <Link2 className="h-4 w-4" />
+                    <span>2. Generate Shareable Invite Link for &ldquo;{specialTemplate.name}&rdquo;</span>
+                  </h4>
+                  <p className="text-[11px] text-slate-300">
+                    Create a direct link you can send on WhatsApp or Discord so users can claim or request free access to this Nameboard Template.
+                  </p>
+
+                  <form onSubmit={handleCreateTemplateLink} className="grid gap-3 sm:grid-cols-3 items-end">
+                    <label className="block">
+                      <span className="text-[11px] font-semibold text-slate-300">Link Mode</span>
+                      <select
+                        value={newLinkMode}
+                        onChange={(e) => setNewLinkMode(e.target.value as "APPROVAL" | "AUTO_GRANT")}
+                        className="mt-1 w-full rounded-lg border border-white/15 bg-black/60 px-2.5 py-2 text-xs text-white focus:border-amber-400 focus:outline-none"
+                      >
+                        <option value="AUTO_GRANT">⚡ Instant Claim (Auto Unlock)</option>
+                        <option value="APPROVAL">🛡️ Request &amp; Admin Approve</option>
+                      </select>
+                    </label>
+
+                    <label className="block">
+                      <span className="text-[11px] font-semibold text-slate-300">Max Uses (0 = Unlimited)</span>
+                      <input
+                        type="number"
+                        min={0}
+                        value={newLinkMaxUses}
+                        onChange={(e) => setNewLinkMaxUses(Number(e.target.value))}
+                        className="mt-1 w-full rounded-lg border border-white/15 bg-black/60 px-2.5 py-2 text-xs text-white focus:border-amber-400 focus:outline-none"
+                      />
+                    </label>
+
+                    <Button
+                      type="submit"
+                      disabled={creatingLink}
+                      className="bg-amber-400 hover:bg-amber-300 text-black font-black text-xs h-9"
+                    >
+                      <Link2 className="h-3.5 w-3.5 mr-1.5" />
+                      {creatingLink ? "Generating..." : "Generate & Copy Link"}
+                    </Button>
+                  </form>
+
+                  {templateLinks.length > 0 && (
+                    <div className="space-y-2 pt-2 border-t border-white/10">
+                      <span className="text-[11px] font-semibold text-slate-400">
+                        Active Shareable Links for this Template ({templateLinks.length}):
+                      </span>
+                      <div className="max-h-36 overflow-y-auto space-y-2 pr-1">
+                        {templateLinks.map((link) => {
+                          const isCopied = copiedToken === link.token;
+                          return (
+                            <div
+                              key={link.id}
+                              className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/10 bg-black/50 p-2.5 text-xs"
+                            >
+                              <div className="truncate flex-1 min-w-[180px]">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-bold text-white truncate">{link.title}</span>
+                                  <Badge variant={link.mode === "AUTO_GRANT" ? "warning" : "muted"}>
+                                    {link.mode === "AUTO_GRANT" ? "⚡ Instant" : "🛡️ Approval"}
+                                  </Badge>
+                                  <span className="text-[11px] text-slate-400">
+                                    Uses: {link.uses_count}/{link.max_uses === 0 ? "∞" : link.max_uses}
+                                  </span>
+                                </div>
+                                <div className="font-mono text-[10px] text-amber-200 truncate mt-0.5">
+                                  {buildShareableUrl(link.token)}
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => copyShareableLink(link.token)}
+                                  className="inline-flex items-center gap-1 rounded bg-amber-400/20 border border-amber-400/40 px-2 py-1 text-[11px] font-bold text-amber-200 hover:bg-amber-400/30"
+                                >
+                                  {isCopied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                                  <span>{isCopied ? "Copied" : "Copy"}</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => shareLinkOnWhatsApp(link, specialTemplate)}
+                                  className="inline-flex items-center gap-1 rounded bg-emerald-500/20 border border-emerald-400/40 px-2 py-1 text-[11px] font-bold text-emerald-200 hover:bg-emerald-500/30"
+                                >
+                                  <Share2 className="h-3 w-3" />
+                                  <span>WhatsApp</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteTemplateLink(link)}
+                                  className="rounded border border-red-500/30 bg-red-500/10 p-1 text-red-300 hover:bg-red-500/20"
+                                  title="Delete Link"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="flex items-center justify-between p-4 border-t border-white/10 bg-slate-950/80 shrink-0">
+                <Link
+                  href="/admin-dashboard/users"
+                  className="text-xs font-semibold text-purple-300 hover:underline"
+                >
+                  Open Full Users &amp; Special Access Manager →
+                </Link>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => setSpecialTemplate(null)}
+                  className="border-white/10 text-slate-300 hover:bg-white/5"
+                >
+                  Close
+                </Button>
+              </div>
             </div>
           </div>
         )}
