@@ -255,11 +255,8 @@ class ReviewSerializer(serializers.ModelSerializer):
         read_only_fields = ["user", "is_approved", "replied_at", "replied_by", "replied_by_name", "created_at"]
 
     def get_replied_by_name(self, obj):
-        request = self.context.get("request")
-        user = getattr(request, "user", None) if request else None
-        if user and user.is_authenticated and user.is_staff:
-            if obj.replied_by:
-                return obj.replied_by.get_full_name() or obj.replied_by.username
+        if obj.replied_by:
+            return obj.replied_by.get_full_name() or obj.replied_by.username
         return None
 
 

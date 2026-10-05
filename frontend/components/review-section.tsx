@@ -118,6 +118,9 @@ export function ReviewSection({ assetId, initialReviews = [] }: ReviewSectionPro
                       <span className="inline-flex items-center gap-1 rounded bg-rail-amber/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-rail-amber border border-rail-amber/30">
                         🛡️ Official Developer Response
                       </span>
+                      {rev.replied_by_name ? (
+                        <span className="text-xs font-semibold text-slate-300">from {rev.replied_by_name}</span>
+                      ) : null}
                       {rev.replied_at ? (
                         <span className="text-[11px] text-slate-400">
                           • {new Date(rev.replied_at).toLocaleDateString("en-IN", { dateStyle: "medium" })}
