@@ -140,7 +140,7 @@ export default function CreateAssetPage() {
       }
 
       const created = await adminPostForm<CreatedAsset>("/admin/assets/", formData);
-      setMessage(`Upload completed. Asset created: ${created.title}. Selling price INR ${created.price}${created.discount_percent ? ` (${created.discount_percent}% off)` : ""}.`);
+      setMessage(`Upload completed. Asset created: ${created.title}. Selling price ₹${created.price}${created.discount_percent ? ` (${created.discount_percent}% off)` : ""}.`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not create asset.");
     } finally {
@@ -195,9 +195,9 @@ export default function CreateAssetPage() {
           <span className="mt-1 block text-xs text-slate-500">Old/MRP price. Keep higher than selling price to show an offer.</span>
         </label>
         <label className="block">
-          <span className="text-sm text-slate-300">Selling price in INR</span>
+          <span className="text-sm text-slate-300">Selling price in ₹ / INR</span>
           <input name="price" type="number" min="0" step="0.01" disabled={isFree} defaultValue="99.00" className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-3 disabled:opacity-50" />
-          <span className="mt-1 block text-xs text-slate-500">{isFree ? "Free product price will be saved as INR 0.00." : "Example: 149.00, 349.00, 999.00"}</span>
+          <span className="mt-1 block text-xs text-slate-500">{isFree ? "Free product price will be saved as ₹0.00." : "Example: 149.00, 349.00, 999.00"}</span>
         </label>
         <label className="block md:col-span-2">
           <span className="text-sm text-slate-300">Short description</span>
@@ -523,7 +523,7 @@ export default function CreateAssetPage() {
                     />
                   </label>
                   <label className="block">
-                    <span className="text-xs text-slate-300">Or Explicit Price in INR (Optional Override)</span>
+                    <span className="text-xs text-slate-300">Or Explicit Price in ₹ / INR (Optional Override)</span>
                     <input
                       type="number"
                       min="0"

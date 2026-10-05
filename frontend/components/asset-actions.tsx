@@ -269,9 +269,9 @@ export function AssetActions({ asset }: { asset: Asset }) {
     }
     if (isPrebooking) {
       if (activeAsset.user_has_early_discount && activeAsset.user_discount_percent) {
-        return `🚀 Pre-Book for INR ${effectivePrice} (${activeAsset.user_discount_percent}% VIP Loyalty Discount)`;
+        return `🚀 Pre-Book for ₹${effectivePrice} (${activeAsset.user_discount_percent}% VIP Loyalty Discount)`;
       }
-      return `🚀 Pre-Book Now for INR ${effectivePrice}`;
+      return `🚀 Pre-Book Now for ₹${effectivePrice}`;
     }
     if (isPrebookingPending) {
       return `⏳ Pre-Booking Opens Soon (${activeAsset.coming_soon_button_text || "Notify Me"})`;
@@ -286,10 +286,10 @@ export function AssetActions({ asset }: { asset: Asset }) {
       return isUpcoming ? "Early Access Download" : "Download package";
     }
     if (isUpcoming) {
-      return `VIP Early Access: Buy for INR ${effectivePrice}`;
+      return `VIP Early Access: Buy for ₹${effectivePrice}`;
     }
     if (activeAsset.user_has_early_discount && activeAsset.user_discount_percent) {
-      return `Buy for INR ${effectivePrice} (${activeAsset.user_discount_percent}% Loyalty Discount)`;
+      return `Buy for ₹${effectivePrice} (${activeAsset.user_discount_percent}% Loyalty Discount)`;
     }
     return `Buy for ${priceLabel(activeAsset)}`;
   }
@@ -418,7 +418,7 @@ export function AssetActions({ asset }: { asset: Asset }) {
               </p>
               {activeAsset.user_has_early_discount && activeAsset.user_discount_percent ? (
                 <p className="text-emerald-200 font-semibold mt-1">
-                  Exclusive loyalty discount applied: Pay INR {effectivePrice} ({activeAsset.user_discount_percent}% OFF).
+                  Exclusive loyalty discount applied: Pay ₹{effectivePrice} ({activeAsset.user_discount_percent}% OFF).
                 </p>
               ) : null}
             </div>
@@ -455,7 +455,7 @@ export function AssetActions({ asset }: { asset: Asset }) {
                 As a valued customer, you qualify for an exclusive {activeAsset.user_discount_percent}% discount!
               </p>
               <p className="text-emerald-200 font-semibold mt-1">
-                Your exclusive price: INR {effectivePrice} (Regular price: INR {activeAsset.price}).
+                Your exclusive price: ₹{effectivePrice} (Regular price: ₹{activeAsset.price}).
               </p>
             </div>
           </div>

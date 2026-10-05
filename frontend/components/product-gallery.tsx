@@ -239,7 +239,7 @@ export function ProductGallery({ asset }: { asset: Asset }) {
             {asset.file_size}
           </span>
           <span className="rounded bg-rail-red px-2 py-0.5 text-[11px] font-extrabold text-white shadow-md">
-            {asset.is_upcoming ? "Coming soon" : asset.is_free ? "Free Download" : `INR ${asset.price}`}
+            {asset.is_upcoming ? "Coming soon" : asset.is_free ? "Free Download" : `₹${asset.price}`}
           </span>
         </div>
 

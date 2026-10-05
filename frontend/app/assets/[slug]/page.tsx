@@ -66,9 +66,9 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ sl
           <h1 className="mt-2 text-4xl font-black">{asset.title}</h1>
           <div className="mt-4 text-xl">
             <PriceDisplay asset={asset} />
-            {!asset.is_free ? <p className="mt-1 text-sm text-slate-400">Currency: Indian Rupees (INR)</p> : null}
+            {!asset.is_free ? <p className="mt-1 text-sm text-slate-400">Currency: Indian Rupees (INR ₹)</p> : null}
             {showDeal && Number(asset.savings_amount || 0) > 0 ? (
-              <p className="mt-1 text-sm text-emerald-300">{asset.deal_title || "Launch Offer"} - You save INR {asset.savings_amount}</p>
+              <p className="mt-1 text-sm text-emerald-300">{asset.deal_title || "Launch Offer"} - You save ₹{asset.savings_amount}</p>
             ) : null}
           </div>
           <p className="mt-4 text-slate-300">{asset.description || asset.short_description}</p>
@@ -155,9 +155,9 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ sl
                     <div className="rounded border border-cyan-500/20 bg-black/40 p-3">
                       <p className="text-xs text-slate-400">Pre-Booking Offer Price</p>
                       <p className="text-lg font-black text-cyan-300">
-                        INR {asset.prebooking_price}{" "}
+                        ₹{asset.prebooking_price}{" "}
                         <span className="text-xs font-normal text-slate-400 line-through">
-                          INR {asset.price}
+                          ₹{asset.price}
                         </span>
                       </p>
                       <p className="text-[11px] text-emerald-300 mt-0.5">

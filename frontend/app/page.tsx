@@ -118,7 +118,7 @@ export default async function HomePage() {
               </span>
               <span className="flex items-center gap-2.5 rounded-lg border border-white/10 bg-white/[0.04] p-3 backdrop-blur-md">
                 <BadgeIndianRupee size={18} className="text-rail-amber shrink-0" />
-                <span className="font-medium">INR Pricing & UPI</span>
+                <span className="font-medium">₹ INR Pricing & UPI</span>
               </span>
               <span className="flex items-center gap-2.5 rounded-lg border border-white/10 bg-white/[0.04] p-3 backdrop-blur-md">
                 <ShieldCheck size={18} className="text-rail-amber shrink-0" />

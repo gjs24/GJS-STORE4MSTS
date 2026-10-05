@@ -27,7 +27,7 @@ function formatNumber(value: number) {
 }
 
 function formatMoney(value: string | number) {
-  return `INR ${new Intl.NumberFormat("en-IN").format(Number(value) || 0)}`;
+  return `₹${new Intl.NumberFormat("en-IN").format(Number(value) || 0)}`;
 }
 
 function formatDate(value: string) {
@@ -154,7 +154,7 @@ export default function AdminDashboardPage() {
     .map((asset) => ({
       title: asset.title,
       category: asset.category?.name || "Asset",
-      price: asset.is_free ? "Free" : `INR ${asset.price}`,
+      price: asset.is_free ? "Free" : `₹${asset.price}`,
       downloads: formatNumber(asset.download_count),
       accent: "from-red-500/35 to-orange-400/10"
     })), [assets]);

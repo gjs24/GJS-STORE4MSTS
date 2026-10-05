@@ -173,7 +173,7 @@ export function AccountList({ type }: AccountListProps) {
                 <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-300">
                   <span className="rounded border border-white/10 px-2 py-1">1024×1024 Texture</span>
                   <span className="rounded border border-white/10 px-2 py-1">DDS & PNG</span>
-                  <span className="rounded border border-white/10 px-2 py-1">INR {row.amount || row.boardTemplate.price || "0.00"}</span>
+                  <span className="rounded border border-white/10 px-2 py-1">₹{row.amount || row.boardTemplate.price || "0.00"}</span>
                   {row.status ? <span className="rounded border border-white/10 px-2 py-1">{row.status}</span> : null}
                 </div>
               </div>
@@ -228,7 +228,7 @@ export function AccountList({ type }: AccountListProps) {
                       href={`/assets/${row.asset.slug}`}
                       className="flex items-center gap-1.5 rounded-lg bg-rail-red px-3.5 py-2 text-xs font-bold text-white shadow-glow transition-all hover:bg-rail-red/90"
                     >
-                      <span>Buy {row.asset.is_free ? "Free" : `INR ${row.asset.price}`}</span>
+                      <span>Buy {row.asset.is_free ? "Free" : `₹${row.asset.price}`}</span>
                     </Link>
                   ) : null}
 

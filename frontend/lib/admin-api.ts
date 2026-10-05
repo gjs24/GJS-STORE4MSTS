@@ -88,6 +88,9 @@ export type AdminReview = {
   rating: number;
   comment: string;
   is_approved: boolean;
+  admin_reply?: string;
+  replied_at?: string | null;
+  replied_by_name?: string | null;
   created_at: string;
 };
 
@@ -489,6 +492,19 @@ export async function setAdminOrderAccess(
   }
 ): Promise<AdminOrder> {
   return adminPost<AdminOrder>(`/admin/orders/${orderId}/set-access/`, payload);
+}
+
+export async function adminReplyToReview(
+  reviewId: number,
+  reply: string
+): Promise<AdminReview> {
+  return adminPost<AdminReview>(`/admin/reviews/${reviewId}/reply/`, { reply });
+}
+
+export async function adminDeleteReviewReply(
+  reviewId: number
+): Promise<AdminReview> {
+  return adminDelete<AdminReview>(`/admin/reviews/${reviewId}/reply/`);
 }
 
 export const fallbackStats: AdminStats = {

@@ -2244,7 +2244,7 @@ class AdminReviewViewSet(viewsets.ModelViewSet):
     http_method_names = ["get", "patch", "delete", "post", "head", "options"]
 
     def get_queryset(self):
-        qs = Review.objects.select_related("user", "asset")
+        qs = Review.objects.select_related("user", "asset", "replied_by")
         status_param = self.request.query_params.get("status")
         if status_param == "approved":
             qs = qs.filter(is_approved=True)
@@ -2256,6 +2256,7 @@ class AdminReviewViewSet(viewsets.ModelViewSet):
             search = search.strip()
             qs = qs.filter(
                 Q(comment__icontains=search)
+                | Q(admin_reply__icontains=search)
                 | Q(user__username__icontains=search)
                 | Q(user__email__icontains=search)
                 | Q(asset__title__icontains=search)
@@ -2290,6 +2291,29 @@ class AdminReviewViewSet(viewsets.ModelViewSet):
         user_label = review.user.username if review.user else "User"
         asset_title = review.asset.title if review.asset else "Asset"
         log_admin_activity(request, "Review unapproved", "Review", review.id, f"Unapproved review by {user_label} on {asset_title}")
+        return Response(ReviewSerializer(review, context={"request": request}).data)
+
+    @action(detail=True, methods=["post", "delete"])
+    def reply(self, request, pk=None):
+        review = self.get_object()
+        if request.method == "DELETE":
+            review.admin_reply = ""
+            review.replied_at = None
+            review.replied_by = None
+            review.save(update_fields=["admin_reply", "replied_at", "replied_by"])
+            log_admin_activity(request, "Review reply deleted", "Review", review.id, f"Deleted developer reply on review #{review.id}")
+            return Response(ReviewSerializer(review, context={"request": request}).data)
+
+        reply_text = str(request.data.get("reply", "")).strip()
+        if not reply_text:
+            return Response({"detail": "Reply text cannot be empty."}, status=status.HTTP_400_BAD_REQUEST)
+
+        review.admin_reply = reply_text
+        review.replied_at = timezone.now()
+        review.replied_by = request.user
+        review.save(update_fields=["admin_reply", "replied_at", "replied_by"])
+        user_label = review.user.username if review.user else "User"
+        log_admin_activity(request, "Review replied", "Review", review.id, f"Replied to review #{review.id} by {user_label}")
         return Response(ReviewSerializer(review, context={"request": request}).data)
 
     def perform_destroy(self, instance):

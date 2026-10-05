@@ -59,9 +59,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     address: businessAddress,
     currenciesAccepted: "INR",
     paymentAccepted: "Cashfree Payments, UPI, card, net banking",
-    priceRange: "INR 0.00 - INR 999.00",
+    priceRange: "₹0.00 - ₹999.00",
     description:
-      "MSTS-GJS Production Store sells downloadable digital assets for MSTS and Open Rails. Paid products are priced in Indian Rupees (INR)."
+      "MSTS-GJS Production Store sells downloadable digital assets for MSTS and Open Rails. Paid products are priced in Indian Rupees (INR ₹)."
   };
 
   return (

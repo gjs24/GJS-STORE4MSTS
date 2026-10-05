@@ -19,7 +19,14 @@ import { AdminLayout } from "@/components/admin-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { adminDelete, adminGet, adminPost, type AdminReview } from "@/lib/admin-api";
+import {
+  adminDelete,
+  adminGet,
+  adminPost,
+  adminReplyToReview,
+  adminDeleteReviewReply,
+  type AdminReview
+} from "@/lib/admin-api";
 
 type ReviewStatusFilter = "all" | "pending" | "approved";
 type ReviewSort = "newest" | "oldest" | "rating_desc" | "rating_asc";
@@ -41,6 +48,9 @@ function ReviewsContent() {
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionId, setActionId] = useState<number | null>(null);
+  const [replyingReviewId, setReplyingReviewId] = useState<number | null>(null);
+  const [replyDraft, setReplyDraft] = useState<string>("");
+  const [replySubmitting, setReplySubmitting] = useState(false);
 
   useEffect(() => {
     setPage(1);
@@ -139,6 +149,55 @@ function ReviewsContent() {
       setFeedback({ type: "error", message: "Failed to delete review." });
     } finally {
       setActionId(null);
+    }
+  }
+
+  function startReplying(review: AdminReview) {
+    setReplyingReviewId(review.id);
+    setReplyDraft(review.admin_reply || "");
+  }
+
+  function cancelReplying() {
+    setReplyingReviewId(null);
+    setReplyDraft("");
+  }
+
+  async function handleSaveReply(reviewId: number) {
+    if (!replyDraft.trim()) {
+      setFeedback({ type: "error", message: "Reply text cannot be empty." });
+      return;
+    }
+    setReplySubmitting(true);
+    setFeedback(null);
+    try {
+      const updated = await adminReplyToReview(reviewId, replyDraft.trim());
+      setReviews((current) => current.map((r) => (r.id === updated.id ? { ...r, ...updated } : r)));
+      setReplyingReviewId(null);
+      setReplyDraft("");
+      setFeedback({ type: "success", message: `Official store reply saved for Review #${reviewId}.` });
+    } catch {
+      setFeedback({ type: "error", message: "Failed to save official reply." });
+    } finally {
+      setReplySubmitting(false);
+    }
+  }
+
+  async function handleDeleteReply(reviewId: number) {
+    if (!window.confirm("Are you sure you want to delete the official reply on this review?")) {
+      return;
+    }
+    setReplySubmitting(true);
+    setFeedback(null);
+    try {
+      const updated = await adminDeleteReviewReply(reviewId);
+      setReviews((current) => current.map((r) => (r.id === updated.id ? { ...r, ...updated } : r)));
+      setReplyingReviewId(null);
+      setReplyDraft("");
+      setFeedback({ type: "success", message: `Official reply removed from Review #${reviewId}.` });
+    } catch {
+      setFeedback({ type: "error", message: "Failed to delete official reply." });
+    } finally {
+      setReplySubmitting(false);
     }
   }
 
@@ -325,10 +384,112 @@ function ReviewsContent() {
                 <p className="text-[11px] text-slate-500">
                   Posted on {new Date(review.created_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}
                 </p>
+
+                {/* Existing Official Admin Reply */}
+                {review.admin_reply && replyingReviewId !== review.id ? (
+                  <div className="mt-2 rounded-lg border border-rail-amber/30 bg-rail-amber/[0.06] p-3.5 space-y-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="inline-flex items-center gap-1 rounded bg-rail-amber/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-rail-amber border border-rail-amber/30">
+                          🛡️ Official Store Response
+                        </span>
+                        {review.replied_by_name ? (
+                          <span className="text-xs font-semibold text-slate-300">by {review.replied_by_name}</span>
+                        ) : null}
+                        {review.replied_at ? (
+                          <span className="text-[11px] text-slate-500">
+                            • {new Date(review.replied_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}
+                          </span>
+                        ) : null}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => startReplying(review)}
+                        className="text-xs font-semibold text-rail-amber hover:underline inline-flex items-center gap-1"
+                      >
+                        <MessageSquare size={12} /> Edit Reply
+                      </button>
+                    </div>
+                    <p className="text-xs sm:text-sm text-slate-200 whitespace-pre-line leading-relaxed">
+                      {review.admin_reply}
+                    </p>
+                  </div>
+                ) : null}
+
+                {/* Reply Composer Form */}
+                {replyingReviewId === review.id ? (
+                  <div className="mt-2 rounded-lg border border-cyan-500/40 bg-black/70 p-3.5 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-cyan-300 flex items-center gap-1.5">
+                        <MessageSquare size={13} /> {review.admin_reply ? "Edit Official Response" : "Write Official Store Response"}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={cancelReplying}
+                        className="text-xs text-slate-400 hover:text-white"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                    <textarea
+                      rows={3}
+                      value={replyDraft}
+                      onChange={(e) => setReplyDraft(e.target.value)}
+                      placeholder="Type your official reply here. Customers will see this reply right below the review on the asset page..."
+                      className="w-full rounded border border-white/10 bg-black/60 p-2.5 text-xs text-white placeholder-slate-500 outline-none focus:border-cyan-400"
+                    />
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          disabled={replySubmitting || !replyDraft.trim()}
+                          onClick={() => handleSaveReply(review.id)}
+                          className="bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold gap-1.5"
+                        >
+                          <CheckCircle2 size={13} /> {replySubmitting ? "Saving..." : "Save Reply"}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={cancelReplying}
+                          className="text-slate-400 hover:text-white text-xs"
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                      {review.admin_reply ? (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={replySubmitting}
+                          onClick={() => handleDeleteReply(review.id)}
+                          className="border border-red-500/30 text-red-400 hover:bg-red-500/10 text-xs gap-1"
+                        >
+                          <Trash2 size={12} /> Remove Reply
+                        </Button>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : null}
               </div>
 
               {/* Actions */}
-              <div className="flex items-center gap-2 self-end sm:self-auto">
+              <div className="flex flex-wrap items-center gap-2 self-end sm:self-auto shrink-0">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => {
+                    if (replyingReviewId === review.id) {
+                      cancelReplying();
+                    } else {
+                      startReplying(review);
+                    }
+                  }}
+                  className="border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/10 text-xs font-semibold gap-1.5"
+                >
+                  <MessageSquare size={14} /> {review.admin_reply ? "Edit Reply" : "Reply"}
+                </Button>
+
                 {!review.is_approved ? (
                   <Button
                     size="sm"

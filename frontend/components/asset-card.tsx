@@ -78,7 +78,7 @@ export function AssetCard({
                 ? "FREE"
                 : asset.discount_percent
                 ? `${asset.discount_percent}% OFF`
-                : `INR ${asset.price}`}
+                : `₹${asset.price}`}
             </span>
             <WishlistButton assetId={asset.id} variant="icon" />
           </div>

@@ -233,12 +233,12 @@ export default function EditAssetPage({ params }: { params: Promise<{ id: string
           </select>
         </label>
         <label className="block">
-          <span className="text-sm text-slate-300">Original price in INR</span>
+          <span className="text-sm text-slate-300">Original price in ₹ / INR</span>
           <input name="original_price" type="number" min="0" step="0.01" disabled={isFree} defaultValue={asset.original_price || asset.price} className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-3 disabled:opacity-50" />
           <span className="mt-1 block text-xs text-slate-500">Old/MRP price. Keep higher than selling price to show an offer.</span>
         </label>
         <label className="block">
-          <span className="text-sm text-slate-300">Selling price in INR</span>
+          <span className="text-sm text-slate-300">Selling price in ₹ / INR</span>
           <input name="price" type="number" min="0" step="0.01" disabled={isFree} defaultValue={asset.price} className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-3 disabled:opacity-50" />
         </label>
         <label className="block md:col-span-2">
@@ -572,7 +572,7 @@ export default function EditAssetPage({ params }: { params: Promise<{ id: string
                     />
                   </label>
                   <label className="block">
-                    <span className="text-xs text-slate-300">Or Explicit Price in INR (Optional Override)</span>
+                    <span className="text-xs text-slate-300">Or Explicit Price in ₹ / INR (Optional Override)</span>
                     <input
                       type="number"
                       min="0"

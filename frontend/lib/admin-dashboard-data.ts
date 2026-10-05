@@ -69,7 +69,7 @@ export type RailwayCard = {
 export const metrics: DashboardMetric[] = [
   { label: "Total Users", value: 0, displayValue: "0", change: "Start phase", tone: "cyan", icon: Users },
   { label: "Total Orders", value: 0, displayValue: "0", change: "No orders yet", tone: "amber", icon: ShoppingCart },
-  { label: "Total Sales", value: 0, displayValue: "INR 0", change: "No revenue yet", tone: "red", icon: BadgeIndianRupee },
+  { label: "Total Sales", value: 0, displayValue: "₹0", change: "No revenue yet", tone: "red", icon: BadgeIndianRupee },
   { label: "Total Downloads", value: 0, displayValue: "0", change: "No downloads yet", tone: "emerald", icon: Download },
   { label: "Total Assets", value: 0, displayValue: "0", change: "No assets yet", tone: "amber", icon: Boxes },
   { label: "Page Views", value: 0, displayValue: "0", change: "Not tracked", tone: "cyan", icon: Eye }

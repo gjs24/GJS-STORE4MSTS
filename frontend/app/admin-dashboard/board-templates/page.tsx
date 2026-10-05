@@ -250,9 +250,7 @@ export default function AdminBoardTemplatesPage() {
         type: "success",
         message: isCurrentlyGranted
           ? `Revoked "${tpl.name}" special access from ${user.username}.`
-          : `Granted free access to "${tpl.name}" for ${user.username}!${
-              updatedAccess.email_status?.sent ? " (Email notification sent)" : ""
-            }`
+          : `Granted free access to "${tpl.name}" for ${user.username}!`
       });
     } catch (err) {
       setSpecialModalFeedback({
@@ -1145,7 +1143,8 @@ export default function AdminBoardTemplatesPage() {
                           return (
                             u.username.toLowerCase().includes(q) ||
                             (u.email || "").toLowerCase().includes(q) ||
-                            `${u.first_name || ""} ${u.last_name || ""}`.toLowerCase().includes(q)
+                            (u.first_name || "").toLowerCase().includes(q) ||
+                            (u.last_name || "").toLowerCase().includes(q)
                           );
                         })
                         .sort((a, b) => {

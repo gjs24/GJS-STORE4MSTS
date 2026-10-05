@@ -100,7 +100,16 @@ export type Asset = {
   created_at?: string;
   images?: Array<{ id: number; image?: string | null; alt_text: string; sort_order: number }>;
   updates?: Array<{ id: number; version: string; changelog: string; created_at: string }>;
-  reviews?: Array<{ id: number; rating: number; comment: string; created_at: string; user?: { username: string } }>;
+  reviews?: Array<{
+    id: number;
+    rating: number;
+    comment: string;
+    created_at: string;
+    user?: { username: string };
+    admin_reply?: string;
+    replied_at?: string;
+    replied_by_name?: string;
+  }>;
 };
 
 export type CurrentUser = {
@@ -438,5 +447,5 @@ export function hasOffer(asset: Pick<Asset, "is_free" | "original_price" | "pric
 }
 
 export function priceLabel(asset: Pick<Asset, "is_free" | "price">) {
-  return asset.is_free ? "Free" : `INR ${asset.price}`;
+  return asset.is_free ? "Free" : `₹${asset.price}`;
 }

@@ -345,6 +345,15 @@ class Review(models.Model):
     rating = models.PositiveSmallIntegerField(validators=[MinValueValidator(1), MaxValueValidator(5)])
     comment = models.TextField()
     is_approved = models.BooleanField(default=True)
+    admin_reply = models.TextField(blank=True, default="")
+    replied_at = models.DateTimeField(blank=True, null=True)
+    replied_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        blank=True,
+        null=True,
+        related_name="review_replies",
+        on_delete=models.SET_NULL,
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

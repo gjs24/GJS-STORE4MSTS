@@ -232,11 +232,32 @@ class ReviewSerializer(serializers.ModelSerializer):
     user_id = serializers.IntegerField(source="user.id", read_only=True)
     asset_title = serializers.CharField(source="asset.title", read_only=True)
     asset_slug = serializers.CharField(source="asset.slug", read_only=True)
+    replied_by_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Review
-        fields = ["id", "asset", "asset_title", "asset_slug", "user", "user_id", "rating", "comment", "is_approved", "created_at"]
-        read_only_fields = ["user", "is_approved", "created_at"]
+        fields = [
+            "id",
+            "asset",
+            "asset_title",
+            "asset_slug",
+            "user",
+            "user_id",
+            "rating",
+            "comment",
+            "is_approved",
+            "admin_reply",
+            "replied_at",
+            "replied_by",
+            "replied_by_name",
+            "created_at",
+        ]
+        read_only_fields = ["user", "is_approved", "replied_at", "replied_by", "replied_by_name", "created_at"]
+
+    def get_replied_by_name(self, obj):
+        if obj.replied_by:
+            return obj.replied_by.get_full_name() or obj.replied_by.username
+        return None
 
 
 class AssetListSerializer(serializers.ModelSerializer):
@@ -487,7 +508,7 @@ class AssetDetailSerializer(AssetListSerializer):
         ]
 
     def get_reviews(self, obj):
-        approved = obj.reviews.filter(is_approved=True).select_related("user")
+        approved = obj.reviews.filter(is_approved=True).select_related("user", "replied_by")
         return ReviewSerializer(approved, many=True, context=self.context).data
 
     def get_can_download(self, obj):
