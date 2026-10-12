@@ -44,7 +44,7 @@ export default function ContactPage() {
           <div className="rounded border border-white/10 bg-white/[0.03] p-5">
             <ShieldQuestion className="mb-3 text-rail-amber" />
             <h2 className="font-semibold text-white">Support Scope</h2>
-            <p className="mt-2 text-sm text-slate-400">Download access, Cashfree payment status, order issues, file access, and installation queries.</p>
+            <p className="mt-2 text-sm text-slate-400">Download access, Razorpay payment status, order issues, file access, and installation queries.</p>
             <p className="mt-3 text-sm text-slate-400">Currency: Indian Rupees (INR) for all paid digital products.</p>
           </div>
         </div>
