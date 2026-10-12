@@ -20,10 +20,13 @@ export type StoreOrder = {
   provider_order_id?: string;
   utr?: string;
   payer_name?: string;
+  customer_phone?: string;
   payment_submitted_at?: string | null;
   download_enabled?: boolean;
   payment_session_id?: string;
-  payment_provider?: "CASHFREE" | "MANUAL" | "";
+  payment_provider?: "RAZORPAY" | "CASHFREE" | "MANUAL" | "";
+  razorpay_order_id?: string;
+  razorpay_key_id?: string;
   cashfree_mode?: "production" | "sandbox";
   manual_payment?: {
     upi_id: string;
@@ -193,15 +196,21 @@ export async function createBoardTemplateOrder(templateId: string, customerPhone
 export async function verifyPayment(
   orderId: number | string,
   payment?: {
-    utr: string;
+    utr?: string;
     payer_name?: string;
+    razorpay_payment_id?: string;
+    razorpay_order_id?: string;
+    razorpay_signature?: string;
   }
 ): Promise<StoreOrder> {
   await validAccessToken();
   const payload = {
     order_id: String(orderId).trim(),
     utr: payment?.utr || "",
-    payer_name: payment?.payer_name || ""
+    payer_name: payment?.payer_name || "",
+    razorpay_payment_id: payment?.razorpay_payment_id || "",
+    razorpay_order_id: payment?.razorpay_order_id || "",
+    razorpay_signature: payment?.razorpay_signature || "",
   };
   let res = await fetch(`${API_URL}/payments/verify/`, {
     method: "POST",

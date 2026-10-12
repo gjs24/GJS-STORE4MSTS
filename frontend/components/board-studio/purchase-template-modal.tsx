@@ -34,6 +34,30 @@ function qrCodeUrl(value: string) {
 
 const cashfreeMode = process.env.NEXT_PUBLIC_CASHFREE_MODE === 'production' ? 'production' : 'sandbox';
 
+function loadRazorpayScript(): Promise<boolean> {
+  return new Promise((resolve) => {
+    if (typeof window === 'undefined') {
+      resolve(false);
+      return;
+    }
+    if ((window as any).Razorpay) {
+      resolve(true);
+      return;
+    }
+    const existing = document.querySelector('script[src="https://checkout.razorpay.com/v1/checkout.js"]');
+    if (existing) {
+      existing.addEventListener('load', () => resolve(true));
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.async = true;
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
+}
+
 export const PurchaseTemplateModal: React.FC<PurchaseTemplateModalProps> = ({
   isOpen,
   template,
@@ -113,6 +137,73 @@ export const PurchaseTemplateModal: React.FC<PurchaseTemplateModalProps> = ({
           onSuccess(template.id);
           onClose();
         }, 1200);
+        return;
+      }
+
+      // Razorpay checkout
+      if (nextOrder.status === 'PENDING' && nextOrder.payment_provider === 'RAZORPAY' && nextOrder.razorpay_order_id && nextOrder.razorpay_key_id) {
+        const loaded = await loadRazorpayScript();
+        if (!loaded) {
+          throw new Error('Could not load Razorpay payment gateway. Please check your internet connection.');
+        }
+        const storedUser = getStoredUser();
+        const options = {
+          key: nextOrder.razorpay_key_id,
+          amount: Math.round(Number(nextOrder.amount) * 100),
+          currency: nextOrder.currency || 'INR',
+          name: 'MSTS-GJS Production Store',
+          description: `Unlock ${template.name}`,
+          order_id: nextOrder.razorpay_order_id,
+          image: '/desktop-app-icon.png',
+          prefill: {
+            name: storedUser?.username || 'GJS Customer',
+            email: storedUser?.email || '',
+            contact: nextOrder.customer_phone || (storedUser?.phone_number || ''),
+          },
+          theme: { color: '#dc2626' },
+          modal: {
+            ondismiss: function () {
+              setIsProcessing(false);
+            },
+          },
+          handler: async function (response: {
+            razorpay_payment_id: string;
+            razorpay_order_id: string;
+            razorpay_signature: string;
+          }) {
+            setIsProcessing(true);
+            try {
+              const verifiedOrder = await verifyPayment(nextOrder.id, {
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_signature: response.razorpay_signature,
+              });
+              if (verifiedOrder.download_enabled || verifiedOrder.status === 'PAID' || verifiedOrder.status === 'APPROVED') {
+                const unlockedIds: string[] = JSON.parse(localStorage.getItem('gjs_unlocked_templates') || '[]');
+                if (!unlockedIds.includes(template.id)) {
+                  unlockedIds.push(template.id);
+                  localStorage.setItem('gjs_unlocked_templates', JSON.stringify(unlockedIds));
+                }
+                setSuccess(true);
+                setTimeout(() => {
+                  setSuccess(false);
+                  onSuccess(template.id);
+                  onClose();
+                }, 1200);
+              }
+            } catch (err: any) {
+              setError(err?.message || 'Payment verification failed.');
+            } finally {
+              setIsProcessing(false);
+            }
+          },
+        };
+        const rzp = new (window as any).Razorpay(options);
+        rzp.on('payment.failed', function (res: any) {
+          setError(`Payment failed: ${res?.error?.description || 'Declined'}`);
+          setIsProcessing(false);
+        });
+        rzp.open();
         return;
       }
 

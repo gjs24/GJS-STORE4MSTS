@@ -78,13 +78,13 @@ export function AccountList({ type }: AccountListProps) {
       if (type !== "purchases") return;
       const rawOrderId = new URLSearchParams(window.location.search).get("order_id")?.trim() || "";
       if (!rawOrderId) return;
-      setMessage("Confirming Cashfree payment...");
+      setMessage("Confirming payment...");
       try {
         const order = await verifyPayment(rawOrderId);
         setMessage(order.download_enabled ? "Payment confirmed. Download access is ready." : "Payment is not confirmed yet. Please refresh in a moment.");
         window.history.replaceState(null, "", window.location.pathname);
       } catch (error) {
-        setMessage(error instanceof Error ? error.message : "Could not confirm Cashfree payment yet.");
+        setMessage(error instanceof Error ? error.message : "Could not confirm payment yet.");
       }
     };
     verifyReturnedOrder().finally(loadRows);

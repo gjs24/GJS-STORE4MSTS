@@ -89,6 +89,98 @@ export function AssetActions({ asset }: { asset: Asset }) {
     return true;
   }
 
+  function loadRazorpayScript(): Promise<boolean> {
+    return new Promise((resolve) => {
+      if (typeof window === "undefined") {
+        resolve(false);
+        return;
+      }
+      if ((window as any).Razorpay) {
+        resolve(true);
+        return;
+      }
+      const existing = document.querySelector('script[src="https://checkout.razorpay.com/v1/checkout.js"]');
+      if (existing) {
+        existing.addEventListener("load", () => resolve(true));
+        return;
+      }
+      const script = document.createElement("script");
+      script.src = "https://checkout.razorpay.com/v1/checkout.js";
+      script.async = true;
+      script.onload = () => resolve(true);
+      script.onerror = () => resolve(false);
+      document.body.appendChild(script);
+    });
+  }
+
+  async function startRazorpayCheckout(nextOrder: StoreOrder) {
+    if (!nextOrder.razorpay_order_id || !nextOrder.razorpay_key_id) {
+      return false;
+    }
+    setMessage("Opening secure Razorpay checkout...");
+    const loaded = await loadRazorpayScript();
+    if (!loaded) {
+      throw new Error("Could not load Razorpay payment gateway. Please check your internet connection.");
+    }
+    const storedUser = getStoredUser();
+    const customerName = storedUser?.username || "GJS Customer";
+    const customerEmail = storedUser?.email || "";
+    const customerPhone = nextOrder.customer_phone || (storedUser?.phone_number || "");
+
+    const options = {
+      key: nextOrder.razorpay_key_id,
+      amount: Math.round(Number(nextOrder.amount) * 100),
+      currency: nextOrder.currency || "INR",
+      name: "MSTS-GJS Production Store",
+      description: activeAsset.title.slice(0, 40),
+      order_id: nextOrder.razorpay_order_id,
+      image: "/desktop-app-icon.png",
+      prefill: {
+        name: customerName,
+        email: customerEmail,
+        contact: customerPhone,
+      },
+      theme: {
+        color: "#dc2626",
+      },
+      modal: {
+        ondismiss: function () {
+          setMessage("Payment was cancelled. You can retry whenever ready.");
+          setBusy(false);
+        },
+      },
+      handler: async function (response: {
+        razorpay_payment_id: string;
+        razorpay_order_id: string;
+        razorpay_signature: string;
+      }) {
+        setBusy(true);
+        setMessage("Verifying payment with bank...");
+        try {
+          const verifiedOrder = await verifyPayment(nextOrder.id, {
+            razorpay_payment_id: response.razorpay_payment_id,
+            razorpay_order_id: response.razorpay_order_id,
+            razorpay_signature: response.razorpay_signature,
+          });
+          setOrder(verifiedOrder);
+          setMessage("Payment verified successfully! Your download is now ready.");
+        } catch (err) {
+          setMessage(err instanceof Error ? err.message : "Payment verification failed.");
+        } finally {
+          setBusy(false);
+        }
+      },
+    };
+
+    const rzp = new (window as any).Razorpay(options);
+    rzp.on("payment.failed", function (response: any) {
+      setMessage(`Payment failed: ${response?.error?.description || "Transaction was not completed"}`);
+      setBusy(false);
+    });
+    rzp.open();
+    return true;
+  }
+
   async function startCashfreeCheckout(nextOrder: StoreOrder) {
     if (!nextOrder.payment_session_id) {
       return false;
@@ -195,7 +287,11 @@ export function AssetActions({ asset }: { asset: Asset }) {
         }
         const nextOrder = await createOrder(activeAsset.id, phone || undefined);
         setOrder(nextOrder);
-        if (nextOrder.status === "PENDING" && nextOrder.payment_session_id) {
+        if (nextOrder.status === "PENDING" && nextOrder.payment_provider === "RAZORPAY" && nextOrder.razorpay_order_id) {
+          await startRazorpayCheckout(nextOrder);
+          setMessage("Complete the payment in the Razorpay window to confirm your order.");
+          return;
+        } else if (nextOrder.status === "PENDING" && nextOrder.payment_session_id) {
           await startCashfreeCheckout(nextOrder);
           setMessage("Complete the Cashfree payment to confirm your order.");
           return;

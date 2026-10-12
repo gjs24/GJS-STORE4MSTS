@@ -1,6 +1,8 @@
 import base64
 from datetime import timedelta
 from decimal import Decimal
+import hashlib
+import hmac
 import json
 import logging
 import os
@@ -327,6 +329,164 @@ def ensure_cashfree_payment(order, request):
     )
     order._state.fields_cache.pop("payment", None)
     return True, ""
+
+
+def razorpay_is_configured():
+    return bool(getattr(settings, "RAZORPAY_KEY_ID", "") and getattr(settings, "RAZORPAY_KEY_SECRET", ""))
+
+
+def create_razorpay_order(order, request=None):
+    if not razorpay_is_configured():
+        return None, "Razorpay is not configured."
+
+    if float(order.amount) <= 0:
+        order.status = Order.Status.APPROVED
+        order.download_enabled = True
+        order.save(update_fields=["status", "download_enabled"])
+        grant_board_unlock_if_applicable(order)
+        return {"status": "paid", "id": f"free_{order.id}"}, ""
+
+    amount_in_paise = int(round(float(order.amount) * 100))
+    user = order.user
+    item_title = (order.asset.title if order.asset else (order.board_template.name if order.board_template else "Store Item"))[:30]
+
+    payload = {
+        "amount": amount_in_paise,
+        "currency": order.currency or "INR",
+        "receipt": f"GJS-{order.id}",
+        "notes": {
+            "order_id": str(order.id),
+            "user_id": str(user.id),
+            "username": str(user.username)[:30],
+            "product": item_title,
+        },
+    }
+    try:
+        response = requests.post(
+            "https://api.razorpay.com/v1/orders",
+            auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET),
+            json=payload,
+            timeout=20,
+        )
+        try:
+            data = response.json()
+        except ValueError:
+            data = {"error": {"description": response.text}}
+
+        if response.status_code >= 400:
+            err_desc = ""
+            if isinstance(data, dict):
+                err_desc = data.get("error", {}).get("description") or data.get("message") or ""
+            logger.warning("Razorpay order create failed for order %s: %s", order.id, data)
+            return None, err_desc or "Razorpay order creation failed."
+        return data, ""
+    except Exception as exc:
+        logger.exception("Razorpay order create request exception: %s", exc)
+        return None, str(exc)
+
+
+def fetch_razorpay_order(provider_order_id):
+    if not razorpay_is_configured():
+        return None, "Razorpay is not configured."
+    try:
+        response = requests.get(
+            f"https://api.razorpay.com/v1/orders/{provider_order_id}",
+            auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET),
+            timeout=20,
+        )
+        try:
+            data = response.json()
+        except ValueError:
+            data = {"error": {"description": response.text}}
+        if response.status_code >= 400:
+            return None, "Razorpay order fetch failed."
+        return data, ""
+    except Exception as exc:
+        return None, str(exc)
+
+
+def verify_razorpay_signature(razorpay_order_id, razorpay_payment_id, razorpay_signature):
+    key_secret = getattr(settings, "RAZORPAY_KEY_SECRET", "")
+    if not key_secret or not razorpay_order_id or not razorpay_payment_id or not razorpay_signature:
+        return False
+    msg = f"{razorpay_order_id}|{razorpay_payment_id}".encode("utf-8")
+    expected = hmac.new(key_secret.encode("utf-8"), msg, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, razorpay_signature)
+
+
+def sync_razorpay_order(order):
+    payment = getattr(order, "payment", None)
+    if not payment or payment.provider != Payment.Provider.RAZORPAY:
+        return True, ""
+    razorpay_order_id = payment.raw_response.get("id") or payment.provider_payment_id or order.provider_order_id
+    if not razorpay_order_id:
+        return True, ""
+    data, error = fetch_razorpay_order(razorpay_order_id)
+    if not data:
+        return False, error
+    status_val = str(data.get("status", "")).lower()
+    payment.raw_response = {**payment.raw_response, **data}
+    payment.status = status_val or payment.status
+    payment.save(update_fields=["raw_response", "status"])
+    if status_val == "paid":
+        order.status = Order.Status.PAID
+        order.download_enabled = True
+        order.save(update_fields=["status", "download_enabled"])
+        grant_board_unlock_if_applicable(order)
+    elif status_val in ["cancelled", "expired"]:
+        order.status = Order.Status.FAILED
+        order.download_enabled = False
+        order.save(update_fields=["status", "download_enabled"])
+    order._state.fields_cache.pop("payment", None)
+    return True, ""
+
+
+def ensure_razorpay_payment(order, request=None):
+    sync_order_download_access(order)
+    if order_has_download_access(order):
+        return True, ""
+    if not razorpay_is_configured():
+        return False, "Razorpay is not configured."
+    payment = getattr(order, "payment", None)
+    if payment and payment.provider == Payment.Provider.RAZORPAY and payment.raw_response.get("id"):
+        synced, _ = sync_razorpay_order(order)
+        if order.status in [Order.Status.PAID, Order.Status.APPROVED]:
+            return True, ""
+        if order.status in [Order.Status.FAILED, Order.Status.REFUNDED, Order.Status.REJECTED]:
+            return False, "Razorpay reports this payment as failed or expired."
+        if order.status == Order.Status.PENDING and order.created_at and order.created_at < timezone.now() - timedelta(minutes=30):
+            # Session expired, allow new order creation below
+            pass
+        else:
+            return True, ""
+    data, error = create_razorpay_order(order, request)
+    if not data:
+        return False, error
+    Payment.objects.update_or_create(
+        order=order,
+        defaults={
+            "provider": Payment.Provider.RAZORPAY,
+            "provider_payment_id": str(data.get("id", "")),
+            "provider_signature": "",
+            "status": str(data.get("status", "created")).lower(),
+            "raw_response": data,
+        },
+    )
+    order._state.fields_cache.pop("payment", None)
+    return True, ""
+
+
+def ensure_payment_gateway(order, request=None):
+    sync_order_download_access(order)
+    if order_has_download_access(order):
+        return True, ""
+    if razorpay_is_configured():
+        return ensure_razorpay_payment(order, request)
+    if cashfree_is_configured():
+        return ensure_cashfree_payment(order, request)
+    if getattr(settings, "MANUAL_UPI_ID", ""):
+        return True, ""
+    return False, "Neither Razorpay nor Cashfree nor Manual UPI is configured. Please contact the administrator."
 
 
 def log_admin_activity(request, action, target_type="", target_id="", message=""):
@@ -1265,9 +1425,13 @@ class OrderCreateView(generics.CreateAPIView):
             if existing_order:
                 sync_order_download_access(existing_order)
                 if not order_has_download_access(existing_order):
-                    synced, sync_error = sync_cashfree_order(existing_order)
-                    if not synced and not cashfree_order_missing_error(sync_error):
-                        return Response({"detail": sync_error or "Cashfree payment status could not be checked."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+                    payment = getattr(existing_order, "payment", None)
+                    if payment and payment.provider == Payment.Provider.RAZORPAY:
+                        sync_razorpay_order(existing_order)
+                    elif payment and payment.provider == Payment.Provider.CASHFREE:
+                        synced, sync_error = sync_cashfree_order(existing_order)
+                        if not synced and not cashfree_order_missing_error(sync_error):
+                            return Response({"detail": sync_error or "Payment status could not be checked."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
                     if existing_order.status == Order.Status.FAILED:
                         existing_order = None
             if existing_order:
@@ -1279,9 +1443,9 @@ class OrderCreateView(generics.CreateAPIView):
                         existing_order.customer_phone = digits
                         existing_order.save(update_fields=["customer_phone"])
                 if not order_has_download_access(existing_order):
-                    cashfree_ready, cashfree_error = ensure_cashfree_payment(existing_order, request)
-                    if not cashfree_ready:
-                        return Response({"detail": cashfree_error or "Cashfree checkout is not available."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+                    gateway_ready, gateway_error = ensure_payment_gateway(existing_order, request)
+                    if not gateway_ready:
+                        return Response({"detail": gateway_error or "Payment checkout is not available."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
                 return Response(OrderSerializer(existing_order, context={"request": request}).data, status=status.HTTP_200_OK)
 
             phone_input = request.data.get("customer_phone") or request.data.get("phone") or ""
@@ -1305,9 +1469,9 @@ class OrderCreateView(generics.CreateAPIView):
             )
             order.provider_order_id = f"GJS-B{order.id:05d}"
             order.save(update_fields=["provider_order_id"])
-            cashfree_ready, cashfree_error = ensure_cashfree_payment(order, request)
-            if not cashfree_ready:
-                return Response({"detail": cashfree_error or "Cashfree checkout is not available."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            gateway_ready, gateway_error = ensure_payment_gateway(order, request)
+            if not gateway_ready:
+                return Response({"detail": gateway_error or "Payment checkout is not available."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
             data = OrderSerializer(order, context={"request": request}).data
             return Response(data, status=status.HTTP_201_CREATED)
 
@@ -1365,10 +1529,13 @@ class OrderCreateView(generics.CreateAPIView):
         if existing_order:
             sync_order_download_access(existing_order)
             if not asset.is_free and not order_has_download_access(existing_order):
-                synced, sync_error = sync_cashfree_order(existing_order)
-                if not synced:
-                    if not cashfree_order_missing_error(sync_error):
-                        return Response({"detail": sync_error or "Cashfree payment status could not be checked."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+                payment = getattr(existing_order, "payment", None)
+                if payment and payment.provider == Payment.Provider.RAZORPAY:
+                    sync_razorpay_order(existing_order)
+                elif payment and payment.provider == Payment.Provider.CASHFREE:
+                    synced, sync_error = sync_cashfree_order(existing_order)
+                    if not synced and not cashfree_order_missing_error(sync_error):
+                        return Response({"detail": sync_error or "Payment status could not be checked."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
                 if existing_order.status == Order.Status.FAILED:
                     existing_order = None
         if existing_order:
@@ -1380,9 +1547,9 @@ class OrderCreateView(generics.CreateAPIView):
                     existing_order.customer_phone = digits
                     existing_order.save(update_fields=["customer_phone"])
             if not order_has_download_access(existing_order) and not user_has_special_access(request.user, asset):
-                cashfree_ready, cashfree_error = ensure_cashfree_payment(existing_order, request)
-                if not cashfree_ready:
-                    return Response({"detail": cashfree_error or "Cashfree checkout is not available."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+                gateway_ready, gateway_error = ensure_payment_gateway(existing_order, request)
+                if not gateway_ready:
+                    return Response({"detail": gateway_error or "Payment checkout is not available."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
             return Response(OrderSerializer(existing_order, context={"request": request}).data, status=status.HTTP_200_OK)
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -1391,9 +1558,9 @@ class OrderCreateView(generics.CreateAPIView):
         ea_status = get_cached_early_access_status(asset, request)
         is_free_purchase = asset.is_free or ea_status["effective_price"] <= Decimal("0.00") or user_has_special_access(request.user, asset)
         if not is_free_purchase:
-            cashfree_ready, cashfree_error = ensure_cashfree_payment(order, request)
-            if not cashfree_ready:
-                return Response({"detail": cashfree_error or "Cashfree checkout is not available."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            gateway_ready, gateway_error = ensure_payment_gateway(order, request)
+            if not gateway_ready:
+                return Response({"detail": gateway_error or "Payment checkout is not available."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         data = OrderSerializer(order, context={"request": request}).data
         headers = self.get_success_headers(data)
         return Response(data, status=status.HTTP_201_CREATED, headers=headers)
@@ -1529,6 +1696,68 @@ class PaymentVerifyView(generics.GenericAPIView):
         if order.status == Order.Status.REJECTED:
             return Response({"detail": "This order was rejected. Please create a new order if you paid again."}, status=status.HTTP_400_BAD_REQUEST)
         payment = getattr(order, "payment", None)
+        razorpay_payment_id = serializer.validated_data.get("razorpay_payment_id", "").strip()
+        razorpay_order_id = serializer.validated_data.get("razorpay_order_id", "").strip()
+        razorpay_signature = serializer.validated_data.get("razorpay_signature", "").strip()
+
+        if razorpay_payment_id and razorpay_signature:
+            r_order_id = razorpay_order_id
+            if not r_order_id and payment and payment.provider == Payment.Provider.RAZORPAY:
+                r_order_id = payment.raw_response.get("id") or payment.provider_payment_id
+            if not r_order_id:
+                r_order_id = order.provider_order_id
+
+            is_valid = verify_razorpay_signature(r_order_id, razorpay_payment_id, razorpay_signature)
+            if not is_valid and razorpay_is_configured():
+                try:
+                    p_res = requests.get(
+                        f"https://api.razorpay.com/v1/payments/{razorpay_payment_id}",
+                        auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET),
+                        timeout=15,
+                    )
+                    p_data = p_res.json()
+                    if p_data.get("status") in ["captured", "authorized"]:
+                        is_valid = True
+                except Exception:
+                    pass
+
+            if not is_valid:
+                return Response({"detail": "Razorpay payment verification failed."}, status=status.HTTP_400_BAD_REQUEST)
+
+            order.status = Order.Status.PAID
+            order.download_enabled = True
+            order.payment_submitted_at = timezone.now()
+            order.save(update_fields=["status", "download_enabled", "payment_submitted_at"])
+
+            if payment:
+                payment.provider = Payment.Provider.RAZORPAY
+                payment.provider_payment_id = razorpay_payment_id
+                payment.provider_signature = razorpay_signature
+                payment.status = "paid"
+                payment.save(update_fields=["provider", "provider_payment_id", "provider_signature", "status"])
+            else:
+                Payment.objects.create(
+                    order=order,
+                    provider=Payment.Provider.RAZORPAY,
+                    provider_payment_id=razorpay_payment_id,
+                    provider_signature=razorpay_signature,
+                    status="paid",
+                )
+
+            grant_board_unlock_if_applicable(order)
+            return Response(OrderSerializer(order, context={"request": request}).data, status=status.HTTP_200_OK)
+
+        if payment and payment.provider == Payment.Provider.RAZORPAY:
+            synced, error = sync_razorpay_order(order)
+            if not synced:
+                return Response({"detail": error}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            order.refresh_from_db()
+            if order.status == Order.Status.PAID:
+                return Response(OrderSerializer(order, context={"request": request}).data)
+            if order.status == Order.Status.FAILED:
+                return Response({"detail": "Razorpay reports this payment as failed or expired."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(OrderSerializer(order, context={"request": request}).data, status=status.HTTP_200_OK)
+
         if payment and payment.provider == Payment.Provider.CASHFREE:
             synced, error = sync_cashfree_order(order)
             if not synced:
@@ -2782,6 +3011,7 @@ def admin_settings(request):
         {
             "api_status": "online",
             "payments": {
+                "razorpay_configured": razorpay_is_configured(),
                 "cashfree_configured": cashfree_is_configured(),
                 "cashfree_environment": settings.CASHFREE_ENVIRONMENT,
                 "manual_upi_configured": bool(settings.MANUAL_UPI_ID),
@@ -2826,6 +3056,74 @@ def cashfree_webhook(request):
         return Response({"status": "processed", "order_id": order.id, "synced": synced, "order_status": order.status}, status=status.HTTP_200_OK)
     except Exception as exc:
         logger.exception("Cashfree webhook processing failed")
+        return Response({"status": "error", "detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+@csrf_exempt
+@api_view(["POST"])
+@permission_classes([permissions.AllowAny])
+def razorpay_webhook(request):
+    try:
+        webhook_secret = getattr(settings, "RAZORPAY_WEBHOOK_SECRET", "")
+        signature = request.headers.get("X-Razorpay-Signature", "")
+        if webhook_secret and signature:
+            computed = hmac.new(webhook_secret.encode("utf-8"), request.body, hashlib.sha256).hexdigest()
+            if not hmac.compare_digest(computed, signature):
+                logger.warning("Razorpay webhook signature verification failed.")
+                return Response({"status": "error", "detail": "Invalid webhook signature"}, status=status.HTTP_400_BAD_REQUEST)
+
+        data = request.data
+        event = data.get("event", "")
+        payload = data.get("payload", {})
+
+        payment_data = payload.get("payment", {}).get("entity", {})
+        order_data = payload.get("order", {}).get("entity", {})
+
+        rzp_order_id = order_data.get("id") or payment_data.get("order_id") or ""
+        rzp_payment_id = payment_data.get("id", "")
+
+        if not rzp_order_id:
+            return Response({"status": "ignored", "detail": "No order_id in webhook payload"}, status=status.HTTP_200_OK)
+
+        order = None
+        payment_obj = Payment.objects.filter(provider=Payment.Provider.RAZORPAY, provider_payment_id=rzp_order_id).select_related("order").first()
+        if payment_obj:
+            order = payment_obj.order
+        if not order:
+            order = Order.objects.filter(provider_order_id=rzp_order_id).first()
+
+        if not order:
+            return Response({"status": "ignored", "detail": f"Order {rzp_order_id} not found"}, status=status.HTTP_200_OK)
+
+        if event in ["payment.captured", "order.paid"]:
+            order.status = Order.Status.PAID
+            order.download_enabled = True
+            order.payment_submitted_at = timezone.now()
+            order.save(update_fields=["status", "download_enabled", "payment_submitted_at"])
+
+            payment, _ = Payment.objects.get_or_create(
+                order=order,
+                defaults={"provider": Payment.Provider.RAZORPAY, "status": "paid", "provider_payment_id": rzp_payment_id or rzp_order_id}
+            )
+            payment.provider = Payment.Provider.RAZORPAY
+            payment.status = "paid"
+            if rzp_payment_id:
+                payment.provider_payment_id = rzp_payment_id
+            payment.raw_response = {**payment.raw_response, **payload}
+            payment.save(update_fields=["provider", "status", "provider_payment_id", "raw_response"])
+
+            grant_board_unlock_if_applicable(order)
+            return Response({"status": "processed", "order_id": order.id, "order_status": order.status}, status=status.HTTP_200_OK)
+
+        elif event in ["payment.failed"]:
+            order.status = Order.Status.FAILED
+            order.download_enabled = False
+            order.save(update_fields=["status", "download_enabled"])
+            return Response({"status": "processed", "order_id": order.id, "order_status": order.status}, status=status.HTTP_200_OK)
+
+        return Response({"status": "ignored", "event": event}, status=status.HTTP_200_OK)
+    except Exception as exc:
+        logger.exception("Razorpay webhook processing failed: %s", exc)
         return Response({"status": "error", "detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
 
