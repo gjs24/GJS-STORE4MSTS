@@ -2046,6 +2046,7 @@ class AdminOrderViewSet(viewsets.ModelViewSet):
         "asset",
         "asset__category",
         "board_template",
+        "payment",
     ).order_by("-id")
 
     serializer_class = AdminOrderSerializer
@@ -2061,6 +2062,7 @@ class AdminOrderViewSet(viewsets.ModelViewSet):
             "asset",
             "asset__category",
             "board_template",
+            "payment",
         ).order_by("-id")
 
         status_param = self.request.query_params.get("status")

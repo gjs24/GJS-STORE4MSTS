@@ -68,6 +68,12 @@ export type AdminOrder = {
   status: "PENDING" | "VERIFICATION_PENDING" | "APPROVED" | "PAID" | "REJECTED" | "FAILED" | "REFUNDED" | "BLOCKED";
   order_id?: string;
   provider_order_id?: string;
+  payment_provider?: "RAZORPAY" | "CASHFREE" | "MANUAL" | string;
+  payment_details?: {
+    provider: string;
+    provider_payment_id?: string;
+    status?: string;
+  } | null;
   utr?: string;
   payer_name?: string;
   payment_submitted_at?: string | null;

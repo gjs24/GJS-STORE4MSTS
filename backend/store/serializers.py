@@ -864,6 +864,8 @@ class AdminOrderSerializer(serializers.ModelSerializer):
     block_reason = serializers.CharField(max_length=255, required=False, allow_blank=True)
     admin_notes = serializers.CharField(required=False, allow_blank=True)
     blocked_at = serializers.DateTimeField(read_only=True)
+    payment_provider = serializers.SerializerMethodField()
+    payment_details = serializers.SerializerMethodField()
 
     class Meta:
         model = Order
@@ -877,6 +879,8 @@ class AdminOrderSerializer(serializers.ModelSerializer):
             "currency",
             "status",
             "provider_order_id",
+            "payment_provider",
+            "payment_details",
             "utr",
             "payer_name",
             "customer_phone",
@@ -896,6 +900,8 @@ class AdminOrderSerializer(serializers.ModelSerializer):
             "amount",
             "currency",
             "provider_order_id",
+            "payment_provider",
+            "payment_details",
             "utr",
             "payer_name",
             "payment_submitted_at",
@@ -903,6 +909,20 @@ class AdminOrderSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
+
+    def get_payment_provider(self, obj):
+        payment = getattr(obj, "payment", None)
+        return payment.provider if payment else ""
+
+    def get_payment_details(self, obj):
+        payment = getattr(obj, "payment", None)
+        if not payment:
+            return None
+        return {
+            "provider": payment.provider,
+            "provider_payment_id": payment.provider_payment_id,
+            "status": payment.status,
+        }
 
 
 class PaymentVerifySerializer(serializers.Serializer):

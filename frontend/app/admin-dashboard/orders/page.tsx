@@ -208,6 +208,10 @@ function OrderAccessModal({ order, initialMode = "MANAGE", onClose, onSave, onDe
               <span className="font-mono text-[11px] text-amber-200/80 block">
                 UTR: {order.utr} {order.payer_name ? `(${order.payer_name})` : ""}
               </span>
+            ) : order.payment_provider ? (
+              <span className="text-slate-400 text-[11px] block">
+                Gateway: {order.payment_provider === "RAZORPAY" ? "Razorpay" : order.payment_provider === "CASHFREE" ? "Cashfree" : order.payment_provider}
+              </span>
             ) : (
               <span className="text-slate-500 text-[11px] block">Gateway Checkout</span>
             )}
@@ -916,8 +920,27 @@ function OrdersContent() {
                         </span>
                       ) : null}
                     </div>
+                  ) : order.payment_provider === "RAZORPAY" ? (
+                    <div className="space-y-0.5">
+                      <span className="inline-flex items-center gap-1 rounded bg-blue-500/10 border border-blue-500/30 px-2 py-0.5 text-xs font-bold text-blue-400">
+                        Razorpay Gateway
+                      </span>
+                      {order.payment_details?.provider_payment_id ? (
+                        <span className="block font-mono text-[10px] text-slate-400 truncate max-w-[150px]" title={order.payment_details.provider_payment_id}>
+                          {order.payment_details.provider_payment_id}
+                        </span>
+                      ) : null}
+                    </div>
+                  ) : order.payment_provider === "CASHFREE" ? (
+                    <div className="space-y-0.5">
+                      <span className="inline-flex items-center gap-1 rounded bg-purple-500/10 border border-purple-500/30 px-2 py-0.5 text-xs font-bold text-purple-400">
+                        Cashfree Gateway
+                      </span>
+                    </div>
                   ) : (
-                    <span className="text-xs text-slate-400">Cashfree Gateway</span>
+                    <span className="text-xs text-slate-400">
+                      {order.payment_provider ? `${order.payment_provider} Gateway` : "Online Gateway"}
+                    </span>
                   )}
                 </div>
 
