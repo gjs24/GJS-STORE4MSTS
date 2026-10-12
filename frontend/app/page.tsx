@@ -91,7 +91,7 @@ export default async function HomePage() {
             </p>
 
             <p className="mt-3 text-xs sm:text-sm leading-relaxed text-slate-400 max-w-2xl">
-              Merchant: <strong className="text-slate-300">{legalOwnerName}</strong>. All paid digital downloads are priced in Indian Rupees (INR) and processed securely via Cashfree Payments.
+              Merchant: <strong className="text-slate-300">{legalOwnerName}</strong>. All paid digital downloads are priced in Indian Rupees (INR) and processed securely via Razorpay Payments.
             </p>
 
             {/* CTAs */}
