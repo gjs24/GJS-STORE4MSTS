@@ -23,7 +23,8 @@ import {
   Image as ImageIcon,
   Store,
   ShoppingCart,
-  ShieldCheck
+  ShieldCheck,
+  Package
 } from 'lucide-react';
 
 interface UserBoardEditorProps {
@@ -518,29 +519,75 @@ export const UserBoardEditor: React.FC<UserBoardEditorProps> = ({
               <span>Purchase Required to Edit</span>
             </div>
             <p className="lock-desc">
-              This is a paid template (₹{activeTemplate.price || 99}). Purchase once to unlock editing, custom textures, and exports.
+              {activeTemplate.allowSeparatePurchase === false && activeTemplate.bundledWithAssets && activeTemplate.bundledWithAssets.length > 0
+                ? `This official nameboard is included exclusively with the ${activeTemplate.bundledWithAssets[0].title} train pack.`
+                : `This is a paid template (₹${activeTemplate.price || 99}). Purchase once to unlock editing, custom textures, and exports.`}
             </p>
-            <button
-              type="button"
-              className="btn-unlock-big"
-              onClick={() => openPurchaseModal(activeTemplate)}
-            >
-              <ShoppingCart size={14} />
-              <span>Unlock Template (₹{activeTemplate.price || 99})</span>
-            </button>
+            {activeTemplate.allowSeparatePurchase === false && activeTemplate.bundledWithAssets && activeTemplate.bundledWithAssets.length > 0 ? (
+              <a
+                href={`/assets/${activeTemplate.bundledWithAssets[0].slug}`}
+                className="btn-unlock-big"
+                style={{
+                  background: 'linear-gradient(135deg, #10b981, #059669)',
+                  textDecoration: 'none',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8
+                }}
+              >
+                <Package size={14} />
+                <span>Get with {activeTemplate.bundledWithAssets[0].title} Pack</span>
+              </a>
+            ) : (
+              <button
+                type="button"
+                className="btn-unlock-big"
+                onClick={() => openPurchaseModal(activeTemplate)}
+              >
+                <ShoppingCart size={14} />
+                <span>Unlock Template (₹{activeTemplate.price || 99})</span>
+              </button>
+            )}
 
             {activeTemplate.bundledWithAssets && activeTemplate.bundledWithAssets.length > 0 && (
-              <div style={{ marginTop: 10, padding: '8px 10px', borderRadius: 6, background: 'rgba(234, 179, 8, 0.1)', border: '1px solid rgba(234, 179, 8, 0.3)', fontSize: 11, color: '#fef08a' }}>
-                💡 <strong>Bundle Option:</strong> Get this template <strong>FREE</strong> when you purchase{' '}
-                <a
-                  href={`/assets/${activeTemplate.bundledWithAssets[0].slug}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{ textDecoration: 'underline', fontWeight: 700, color: '#facc15' }}
-                >
-                  {activeTemplate.bundledWithAssets[0].title}
-                </a>{' '}
-                (Single Price Bundle)!
+              <div
+                style={{
+                  marginTop: 10,
+                  padding: '8px 10px',
+                  borderRadius: 6,
+                  background: activeTemplate.allowSeparatePurchase === false ? 'rgba(16, 185, 129, 0.15)' : 'rgba(234, 179, 8, 0.1)',
+                  border: activeTemplate.allowSeparatePurchase === false ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(234, 179, 8, 0.3)',
+                  fontSize: 11,
+                  color: activeTemplate.allowSeparatePurchase === false ? '#6ee7b7' : '#fef08a'
+                }}
+              >
+                {activeTemplate.allowSeparatePurchase === false ? (
+                  <>
+                    🎁 <strong>Whole Pack Exclusive:</strong> Included FREE when you purchase{' '}
+                    <a
+                      href={`/assets/${activeTemplate.bundledWithAssets[0].slug}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ textDecoration: 'underline', fontWeight: 700, color: '#a7f3d0' }}
+                    >
+                      {activeTemplate.bundledWithAssets[0].title}
+                    </a>!
+                  </>
+                ) : (
+                  <>
+                    💡 <strong>Bundle Option:</strong> Get this template <strong>FREE</strong> when you purchase{' '}
+                    <a
+                      href={`/assets/${activeTemplate.bundledWithAssets[0].slug}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ textDecoration: 'underline', fontWeight: 700, color: '#facc15' }}
+                    >
+                      {activeTemplate.bundledWithAssets[0].title}
+                    </a>{' '}
+                    (Single Price Bundle)!
+                  </>
+                )}
               </div>
             )}
           </div>

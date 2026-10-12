@@ -133,6 +133,10 @@ class Asset(models.Model):
         default=False,
         help_text="Bundle associated board template for free when user purchases this asset at single price",
     )
+    allow_separate_board_purchase = models.BooleanField(
+        default=True,
+        help_text="Allow customers to buy this board template separately or show the separate buy option on this asset",
+    )
     download_count = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

@@ -244,6 +244,7 @@ export const storageService = {
           canCustomize: item.can_customize !== undefined ? item.can_customize : (!item.is_paid),
           unlockedViaAsset: item.unlocked_via_asset || null,
           bundledWithAssets: item.bundled_with_assets || [],
+          allowSeparatePurchase: item.allow_separate_purchase !== false,
           variations: item.variations || [],
           quickPresets: item.quick_presets || item.quickPresets || [],
           createdAt: item.created_at || new Date().toISOString(),

@@ -18,7 +18,8 @@ import {
   AlertCircle,
   QrCode,
   CheckCircle2,
-  LogIn
+  LogIn,
+  Package
 } from 'lucide-react';
 
 interface PurchaseTemplateModalProps {
@@ -105,6 +106,12 @@ export const PurchaseTemplateModal: React.FC<PurchaseTemplateModalProps> = ({
     setError(null);
 
     try {
+      if (template.allowSeparatePurchase === false) {
+        setError('This board is exclusive to its train pack and cannot be purchased separately.');
+        setIsProcessing(false);
+        return;
+      }
+
       if (!loggedIn) {
         setError('Please log in with your MSTS Store account to complete this purchase.');
         setIsProcessing(false);
@@ -278,7 +285,47 @@ export const PurchaseTemplateModal: React.FC<PurchaseTemplateModalProps> = ({
           <X size={18} />
         </button>
 
-        {success ? (
+        {template.allowSeparatePurchase === false && template.bundledWithAssets && template.bundledWithAssets.length > 0 ? (
+          <div style={{ padding: '36px 24px', textAlign: 'center' }}>
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
+              <Package size={56} style={{ color: '#10b981' }} />
+            </div>
+            <h2 style={{ fontSize: 20, color: '#fff', marginBottom: 8 }}>Included with Train Pack</h2>
+            <p style={{ fontSize: 13, color: '#94a3b8', marginBottom: 20, lineHeight: 1.6 }}>
+              <strong>{template.name}</strong> is included exclusively as part of the{' '}
+              <strong style={{ color: '#fff' }}>{template.bundledWithAssets[0].title}</strong> train pack. It is not sold separately.
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: 10 }}>
+              <a
+                href={`/assets/${template.bundledWithAssets[0].slug}`}
+                className="btn-store-primary"
+                style={{
+                  background: 'linear-gradient(135deg, #10b981, #059669)',
+                  textDecoration: 'none',
+                  padding: '10px 20px',
+                  borderRadius: 8,
+                  fontWeight: 700,
+                  fontSize: 13,
+                  color: '#fff',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6
+                }}
+              >
+                <span>View Train Pack</span>
+                <span>→</span>
+              </a>
+              <button
+                type="button"
+                onClick={onClose}
+                className="btn-nav-switch"
+                style={{ padding: '10px 18px', borderRadius: 8 }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        ) : success ? (
           <div className="checkout-success-view" style={{ padding: '36px 24px', textAlign: 'center' }}>
             <div className="success-icon-bounce" style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
               <CheckCircle size={56} style={{ color: '#34d399' }} />

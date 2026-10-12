@@ -1387,6 +1387,11 @@ class OrderCreateView(generics.CreateAPIView):
                 template = get_object_or_404(BoardTemplate, id=board_template_id)
             else:
                 template = get_object_or_404(BoardTemplate, id=board_template_id, published=True)
+                if template.assets.filter(is_published=True, allow_separate_board_purchase=False).exists():
+                    return Response(
+                        {"detail": "This Name Board is included exclusively with its trainset pack and is not available for separate purchase."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
             already_unlocked = template.can_user_customize(request.user)
             if already_unlocked:
                 existing_order = Order.objects.filter(user=request.user, board_template=template, status__in=[Order.Status.APPROVED, Order.Status.PAID]).order_by("-id").first()

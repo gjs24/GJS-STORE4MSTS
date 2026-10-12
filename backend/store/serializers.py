@@ -351,6 +351,7 @@ class AssetListSerializer(serializers.ModelSerializer):
             "board_template",
             "board_template_id",
             "bundle_board_template_free",
+            "allow_separate_board_purchase",
             "download_count",
             "average_rating",
             "review_count",
@@ -481,6 +482,7 @@ class AssetListSerializer(serializers.ModelSerializer):
             "is_paid": bt.is_paid,
             "target_texture_name": getattr(bt, "target_texture_name", "") or "",
             "is_bundled_free": getattr(obj, "bundle_board_template_free", False),
+            "allow_separate_purchase": getattr(obj, "allow_separate_board_purchase", True),
         }
 
 
@@ -649,6 +651,7 @@ class BoardTemplateSerializer(serializers.ModelSerializer):
     is_unlocked = serializers.SerializerMethodField()
     unlocked_via_asset = serializers.SerializerMethodField()
     bundled_with_assets = serializers.SerializerMethodField()
+    allow_separate_purchase = serializers.SerializerMethodField()
 
     class Meta:
         model = BoardTemplate
@@ -674,6 +677,7 @@ class BoardTemplateSerializer(serializers.ModelSerializer):
             "is_unlocked",
             "unlocked_via_asset",
             "bundled_with_assets",
+            "allow_separate_purchase",
             "created_at",
             "updated_at",
         ]
@@ -687,6 +691,11 @@ class BoardTemplateSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         user = getattr(request, "user", None) if request else None
         return obj.can_user_customize(user)
+
+    def get_allow_separate_purchase(self, obj):
+        if obj.assets.filter(is_published=True, allow_separate_board_purchase=False).exists():
+            return False
+        return True
 
     def get_unlocked_via_asset(self, obj):
         request = self.context.get("request")
@@ -710,8 +719,18 @@ class BoardTemplateSerializer(serializers.ModelSerializer):
         return None
 
     def get_bundled_with_assets(self, obj):
-        assets = obj.assets.filter(is_published=True, bundle_board_template_free=True)
-        return [{"id": a.id, "title": a.title, "slug": a.slug, "price": str(a.price)} for a in assets]
+        assets = obj.assets.filter(is_published=True)
+        return [
+            {
+                "id": a.id,
+                "title": a.title,
+                "slug": a.slug,
+                "price": str(a.price),
+                "bundle_free": a.bundle_board_template_free,
+                "allow_separate_purchase": getattr(a, "allow_separate_board_purchase", True),
+            }
+            for a in assets
+        ]
 
 
 class UserCustomBoardSerializer(serializers.ModelSerializer):

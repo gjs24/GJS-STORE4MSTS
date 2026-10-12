@@ -326,5 +326,36 @@ class BoardStudioTests(APITestCase):
         self.assertEqual(res.status_code, 200)
         self.assertFalse(UserBoardUnlock.objects.filter(user=self.user1, template=self.paid_template).exists())
 
+    def test_allow_separate_board_purchase_toggle_and_restriction(self):
+        from store.models import Asset, Category
+        cat = Category.objects.create(name="EMU", slug="emu")
+        asset = Asset.objects.create(
+            title="Vande Bharat Sleeper",
+            slug="vande-bharat-sleeper",
+            category=cat,
+            price=Decimal("299.00"),
+            is_published=True,
+            board_template=self.paid_template,
+            bundle_board_template_free=True,
+            allow_separate_board_purchase=False,
+        )
+
+        # 1. Check Serializer serialization
+        from store.serializers import AssetDetailSerializer, BoardTemplateSerializer
+        asset_ser = AssetDetailSerializer(asset).data
+        self.assertFalse(asset_ser["allow_separate_board_purchase"])
+        self.assertFalse(asset_ser["board_template"]["allow_separate_purchase"])
+
+        tpl_ser = BoardTemplateSerializer(self.paid_template).data
+        self.assertFalse(tpl_ser["allow_separate_purchase"])
+
+        # 2. Regular user cannot place a separate order for this template
+        self.client.force_authenticate(user=self.user2)
+        url = reverse("cashfree-create-order")
+        res = self.client.post(url, {"board_template_id": self.paid_template.id}, format="json")
+        self.assertEqual(res.status_code, 400)
+        self.assertIn("exclusive", res.data.get("detail", "").lower())
+
+
 
 

@@ -115,7 +115,8 @@ export interface BoardTemplate {
   isUnlocked?: boolean; // true if free, unlocked, or purchased
   canCustomize?: boolean; // true if permitted to save customized variants
   unlockedViaAsset?: { id: number; title: string; slug: string } | null;
-  bundledWithAssets?: { id: number; title: string; slug: string; price: string }[];
+  bundledWithAssets?: { id: number; title: string; slug: string; price: string; bundle_free?: boolean; allow_separate_purchase?: boolean }[];
+  allowSeparatePurchase?: boolean; // false if exclusively part of a whole pack
   variations?: BoardVariation[];
   quickPresets?: QuickPreset[];
 }

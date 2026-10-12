@@ -26,7 +26,8 @@ import {
   Unlock,
   ShoppingCart,
   ShieldCheck,
-  UserCheck
+  UserCheck,
+  Package
 } from 'lucide-react';
 
 interface HomePageProps {
@@ -443,7 +444,7 @@ export const HomePage: React.FC<HomePageProps> = ({
                           <strong>Resolution:</strong> {template.baseWidth}×{template.baseHeight}px
                         </span>
                         <span className="spec-item">
-                          <strong>Access:</strong> {template.isPaid ? (isUnlocked ? '✓ Unlocked' : `₹${price}`) : 'Free'}
+                          <strong>Access:</strong> {template.isPaid ? (isUnlocked ? '✓ Unlocked' : template.allowSeparatePurchase === false ? 'With Pack' : `₹${price}`) : 'Free'}
                         </span>
                       </div>
 
@@ -481,6 +482,24 @@ export const HomePage: React.FC<HomePageProps> = ({
                             <Zap size={13} />
                             <span>Customize</span>
                           </button>
+                        ) : template.allowSeparatePurchase === false && template.bundledWithAssets && template.bundledWithAssets.length > 0 ? (
+                          <a
+                            href={`/assets/${template.bundledWithAssets[0].slug}`}
+                            className="btn-store-primary"
+                            onClick={(e) => e.stopPropagation()}
+                            style={{
+                              background: 'linear-gradient(135deg, #10b981, #059669)',
+                              textDecoration: 'none',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: 5
+                            }}
+                            title={`Included free with ${template.bundledWithAssets[0].title}`}
+                          >
+                            <Package size={13} />
+                            <span>Get with Pack</span>
+                          </a>
                         ) : (
                           <button
                             type="button"

@@ -51,6 +51,7 @@ export default function EditAssetPage({ params }: { params: Promise<{ id: string
   const [boardTemplates, setBoardTemplates] = useState<any[]>([]);
   const [selectedBoardTemplateId, setSelectedBoardTemplateId] = useState<string>("");
   const [bundleBoardTemplateFree, setBundleBoardTemplateFree] = useState<boolean>(false);
+  const [allowSeparateBoardPurchase, setAllowSeparateBoardPurchase] = useState<boolean>(true);
 
   useEffect(() => {
     params.then(({ id }) => {
@@ -64,6 +65,7 @@ export default function EditAssetPage({ params }: { params: Promise<{ id: string
             data.board_template?.id || (data as any).board_template_id || ""
           );
           setBundleBoardTemplateFree(Boolean((data as any).bundle_board_template_free));
+          setAllowSeparateBoardPurchase((data as any).allow_separate_board_purchase !== false);
           setIsFree(data.is_free);
           setEarlyAccessEnabled(Boolean(data.early_access_enabled));
           setEarlyAccessHasAccess(Boolean(data.early_access_has_access));
@@ -149,9 +151,11 @@ export default function EditAssetPage({ params }: { params: Promise<{ id: string
     if (selectedBoardTemplateId) {
       formData.set("board_template", selectedBoardTemplateId);
       formData.set("bundle_board_template_free", bundleBoardTemplateFree ? "true" : "false");
+      formData.set("allow_separate_board_purchase", allowSeparateBoardPurchase ? "true" : "false");
     } else {
       formData.delete("board_template");
       formData.set("bundle_board_template_free", "false");
+      formData.set("allow_separate_board_purchase", "true");
     }
     formData.set("release_date", String(formData.get("release_date") || ""));
 
@@ -322,23 +326,43 @@ export default function EditAssetPage({ params }: { params: Promise<{ id: string
           </select>
 
           {selectedBoardTemplateId && (
-            <label className="flex items-start gap-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3.5 cursor-pointer hover:bg-emerald-500/15 transition-colors">
-              <input
-                type="checkbox"
-                name="bundle_board_template_free"
-                checked={bundleBoardTemplateFree}
-                onChange={(e) => setBundleBoardTemplateFree(e.target.checked)}
-                className="mt-0.5 h-4 w-4 rounded accent-emerald-500 cursor-pointer"
-              />
-              <div>
-                <span className="text-sm font-bold text-emerald-300 flex items-center gap-1.5">
-                  <span>🎁</span> Give Name Board Template FREE with this Asset (Single Price Bundle)
-                </span>
-                <p className="mt-1 text-xs text-slate-300 leading-relaxed">
-                  When enabled, buyers of this asset automatically unlock this matching Name Board template for free in the Board Studio without paying anything extra! If unchecked, the Name Board is sold separately in the Board Studio.
-                </p>
-              </div>
-            </label>
+            <div className="space-y-3">
+              <label className="flex items-start gap-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3.5 cursor-pointer hover:bg-emerald-500/15 transition-colors">
+                <input
+                  type="checkbox"
+                  name="bundle_board_template_free"
+                  checked={bundleBoardTemplateFree}
+                  onChange={(e) => setBundleBoardTemplateFree(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded accent-emerald-500 cursor-pointer"
+                />
+                <div>
+                  <span className="text-sm font-bold text-emerald-300 flex items-center gap-1.5">
+                    <span>🎁</span> Give Name Board Template FREE with this Asset (Whole Pack Bundle)
+                  </span>
+                  <p className="mt-1 text-xs text-slate-300 leading-relaxed">
+                    When enabled, buyers of this asset automatically unlock this matching Name Board template for free in the Board Studio without paying anything extra!
+                  </p>
+                </div>
+              </label>
+
+              <label className="flex items-start gap-3 rounded-lg border border-sky-500/30 bg-sky-500/10 p-3.5 cursor-pointer hover:bg-sky-500/15 transition-colors">
+                <input
+                  type="checkbox"
+                  name="allow_separate_board_purchase"
+                  checked={allowSeparateBoardPurchase}
+                  onChange={(e) => setAllowSeparateBoardPurchase(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded accent-sky-500 cursor-pointer"
+                />
+                <div>
+                  <span className="text-sm font-bold text-sky-300 flex items-center gap-1.5">
+                    <span>🛒</span> Allow Separate Board Purchase (Show &quot;Buy Board Separately&quot; Option)
+                  </span>
+                  <p className="mt-1 text-xs text-slate-300 leading-relaxed">
+                    If checked, customers can also buy the board separately on its own. <strong>If unchecked</strong>, the &quot;Buy Board Separately&quot; option and standalone price are hidden because the board is included exclusively as part of the whole pack.
+                  </p>
+                </div>
+              </label>
+            </div>
           )}
         </div>
         <div className="space-y-4 rounded border border-emerald-400/20 bg-emerald-400/5 p-4 md:col-span-2">
