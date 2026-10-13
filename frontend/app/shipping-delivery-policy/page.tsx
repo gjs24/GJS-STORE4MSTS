@@ -23,7 +23,7 @@ export default function ShippingDeliveryPolicyPage() {
         {
           title: "Digital Delivery After Payment",
           body:
-            "Files are delivered digitally after successful payment. Once Razorpay confirms payment and the order is verified, download access is made available through the customer account, purchase page, or download section."
+            "Files are delivered digitally after successful payment. Once Cashfree confirms payment and the order is verified, download access is made available through the customer account, purchase page, or download section."
         },
         {
           title: "Delivery Timeline",

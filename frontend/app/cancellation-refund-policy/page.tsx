@@ -46,7 +46,7 @@ export default function CancellationRefundPolicyPage() {
         {
           title: "Refund Review Process",
           body:
-            "Refund requests must include order details, payment reference where available, product name, and a description of the issue. Approved refunds will be processed through the original payment method or Razorpay-supported refund process. Refunds are usually initiated within 5-7 business days after approval, subject to Razorpay, bank, and payment method timelines."
+            "Refund requests must include order details, payment reference where available, product name, and a description of the issue. Approved refunds will be processed through the original payment method or Cashfree-supported refund process. Refunds are usually initiated within 5-7 business days after approval, subject to Cashfree, bank, and payment method timelines."
         }
       ]}
     />

@@ -118,7 +118,7 @@ export function SiteFooter() {
           <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3.5 space-y-2 text-xs text-slate-300">
             <div className="flex items-center gap-2">
               <ShieldCheck size={16} className="text-rail-amber shrink-0" />
-              <span>Razorpay Payments Secured</span>
+              <span>Cashfree Payments Secured</span>
             </div>
             <div className="flex items-center gap-2">
               <DownloadCloud size={16} className="text-rail-amber shrink-0" />
