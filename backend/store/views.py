@@ -866,7 +866,7 @@ def send_special_access_email(user, special_access, custom_subject=None, custom_
     else:
         expiry_info = "Permanent Access (Never Expires)"
 
-    store_url = getattr(settings, "FRONTEND_URL", "https://gjs-store-4-msts.vercel.app").rstrip("/")
+    store_url = getattr(settings, "FRONTEND_URL", "https://gjspro.store").rstrip("/")
 
     # Replacements
     placeholders = {

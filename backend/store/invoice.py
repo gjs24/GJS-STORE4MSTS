@@ -177,7 +177,7 @@ def generate_invoice_pdf(order):
     brand_p = [
         Paragraph("MSTS-GJS PRODUCTION STORE", brand_style),
         Paragraph("Official Indian Railways Simulator Content & Addons", subtitle_style),
-        Paragraph("Web: https://gjs-store-4-msts.vercel.app", subtitle_style),
+        Paragraph("Web: https://gjspro.store", subtitle_style),
         Paragraph("Email Support: support@gjsproduction.com", subtitle_style),
     ]
     inv_p = [
@@ -556,7 +556,7 @@ def generate_invoice_html(order):
     <div>
       <div class="brand-title">MSTS-GJS PRODUCTION STORE</div>
       <div class="brand-sub">Official Indian Railways Simulator Content & Addons</div>
-      <div class="brand-sub">Web: https://gjs-store-4-msts.vercel.app | Support: support@gjsproduction.com</div>
+      <div class="brand-sub">Web: https://gjspro.store | Support: support@gjsproduction.com</div>
     </div>
     <div class="inv-title">
       <h1>TAX INVOICE</h1>
