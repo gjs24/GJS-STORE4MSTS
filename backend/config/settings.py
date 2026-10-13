@@ -122,7 +122,7 @@ SIMPLE_JWT = {
     "SIGNING_KEY": env("JWT_SECRET_KEY", default=SECRET_KEY),
 }
 
-GOOGLE_OAUTH_CLIENT_ID = env("GOOGLE_OAUTH_CLIENT_ID", default="")
+GOOGLE_OAUTH_CLIENT_ID = env("GOOGLE_OAUTH_CLIENT_ID", default="319900561605-7j15m1bm7s3gm3fcbnoiibmgqi9jv9dv.apps.googleusercontent.com")
 CASHFREE_CLIENT_ID = env("CASHFREE_CLIENT_ID", default="")
 CASHFREE_CLIENT_SECRET = env("CASHFREE_CLIENT_SECRET", default="")
 CASHFREE_ENVIRONMENT = env("CASHFREE_ENVIRONMENT", default="sandbox").lower()
