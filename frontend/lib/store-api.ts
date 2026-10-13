@@ -153,10 +153,11 @@ export async function userPatch<T>(path: string, body: Record<string, unknown>):
   return res.json();
 }
 
-export async function createOrder(assetId: number, customerPhone?: string): Promise<StoreOrder> {
+export async function createOrder(assetId: number, customerPhone?: string, forceNew: boolean = false): Promise<StoreOrder> {
   await validAccessToken();
   const payload: Record<string, any> = { asset_id: assetId };
   if (customerPhone) payload.customer_phone = customerPhone;
+  if (forceNew) payload.force_new = true;
   let res = await fetch(`${API_URL}/orders/create/`, {
     method: "POST",
     headers: { ...authHeaders(), "Content-Type": "application/json" },
@@ -173,10 +174,11 @@ export async function createOrder(assetId: number, customerPhone?: string): Prom
   return res.json();
 }
 
-export async function createBoardTemplateOrder(templateId: string, customerPhone?: string): Promise<StoreOrder> {
+export async function createBoardTemplateOrder(templateId: string, customerPhone?: string, forceNew: boolean = false): Promise<StoreOrder> {
   await validAccessToken();
   const payload: Record<string, any> = { board_template_id: templateId };
   if (customerPhone) payload.customer_phone = customerPhone;
+  if (forceNew) payload.force_new = true;
   let res = await fetch(`${API_URL}/orders/create/`, {
     method: "POST",
     headers: { ...authHeaders(), "Content-Type": "application/json" },

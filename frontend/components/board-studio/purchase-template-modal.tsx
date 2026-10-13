@@ -128,7 +128,7 @@ export const PurchaseTemplateModal: React.FC<PurchaseTemplateModalProps> = ({
         localStorage.setItem('gjs_customer_phone', cleanedPhone);
       }
 
-      const nextOrder = await createBoardTemplateOrder(template.id, cleanedPhone || undefined);
+      const nextOrder = await createBoardTemplateOrder(template.id, cleanedPhone || undefined, true);
       setOrder(nextOrder);
 
       // If already approved / free / unlocked

@@ -285,7 +285,7 @@ export function AssetActions({ asset }: { asset: Asset }) {
             localStorage.setItem("gjs_customer_phone", phone);
           }
         }
-        const nextOrder = await createOrder(activeAsset.id, phone || undefined);
+        const nextOrder = await createOrder(activeAsset.id, phone || undefined, true);
         setOrder(nextOrder);
         if (nextOrder.status === "PENDING" && nextOrder.payment_provider === "RAZORPAY" && nextOrder.razorpay_order_id) {
           await startRazorpayCheckout(nextOrder);

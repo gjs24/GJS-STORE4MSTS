@@ -317,7 +317,7 @@ def ensure_cashfree_payment(order, request):
         else:
             if order.status in [Order.Status.FAILED, Order.Status.REFUNDED, Order.Status.REJECTED]:
                 return False, "Cashfree reports this payment as failed or expired."
-            if order.status == Order.Status.PENDING and order.created_at and order.created_at < timezone.now() - timedelta(minutes=25):
+            if order.status == Order.Status.PENDING and order.created_at and order.created_at < timezone.now() - timedelta(minutes=2):
                 order.status = Order.Status.EXPIRED
                 order.download_enabled = False
                 order.save(update_fields=["status", "download_enabled"])
@@ -1438,9 +1438,11 @@ class OrderCreateView(generics.CreateAPIView):
                 status__in=[Order.Status.PENDING, Order.Status.VERIFICATION_PENDING, Order.Status.APPROVED, Order.Status.PAID],
             ).order_by("-id").first()
 
+            force_fresh = bool(request.data.get("force_new") or request.data.get("refresh"))
             if existing_order and existing_order.status == Order.Status.PENDING and (
-                existing_order.amount != target_amount
-                or (existing_order.created_at and existing_order.created_at < timezone.now() - timedelta(minutes=25))
+                force_fresh
+                or existing_order.amount != target_amount
+                or (existing_order.created_at and existing_order.created_at < timezone.now() - timedelta(minutes=2))
             ):
                 existing_order.status = Order.Status.EXPIRED
                 existing_order.download_enabled = False
@@ -1539,12 +1541,14 @@ class OrderCreateView(generics.CreateAPIView):
 
         # A pending order is an unpaid checkout quote, not a price lock.  Do
         # not reuse it after an administrator changes the product price or discount.
+        force_fresh = bool(request.data.get("force_new") or request.data.get("refresh"))
         if (
             existing_order
             and existing_order.status == Order.Status.PENDING
             and (
-                existing_order.amount != target_amount
-                or (existing_order.created_at and existing_order.created_at < timezone.now() - timedelta(minutes=25))
+                force_fresh
+                or existing_order.amount != target_amount
+                or (existing_order.created_at and existing_order.created_at < timezone.now() - timedelta(minutes=2))
             )
         ):
             existing_order.status = Order.Status.EXPIRED
