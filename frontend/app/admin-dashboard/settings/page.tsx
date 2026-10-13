@@ -97,9 +97,10 @@ export default function AdminSettingsPage() {
         <div className="rounded border border-white/10 bg-white/[0.03] p-5">
           <CreditCard className="text-rail-amber" />
           <h2 className="mt-4 font-semibold">Payments</h2>
-          <p className="mt-3 text-sm text-slate-400">Razorpay: {settings.payments.razorpay_configured ? "Configured & Active" : "Missing keys"}</p>
-          <p className="mt-1 text-sm text-slate-400">Cashfree: {settings.payments.cashfree_configured ? "Configured" : "Missing keys"}</p>
-          <p className="mt-1 text-sm text-slate-400">Mode: {settings.payments.cashfree_environment || "sandbox"}</p>
+          <p className="mt-3 text-sm text-slate-300 font-medium">Primary Gateway: <span className="text-emerald-400 font-bold">Cashfree</span></p>
+          <p className="mt-1 text-sm text-slate-400">Cashfree Status: {settings.payments.cashfree_configured ? "Configured & Active" : "Missing keys"}</p>
+          <p className="mt-1 text-sm text-slate-400">Cashfree Mode: {settings.payments.cashfree_environment || "sandbox"}</p>
+          <p className="mt-1 text-sm text-slate-400">Razorpay: {settings.payments.razorpay_configured ? "Configured" : "Disabled (Moved to Cashfree)"}</p>
           <p className="mt-1 text-sm text-slate-400">Stripe: {settings.payments.stripe_configured ? "Configured" : "Optional / not configured"}</p>
         </div>
         <div className="rounded border border-white/10 bg-white/[0.03] p-5">

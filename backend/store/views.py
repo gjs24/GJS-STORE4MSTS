@@ -332,6 +332,9 @@ def ensure_cashfree_payment(order, request):
 
 
 def razorpay_is_configured():
+    preferred = getattr(settings, "PAYMENT_GATEWAY_PROVIDER", "CASHFREE").upper()
+    if preferred != "RAZORPAY":
+        return False
     return bool(getattr(settings, "RAZORPAY_KEY_ID", "") and getattr(settings, "RAZORPAY_KEY_SECRET", ""))
 
 
@@ -480,13 +483,18 @@ def ensure_payment_gateway(order, request=None):
     sync_order_download_access(order)
     if order_has_download_access(order):
         return True, ""
-    if razorpay_is_configured():
+    preferred_gateway = getattr(settings, "PAYMENT_GATEWAY_PROVIDER", "CASHFREE").upper()
+    if preferred_gateway == "CASHFREE" and cashfree_is_configured():
+        return ensure_cashfree_payment(order, request)
+    if preferred_gateway == "RAZORPAY" and razorpay_is_configured():
         return ensure_razorpay_payment(order, request)
     if cashfree_is_configured():
         return ensure_cashfree_payment(order, request)
+    if razorpay_is_configured():
+        return ensure_razorpay_payment(order, request)
     if getattr(settings, "MANUAL_UPI_ID", ""):
         return True, ""
-    return False, "Neither Razorpay nor Cashfree nor Manual UPI is configured. Please contact the administrator."
+    return False, "Neither Cashfree nor Razorpay nor Manual UPI is configured. Please contact the administrator."
 
 
 def log_admin_activity(request, action, target_type="", target_id="", message=""):
@@ -1432,7 +1440,8 @@ class OrderCreateView(generics.CreateAPIView):
                 if not order_has_download_access(existing_order):
                     payment = getattr(existing_order, "payment", None)
                     if payment and payment.provider == Payment.Provider.RAZORPAY:
-                        sync_razorpay_order(existing_order)
+                        if razorpay_is_configured():
+                            sync_razorpay_order(existing_order)
                     elif payment and payment.provider == Payment.Provider.CASHFREE:
                         synced, sync_error = sync_cashfree_order(existing_order)
                         if not synced and not cashfree_order_missing_error(sync_error):
@@ -1536,7 +1545,8 @@ class OrderCreateView(generics.CreateAPIView):
             if not asset.is_free and not order_has_download_access(existing_order):
                 payment = getattr(existing_order, "payment", None)
                 if payment and payment.provider == Payment.Provider.RAZORPAY:
-                    sync_razorpay_order(existing_order)
+                    if razorpay_is_configured():
+                        sync_razorpay_order(existing_order)
                 elif payment and payment.provider == Payment.Provider.CASHFREE:
                     synced, sync_error = sync_cashfree_order(existing_order)
                     if not synced and not cashfree_order_missing_error(sync_error):
@@ -3018,9 +3028,10 @@ def admin_settings(request):
         {
             "api_status": "online",
             "payments": {
-                "razorpay_configured": razorpay_is_configured(),
+                "active_gateway": getattr(settings, "PAYMENT_GATEWAY_PROVIDER", "CASHFREE").upper(),
                 "cashfree_configured": cashfree_is_configured(),
                 "cashfree_environment": settings.CASHFREE_ENVIRONMENT,
+                "razorpay_configured": razorpay_is_configured(),
                 "manual_upi_configured": bool(settings.MANUAL_UPI_ID),
                 "stripe_configured": bool(settings.STRIPE_SECRET_KEY),
             },
