@@ -127,7 +127,20 @@ def cashfree_return_url(order, request=None):
             separator = "&" if "?" in custom_return else "?"
             return f"{custom_return}{separator}order_id={order.id}"
 
-    base_return = getattr(settings, "CASHFREE_RETURN_URL", "http://localhost:3000/dashboard/purchases")
+    origin = ""
+    if request:
+        origin = request.META.get("HTTP_ORIGIN") or ""
+        if not origin and request.META.get("HTTP_REFERER"):
+            from urllib.parse import urlparse
+            parsed = urlparse(request.META["HTTP_REFERER"])
+            if parsed.scheme and parsed.netloc:
+                origin = f"{parsed.scheme}://{parsed.netloc}"
+    if not origin:
+        origin = getattr(settings, "FRONTEND_URL", "https://gjspro.store").rstrip("/")
+
+    base_return = getattr(settings, "CASHFREE_RETURN_URL", "")
+    if not base_return or "localhost" in base_return:
+        base_return = f"{origin}/dashboard/purchases"
     if order.board_template and "/dashboard/purchases" in base_return:
         board_url = base_return.replace("/dashboard/purchases", "/board-studio")
         separator = "&" if "?" in board_url else "?"
