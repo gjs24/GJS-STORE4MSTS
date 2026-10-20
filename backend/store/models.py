@@ -137,6 +137,32 @@ class Asset(models.Model):
         default=True,
         help_text="Allow customers to buy this board template separately or show the separate buy option on this asset",
     )
+    has_paid_update = models.BooleanField(
+        default=False,
+        help_text="Require existing owners of previous versions to pay the update fee to download this updated version",
+    )
+    update_price = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        help_text="Upgrade price for past purchasers (e.g. ₹10.00). New users pay the full Asset Price.",
+    )
+    paid_update_version = models.CharField(
+        max_length=20,
+        blank=True,
+        default="",
+        help_text="The version string of this paid update (e.g. 2.0.0). Defaults to the asset version if blank.",
+    )
+    update_notes = models.TextField(
+        blank=True,
+        default="",
+        help_text="Changelog or features added in this paid update shown to existing owners",
+    )
+    update_released_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        help_text="Timestamp when this paid update was activated. Orders placed after this date get the update automatically.",
+    )
     download_count = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -148,7 +174,57 @@ class Asset(models.Model):
         if not self.slug:
             self.slug = slugify(self.title)
         self.is_free = self.price <= Decimal("0.00")
+        if self.has_paid_update and not self.update_released_at:
+            self.update_released_at = timezone.now()
+        elif not self.has_paid_update:
+            self.update_released_at = None
         super().save(*args, **kwargs)
+
+    def check_user_update_access(self, user):
+        """
+        Returns (has_access: bool, requires_update: bool)
+        """
+        if not user or not user.is_authenticated:
+            return False, False
+        if user.is_staff or getattr(user, "is_superuser", False):
+            return True, False
+        from .special_access import user_has_special_access
+        if user_has_special_access(user, self):
+            return True, False
+
+        # Check if user owns base
+        has_paid_base = self.orders.filter(
+            user=user,
+            status__in=["PAID", "APPROVED"],
+            download_enabled=True,
+        ).exists()
+
+        if not has_paid_base:
+            return False, False
+
+        # User owns the product. Does the product require a paid update?
+        if not self.has_paid_update or self.update_price <= Decimal("0.00"):
+            return True, False
+
+        effective_version = self.paid_update_version or self.version
+
+        # Has the user unlocked this update version?
+        if self.user_update_unlocks.filter(user=user, version=effective_version).exists():
+            return True, False
+
+        # Did the user buy the asset AFTER the update was released?
+        if self.update_released_at and self.orders.filter(
+            user=user,
+            order_type__in=["BASE", "BUNDLE"],
+            status__in=["PAID", "APPROVED"],
+            created_at__gte=self.update_released_at,
+        ).exists():
+            # Auto-unlock for them
+            self.user_update_unlocks.get_or_create(user=user, version=effective_version)
+            return True, False
+
+        # Otherwise, this is an existing buyer who needs to pay the update fee!
+        return False, True
 
     def __str__(self):
         return self.title
@@ -377,8 +453,13 @@ class Order(models.Model):
         constraints = [
             models.UniqueConstraint(
                 fields=["user", "asset"],
-                condition=models.Q(status="PAID", asset__isnull=False, asset_addon__isnull=True),
+                condition=models.Q(status="PAID", asset__isnull=False, asset_addon__isnull=True, order_type="BASE"),
                 name="one_paid_order_per_user_asset",
+            ),
+            models.UniqueConstraint(
+                fields=["user", "asset", "order_type"],
+                condition=models.Q(status="PAID", asset__isnull=False, order_type="UPGRADE"),
+                name="one_paid_upgrade_order_per_user_asset",
             ),
             models.UniqueConstraint(
                 fields=["user", "asset_addon"],
@@ -419,6 +500,23 @@ class UserAssetAddonUnlock(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.addon.title}"
+
+
+class UserAssetUpdateUnlock(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="asset_update_unlocks", on_delete=models.CASCADE)
+    asset = models.ForeignKey(Asset, related_name="user_update_unlocks", on_delete=models.CASCADE)
+    version = models.CharField(max_length=40, blank=True, default="")
+    order = models.ForeignKey(Order, related_name="update_unlocks", on_delete=models.SET_NULL, null=True, blank=True)
+    unlocked_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-unlocked_at"]
+        constraints = [
+            models.UniqueConstraint(fields=["user", "asset", "version"], name="unique_user_asset_update_unlock")
+        ]
+
+    def __str__(self):
+        return f"{self.user.username} unlocked {self.asset.title} v{self.version}"
 
 
 class Payment(models.Model):

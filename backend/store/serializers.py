@@ -391,6 +391,10 @@ class AssetListSerializer(serializers.ModelSerializer):
             "board_template_id",
             "bundle_board_template_free",
             "allow_separate_board_purchase",
+            "has_paid_update",
+            "update_price",
+            "paid_update_version",
+            "update_notes",
             "download_count",
             "average_rating",
             "review_count",
@@ -533,6 +537,7 @@ class AssetDetailSerializer(AssetListSerializer):
     addons = serializers.SerializerMethodField()
     bundle_price = serializers.SerializerMethodField()
     user_owns_base = serializers.SerializerMethodField()
+    user_requires_update = serializers.SerializerMethodField()
 
     class Meta(AssetListSerializer.Meta):
         fields = AssetListSerializer.Meta.fields + [
@@ -548,6 +553,7 @@ class AssetDetailSerializer(AssetListSerializer):
             "reviews",
             "updates",
             "can_download",
+            "user_requires_update",
             "addons",
             "bundle_price",
             "user_owns_base",
@@ -580,6 +586,14 @@ class AssetDetailSerializer(AssetListSerializer):
             download_enabled=True,
         ).exists()
 
+    def get_user_requires_update(self, obj):
+        request = self.context.get("request")
+        user = getattr(request, "user", None) if request else None
+        if not user or not user.is_authenticated:
+            return False
+        has_access, requires_update = obj.check_user_update_access(user)
+        return requires_update
+
     def get_reviews(self, obj):
         approved = obj.reviews.filter(is_approved=True).select_related("user", "replied_by")
         return ReviewSerializer(approved, many=True, context=self.context).data
@@ -606,6 +620,11 @@ class AssetDetailSerializer(AssetListSerializer):
 
         if not has_paid_order:
             return False
+
+        if obj.has_paid_update and obj.update_price > Decimal("0.00"):
+            has_access, requires_update = obj.check_user_update_access(user)
+            if requires_update:
+                return False
 
         if obj.is_upcoming:
             now = timezone.now()

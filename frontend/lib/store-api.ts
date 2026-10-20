@@ -210,6 +210,31 @@ export async function createAddonOrder(
   return res.json();
 }
 
+export async function createUpdateOrder(
+  assetId: number,
+  customerPhone?: string,
+  forceNew: boolean = false
+): Promise<StoreOrder> {
+  await validAccessToken();
+  const payload: Record<string, any> = { asset_id: assetId, is_update: true };
+  if (customerPhone) payload.customer_phone = customerPhone;
+  if (forceNew) payload.force_new = true;
+  let res = await fetch(`${API_URL}/orders/create/`, {
+    method: "POST",
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  if (res.status === 401 && await refreshAccessToken()) {
+    res = await fetch(`${API_URL}/orders/create/`, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+  }
+  if (!res.ok) throw new Error(await parseError(res, "Could not create version update order."));
+  return res.json();
+}
+
 export async function createBoardTemplateOrder(templateId: string, customerPhone?: string, forceNew: boolean = false): Promise<StoreOrder> {
   await validAccessToken();
   const payload: Record<string, any> = { board_template_id: templateId };

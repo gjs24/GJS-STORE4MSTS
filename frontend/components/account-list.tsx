@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Download, FileText, PackageCheck, ShoppingCart, TrainFront, Trash2 } from "lucide-react";
+import { Download, FileText, PackageCheck, ShoppingCart, Sparkles, TrainFront, Trash2 } from "lucide-react";
 import { PriceDisplay } from "@/components/price-display";
 import type { Asset, AssetFeatureAddon } from "@/lib/api";
 import { downloadAsset, downloadAddon, downloadInvoice, removeFromWishlist, type DownloadLog, type StoreOrder, type WishlistItem, userGet, verifyPayment } from "@/lib/store-api";
@@ -344,14 +344,24 @@ export function AccountList({ type }: AccountListProps) {
                   ) : row.asset ? (
                     row.downloadEnabled ? (
                       <>
-                        <button
-                          onClick={() => handleDownload(row.asset!)}
-                          disabled={busyId === row.asset.id}
-                          className="flex items-center gap-1.5 rounded-lg bg-rail-red px-3.5 py-2 text-xs font-bold text-white shadow-glow transition-all hover:bg-rail-red/90 disabled:opacity-60"
-                        >
-                          <PackageCheck size={15} />
-                          <span>Download</span>
-                        </button>
+                        {row.asset.user_requires_update ? (
+                          <Link
+                            href={`/assets/${row.asset.slug}`}
+                            className="flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-amber-600 to-orange-600 px-3.5 py-2 text-xs font-bold text-white shadow-glow transition-all hover:from-amber-500 hover:to-orange-500"
+                          >
+                            <Sparkles size={15} />
+                            <span>Unlock v{row.asset.paid_update_version || row.asset.version} (₹{row.asset.update_price || "10"})</span>
+                          </Link>
+                        ) : (
+                          <button
+                            onClick={() => handleDownload(row.asset!)}
+                            disabled={busyId === row.asset.id}
+                            className="flex items-center gap-1.5 rounded-lg bg-rail-red px-3.5 py-2 text-xs font-bold text-white shadow-glow transition-all hover:bg-rail-red/90 disabled:opacity-60"
+                          >
+                            <PackageCheck size={15} />
+                            <span>Download</span>
+                          </button>
+                        )}
                         {row.unlockedAddons && row.unlockedAddons.map((addon) => (
                           <button
                             key={addon.id}

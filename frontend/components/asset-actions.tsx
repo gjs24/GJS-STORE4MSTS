@@ -7,7 +7,7 @@ import { CheckCircle2, Download, Lock, ShoppingCart, Sparkles, Zap } from "lucid
 import { CountdownTimer } from "@/components/countdown-timer";
 import { getStoredUser, priceLabel, type Asset, type AssetFeatureAddon } from "@/lib/api";
 import { WishlistButton } from "@/components/wishlist-button";
-import { createOrder, createAddonOrder, downloadAsset, downloadAddon, isLoggedIn, notifyMe, userGet, verifyPayment, type StoreOrder } from "@/lib/store-api";
+import { createOrder, createAddonOrder, createUpdateOrder, downloadAsset, downloadAddon, isLoggedIn, notifyMe, userGet, verifyPayment, type StoreOrder } from "@/lib/store-api";
 
 function qrCodeUrl(value: string) {
   return `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(value)}`;
@@ -84,12 +84,6 @@ export function AssetActions({ asset }: { asset: Asset }) {
   const activeAddons = activeAsset.addons || [];
   const hasAddons = activeAddons.length > 0;
   const userOwnsBase = Boolean(activeAsset.can_download || activeAsset.user_owns_base || activeAsset.is_free);
-  const [selectedEdition, setSelectedEdition] = useState<"bundle" | "base">("bundle");
-
-  const baseNumeric = Number(effectivePrice) || 0;
-  const addonSum = activeAddons.reduce((sum, a) => sum + (Number(a.bundle_price_addition) || 0), 0);
-  const computedBundlePrice = (baseNumeric + addonSum).toFixed(2).replace(/\.00$/, "");
-  const bundlePrice = activeAsset.bundle_price || computedBundlePrice;
 
   async function requireLogin() {
     if (!isLoggedIn()) {
@@ -223,7 +217,57 @@ export function AssetActions({ asset }: { asset: Asset }) {
     if (download.revoke) setTimeout(download.revoke, 1000);
   }
 
+  async function handlePayUpdateAction() {
+    if (!(await requireLogin())) return;
+    setBusy(true);
+    const versionLabel = activeAsset.paid_update_version || activeAsset.version;
+    setMessage(`Creating update order for v${versionLabel}...`);
+    try {
+      const storedUser = getStoredUser();
+      let phone = storedUser?.phone_number || (typeof window !== "undefined" ? (localStorage.getItem("gjs_customer_phone") || "") : "");
+      if (!phone || phone.replace(/\D/g, "").length !== 10) {
+        const userPhone = window.prompt(
+          "Enter your 10-digit mobile number for order receipt & OTP:",
+          phone
+        );
+        if (userPhone && userPhone.replace(/\D/g, "").length >= 10) {
+          phone = userPhone.replace(/\D/g, "").slice(-10);
+          localStorage.setItem("gjs_customer_phone", phone);
+        }
+      }
+      const nextOrder = await createUpdateOrder(activeAsset.id, phone || undefined, true);
+      setOrder(nextOrder);
+      if (nextOrder.status === "PENDING" && nextOrder.payment_provider === "RAZORPAY" && nextOrder.razorpay_order_id) {
+        await startRazorpayCheckout(nextOrder);
+        setMessage("Complete the payment in the Razorpay window to unlock your update.");
+        return;
+      } else if (nextOrder.status === "PENDING" && nextOrder.payment_session_id) {
+        await startCashfreeCheckout(nextOrder);
+        setMessage("Complete the Cashfree payment to unlock your update.");
+        return;
+      } else if (nextOrder.status === "PENDING" && nextOrder.manual_payment) {
+        setMessage("Scan the UPI QR code below and submit your UTR / Transaction ID for admin verification.");
+        return;
+      } else if (nextOrder.download_enabled || nextOrder.status === "APPROVED" || nextOrder.status === "PAID") {
+        setMessage(`🎉 Update v${versionLabel} unlocked successfully!`);
+        if (isLoggedIn()) {
+          const fresh = await userGet<Asset>(`/assets/${activeAsset.slug}/`);
+          setCurrentAsset(fresh);
+        }
+      } else {
+        setMessage("Payment required before unlocking this update.");
+      }
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not complete update purchase.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function handlePrimaryAction() {
+    if (activeAsset.user_requires_update) {
+      return handlePayUpdateAction();
+    }
     if (activeAsset.user_early_access_pending) {
       if (activeAsset.early_access_starts_at) {
         setMessage(
@@ -298,8 +342,7 @@ export function AssetActions({ asset }: { asset: Asset }) {
             localStorage.setItem("gjs_customer_phone", phone);
           }
         }
-        const isBuyingBundle = hasAddons && !userOwnsBase && selectedEdition === "bundle";
-        const nextOrder = await createOrder(activeAsset.id, phone || undefined, true, isBuyingBundle);
+        const nextOrder = await createOrder(activeAsset.id, phone || undefined, true);
         setOrder(nextOrder);
         if (nextOrder.status === "PENDING" && nextOrder.payment_provider === "RAZORPAY" && nextOrder.razorpay_order_id) {
           await startRazorpayCheckout(nextOrder);
@@ -432,6 +475,9 @@ export function AssetActions({ asset }: { asset: Asset }) {
   }
 
   function getButtonLabel() {
+    if (activeAsset.user_requires_update) {
+      return `Pay ₹${activeAsset.update_price || "0"} to Unlock Update (v${activeAsset.paid_update_version || activeAsset.version})`;
+    }
     if (activeAsset.user_early_access_pending) {
       return activeAsset.early_access_starts_at
         ? `VIP Access Opens ${new Date(activeAsset.early_access_starts_at).toLocaleDateString("en-IN")}`
@@ -463,12 +509,6 @@ export function AssetActions({ asset }: { asset: Asset }) {
     }
     if (activeAsset.is_free || activeAsset.can_download) {
       return isUpcoming ? "Early Access Download" : "Download package";
-    }
-    if (hasAddons && !userOwnsBase) {
-      if (selectedEdition === "bundle") {
-        return `Buy Complete Bundle for ₹${bundlePrice}`;
-      }
-      return `Buy Base Only for ₹${effectivePrice}`;
     }
     if (isUpcoming) {
       return `VIP Early Access: Buy for ₹${effectivePrice}`;
@@ -685,59 +725,32 @@ export function AssetActions({ asset }: { asset: Asset }) {
         ) : null
       ) : null}
 
-      {/* Edition Selector for New Buyers */}
-      {!userOwnsBase && hasAddons && !isUpcomingBlocked && !activeAsset.is_free && (
-        <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 space-y-3">
-          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-            Choose Your Edition
-          </p>
-          <div className="grid gap-3 sm:grid-cols-2">
-            {/* Complete Bundle Option */}
-            <button
-              type="button"
-              onClick={() => setSelectedEdition("bundle")}
-              className={`relative flex flex-col items-start p-3.5 rounded-lg border text-left transition-all ${
-                selectedEdition === "bundle"
-                  ? "border-emerald-500 bg-emerald-500/10 ring-1 ring-emerald-500/50"
-                  : "border-white/10 bg-black/30 hover:border-white/20"
-              }`}
-            >
-              <span className="absolute -top-2.5 right-3 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white shadow-sm">
-                Recommended
-              </span>
-              <div className="flex items-center justify-between w-full">
-                <span className="font-bold text-white text-sm">Complete Bundle</span>
-                <span className="font-extrabold text-emerald-400 text-base">₹{bundlePrice}</span>
+      {/* Paid Version Update Banner for Existing Owners */}
+      {activeAsset.user_requires_update && (
+        <div className="rounded-xl border border-amber-500/40 bg-gradient-to-r from-amber-950/40 via-amber-900/20 to-black/60 p-4 space-y-3 shadow-lg shadow-amber-950/20">
+          <div className="flex items-start gap-3">
+            <div className="rounded-lg bg-amber-500/20 p-2 text-amber-400 border border-amber-500/30 shrink-0 mt-0.5">
+              <Sparkles size={20} />
+            </div>
+            <div className="space-y-1.5 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-bold text-white text-base">
+                  Version Update Available: v{activeAsset.paid_update_version || activeAsset.version}
+                </span>
+                <span className="rounded bg-amber-500/20 border border-amber-400/40 px-2 py-0.5 text-xs font-extrabold text-amber-300 uppercase">
+                  Existing Owner Update Fee: ₹{activeAsset.update_price}
+                </span>
               </div>
-              <p className="mt-1 text-xs text-slate-300">
-                Base Pack + All Feature Upgrades ({activeAddons.map((a) => a.title).join(", ")})
+              <p className="text-xs text-amber-200/90 leading-relaxed">
+                You already own a previous version of this asset! Pay only the update charge of <strong className="text-white">₹{activeAsset.update_price}</strong> to unlock and download this updated release.
               </p>
-              <span className="mt-2 text-[11px] font-semibold text-emerald-300 flex items-center gap-1">
-                <Sparkles size={12} /> Includes all current & future updates
-              </span>
-            </button>
-
-            {/* Base Edition Option */}
-            <button
-              type="button"
-              onClick={() => setSelectedEdition("base")}
-              className={`relative flex flex-col items-start p-3.5 rounded-lg border text-left transition-all ${
-                selectedEdition === "base"
-                  ? "border-emerald-500 bg-emerald-500/10 ring-1 ring-emerald-500/50"
-                  : "border-white/10 bg-black/30 hover:border-white/20"
-              }`}
-            >
-              <div className="flex items-center justify-between w-full">
-                <span className="font-bold text-white text-sm">Base Pack Only</span>
-                <span className="font-extrabold text-slate-200 text-base">₹{effectivePrice}</span>
-              </div>
-              <p className="mt-1 text-xs text-slate-400">
-                Standard release without optional add-on features
-              </p>
-              <span className="mt-2 text-[11px] text-slate-400">
-                Add-ons can be purchased separately later
-              </span>
-            </button>
+              {activeAsset.update_notes ? (
+                <div className="mt-2 rounded-lg bg-black/40 border border-white/10 p-3 text-xs text-slate-300">
+                  <p className="font-semibold text-amber-300 mb-1">What&apos;s new in this update:</p>
+                  <p className="whitespace-pre-line text-slate-300">{activeAsset.update_notes}</p>
+                </div>
+              ) : null}
+            </div>
           </div>
         </div>
       )}
@@ -747,7 +760,9 @@ export function AssetActions({ asset }: { asset: Asset }) {
           onClick={handlePrimaryAction}
           disabled={busy || isPrebookingSoldOut}
           className={`rounded px-5 py-3 font-semibold text-white transition disabled:opacity-60 ${
-            hasPrebooked
+            activeAsset.user_requires_update
+              ? "bg-gradient-to-r from-amber-600 via-orange-600 to-amber-500 hover:from-amber-500 hover:to-orange-500 shadow-md shadow-amber-900/30 ring-1 ring-amber-400/40 font-bold"
+              : hasPrebooked
               ? downloadsReady
                 ? "bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 shadow-md shadow-emerald-900/30"
                 : "bg-slate-700/90 hover:bg-slate-700 text-cyan-200 border border-cyan-500/40"
@@ -758,7 +773,9 @@ export function AssetActions({ asset }: { asset: Asset }) {
               : "bg-rail-red hover:bg-rail-red/90"
           }`}
         >
-          {hasPrebooked ? (
+          {activeAsset.user_requires_update ? (
+            <Sparkles className="mr-2 inline text-amber-200" size={18} />
+          ) : hasPrebooked ? (
             downloadsReady ? (
               <Download className="mr-2 inline" size={18} />
             ) : (

@@ -78,6 +78,11 @@ export type Asset = {
   external_download_url?: string;
   private_download_key?: string;
   google_drive_file_id?: string;
+  has_paid_update?: boolean;
+  update_price?: string;
+  paid_update_version?: string;
+  update_notes?: string;
+  user_requires_update?: boolean;
   preview_video_url?: string;
   requirements?: string;
   installation_steps?: string;

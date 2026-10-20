@@ -54,6 +54,7 @@ from .models import (
     SpecialAccessInviteLink,
     AssetFeatureAddon,
     UserAssetAddonUnlock,
+    UserAssetUpdateUnlock,
     UserBoardUnlock,
     UserCustomBoard,
     UserProfile,
@@ -273,6 +274,14 @@ def grant_addon_unlock_if_applicable(order):
                 addon=addon,
                 defaults={"order": order},
             )
+    if order.asset and order.asset.has_paid_update:
+        effective_version = order.asset.paid_update_version or order.asset.version
+        UserAssetUpdateUnlock.objects.get_or_create(
+            user=order.user,
+            asset=order.asset,
+            version=effective_version,
+            defaults={"order": order},
+        )
 
 
 def grant_board_unlock_if_applicable(order):
@@ -1656,6 +1665,126 @@ class OrderCreateView(generics.CreateAPIView):
                     return Response({"detail": gateway_error or "Payment checkout is not available."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
             return Response(OrderSerializer(order, context={"request": request}).data, status=status.HTTP_201_CREATED)
 
+        is_update = bool(request.data.get("is_update"))
+        if is_update:
+            asset = get_object_or_404(Asset, id=request.data.get("asset_id"), is_published=True)
+            if not asset.has_paid_update or asset.update_price <= Decimal("0.00"):
+                return Response(
+                    {"detail": "This product does not have an active paid update."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            effective_version = asset.paid_update_version or asset.version
+            already_unlocked = asset.user_update_unlocks.filter(user=request.user, version=effective_version).exists()
+            if already_unlocked:
+                existing_order = Order.objects.filter(
+                    user=request.user,
+                    asset=asset,
+                    order_type=Order.OrderType.UPGRADE,
+                    status__in=[Order.Status.APPROVED, Order.Status.PAID],
+                ).order_by("-id").first()
+                if existing_order:
+                    return Response(OrderSerializer(existing_order, context={"request": request}).data, status=status.HTTP_200_OK)
+                return Response({"detail": f"You already have access to update {effective_version}."}, status=status.HTTP_200_OK)
+
+            owns_base = (
+                asset.is_free
+                or user_has_special_access(request.user, asset)
+                or Order.objects.filter(
+                    user=request.user,
+                    asset=asset,
+                    status__in=[Order.Status.APPROVED, Order.Status.PAID],
+                ).exists()
+            )
+            if not owns_base:
+                return Response(
+                    {"detail": "You must own the product before purchasing the update."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            target_amount = asset.update_price
+            existing_order = Order.objects.filter(
+                user=request.user,
+                asset=asset,
+                order_type=Order.OrderType.UPGRADE,
+                status__in=[Order.Status.PENDING, Order.Status.VERIFICATION_PENDING, Order.Status.APPROVED, Order.Status.PAID],
+            ).order_by("-id").first()
+
+            force_fresh = bool(request.data.get("force_new") or request.data.get("refresh"))
+            if (
+                existing_order
+                and existing_order.status == Order.Status.PENDING
+                and (
+                    force_fresh
+                    or existing_order.amount != target_amount
+                    or (existing_order.created_at and existing_order.created_at < timezone.now() - timedelta(minutes=2))
+                )
+            ):
+                existing_order.status = Order.Status.EXPIRED
+                existing_order.download_enabled = False
+                existing_order.save(update_fields=["status", "download_enabled"])
+                Payment.objects.filter(order=existing_order).update(status="expired")
+                existing_order = None
+
+            if existing_order:
+                sync_order_download_access(existing_order)
+                if not order_has_download_access(existing_order):
+                    payment = getattr(existing_order, "payment", None)
+                    if payment and payment.provider == Payment.Provider.RAZORPAY:
+                        if razorpay_is_configured():
+                            sync_razorpay_order(existing_order)
+                    elif payment and payment.provider == Payment.Provider.CASHFREE:
+                        synced, sync_error = sync_cashfree_order(existing_order)
+                        if not synced and not cashfree_order_missing_error(sync_error):
+                            return Response({"detail": sync_error or "Payment status could not be checked."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+                    if existing_order.status == Order.Status.FAILED:
+                        existing_order = None
+
+            if existing_order:
+                req_phone = request.data.get("customer_phone") or request.data.get("phone")
+                if req_phone:
+                    import re
+                    digits = re.sub(r"\D", "", str(req_phone))[-10:]
+                    if len(digits) == 10 and existing_order.customer_phone != digits:
+                        existing_order.customer_phone = digits
+                        existing_order.save(update_fields=["customer_phone"])
+                if not order_has_download_access(existing_order):
+                    gateway_ready, gateway_error = ensure_payment_gateway(existing_order, request)
+                    if not gateway_ready:
+                        return Response({"detail": gateway_error or "Payment checkout is not available."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+                return Response(OrderSerializer(existing_order, context={"request": request}).data, status=status.HTTP_200_OK)
+
+            phone_input = request.data.get("customer_phone") or request.data.get("phone") or ""
+            if not phone_input and hasattr(request.user, "profile") and request.user.profile.phone_number:
+                phone_input = request.user.profile.phone_number
+            if not phone_input:
+                prev = Order.objects.filter(user=request.user).exclude(customer_phone="").order_by("-id").first()
+                if prev:
+                    phone_input = prev.customer_phone
+            import re
+            cleaned_phone = re.sub(r"\D", "", str(phone_input))[-10:] if len(re.sub(r"\D", "", str(phone_input))) >= 10 else ""
+
+            is_free_update = target_amount <= Decimal("0.00")
+            order = Order.objects.create(
+                user=request.user,
+                asset=asset,
+                order_type=Order.OrderType.UPGRADE,
+                customer_phone=cleaned_phone,
+                amount=target_amount,
+                currency="INR",
+                status=Order.Status.APPROVED if is_free_update else Order.Status.PENDING,
+                download_enabled=is_free_update,
+            )
+            order.provider_order_id = f"GJS-U{order.id:05d}"
+            order.save(update_fields=["provider_order_id"])
+            if is_free_update:
+                grant_addon_unlock_if_applicable(order)
+            else:
+                gateway_ready, gateway_error = ensure_payment_gateway(order, request)
+                if not gateway_ready:
+                    return Response({"detail": gateway_error or "Payment checkout is not available."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            return Response(OrderSerializer(order, context={"request": request}).data, status=status.HTTP_201_CREATED)
+
         asset = get_object_or_404(Asset, id=request.data.get("asset_id"), is_published=True)
         is_bundle = bool(request.data.get("is_bundle"))
         ea_status = get_cached_early_access_status(asset, request)
@@ -2929,6 +3058,19 @@ def create_download_response(request, asset):
     )
     if not allowed:
         return Response({"detail": "Purchase required before downloading this asset."}, status=status.HTTP_403_FORBIDDEN)
+    if asset.has_paid_update and asset.update_price > Decimal("0.00"):
+        has_access, requires_update = asset.check_user_update_access(request.user)
+        if requires_update:
+            version_str = asset.paid_update_version or asset.version
+            return Response(
+                {
+                    "detail": f"A paid version update ({version_str}) is required to download this asset. Please unlock the update to continue.",
+                    "requires_update": True,
+                    "update_price": str(asset.update_price),
+                    "update_version": version_str,
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
     if asset.private_download_key:
         signed_url = create_private_download_url(asset.private_download_key)
         if not signed_url:

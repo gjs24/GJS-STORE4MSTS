@@ -52,6 +52,10 @@ export default function EditAssetPage({ params }: { params: Promise<{ id: string
   const [selectedBoardTemplateId, setSelectedBoardTemplateId] = useState<string>("");
   const [bundleBoardTemplateFree, setBundleBoardTemplateFree] = useState<boolean>(false);
   const [allowSeparateBoardPurchase, setAllowSeparateBoardPurchase] = useState<boolean>(true);
+  const [hasPaidUpdate, setHasPaidUpdate] = useState<boolean>(false);
+  const [updatePrice, setUpdatePrice] = useState<string>("10.00");
+  const [paidUpdateVersion, setPaidUpdateVersion] = useState<string>("");
+  const [updateNotes, setUpdateNotes] = useState<string>("");
 
   useEffect(() => {
     params.then(({ id }) => {
@@ -86,6 +90,10 @@ export default function EditAssetPage({ params }: { params: Promise<{ id: string
           setPrebookingDownloadUnlockAt(data.prebooking_download_unlock_at ? formatDateTimeLocal(data.prebooking_download_unlock_at) : "");
           setPrebookingDownloadsUnlocked(Boolean(data.prebooking_downloads_unlocked));
           setPrebookingSlots(data.prebooking_slots || 0);
+          setHasPaidUpdate(Boolean((data as any).has_paid_update));
+          setUpdatePrice((data as any).update_price && (data as any).update_price !== "0.00" ? (data as any).update_price : "10.00");
+          setPaidUpdateVersion((data as any).paid_update_version || "");
+          setUpdateNotes((data as any).update_notes || "");
           setMessage("");
         })
         .catch((error) => {
@@ -158,6 +166,10 @@ export default function EditAssetPage({ params }: { params: Promise<{ id: string
       formData.set("allow_separate_board_purchase", "true");
     }
     formData.set("release_date", String(formData.get("release_date") || ""));
+    formData.set("has_paid_update", String(hasPaidUpdate));
+    formData.set("update_price", updatePrice.trim() || "0.00");
+    formData.set("paid_update_version", paidUpdateVersion.trim());
+    formData.set("update_notes", updateNotes.trim());
 
     if (file instanceof File && file.size === 0) {
       formData.delete("download_file");
@@ -848,6 +860,84 @@ export default function EditAssetPage({ params }: { params: Promise<{ id: string
                   </div>
                 </div>
               </div>
+            </div>
+          ) : null}
+        </div>
+
+        {/* Paid Version Update Settings for Existing Owners */}
+        <div className="rounded-xl border border-amber-500/30 bg-amber-950/20 p-5 space-y-4 md:col-span-2">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-base font-semibold text-amber-300">
+                  ⚡ Paid Version Update for Existing Buyers
+                </span>
+                <span className="rounded bg-amber-500/20 px-2 py-0.5 text-xs font-semibold text-amber-200">
+                  {hasPaidUpdate ? "ACTIVE" : "DISABLED"}
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 mt-0.5">
+                When active, existing owners of previous versions must pay an update fee to download new files. New buyers simply pay the regular asset price.
+              </p>
+            </div>
+            <label className="relative inline-flex cursor-pointer items-center">
+              <input
+                type="checkbox"
+                checked={hasPaidUpdate}
+                onChange={(e) => setHasPaidUpdate(e.target.checked)}
+                className="peer sr-only"
+              />
+              <div className="peer h-6 w-11 rounded-full bg-slate-700 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all after:content-[''] peer-checked:bg-amber-500 peer-checked:after:translate-x-full" />
+            </label>
+          </div>
+
+          {hasPaidUpdate ? (
+            <div className="space-y-4 pt-2 border-t border-amber-500/20">
+              <div className="grid gap-4 md:grid-cols-2">
+                <label className="block">
+                  <span className="text-xs font-medium text-slate-300">Update Charge for Existing Owners (₹ INR)</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={updatePrice}
+                    onChange={(e) => setUpdatePrice(e.target.value)}
+                    placeholder="10.00"
+                    className="mt-1 w-full rounded border border-white/10 bg-black/40 px-3 py-2 text-sm text-white"
+                  />
+                  <span className="mt-1 block text-xs text-slate-400">
+                    Price existing customers pay to unlock the updated download (e.g. ₹10.00).
+                  </span>
+                </label>
+
+                <label className="block">
+                  <span className="text-xs font-medium text-slate-300">Update Version String (e.g. 2.0.0)</span>
+                  <input
+                    type="text"
+                    value={paidUpdateVersion}
+                    onChange={(e) => setPaidUpdateVersion(e.target.value)}
+                    placeholder={asset.version || "2.0.0"}
+                    className="mt-1 w-full rounded border border-white/10 bg-black/40 px-3 py-2 text-sm text-white"
+                  />
+                  <span className="mt-1 block text-xs text-slate-400">
+                    Leave blank to use the main asset version ({asset.version}).
+                  </span>
+                </label>
+              </div>
+
+              <label className="block">
+                <span className="text-xs font-medium text-slate-300">Update Notes / Changelog for Existing Owners</span>
+                <textarea
+                  value={updateNotes}
+                  onChange={(e) => setUpdateNotes(e.target.value)}
+                  placeholder="e.g. Added realistic 3D interior, brand new motor sounds, and improved physics for Open Rails."
+                  rows={3}
+                  className="mt-1 w-full rounded border border-white/10 bg-black/40 px-3 py-2 text-sm text-white"
+                />
+                <span className="mt-1 block text-xs text-slate-400">
+                  Explains what is included in this update when existing owners visit the product page.
+                </span>
+              </label>
             </div>
           ) : null}
         </div>
