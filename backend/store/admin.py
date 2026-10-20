@@ -4,6 +4,7 @@ from .models import AdminActivityLog, Asset, AssetFile, AssetImage, Category, Do
 from .models import (
     AdminActivityLog,
     Asset,
+    AssetFeatureAddon,
     AssetFile,
     AssetImage,
     BoardTemplate,
@@ -17,6 +18,7 @@ from .models import (
     SpecialAccessClaimRequest,
     SpecialAccessInviteLink,
     UpdateLog,
+    UserAssetAddonUnlock,
     UserBoardUnlock,
     UserCustomBoard,
     UserSpecialAccess,
@@ -75,6 +77,11 @@ class UpdateLogInline(admin.TabularInline):
     extra = 0
 
 
+class AssetFeatureAddonInline(admin.StackedInline):
+    model = AssetFeatureAddon
+    extra = 0
+
+
 @admin.register(Asset)
 class AssetAdmin(admin.ModelAdmin):
     list_display = ("title", "category", "simulator_type", "original_price", "price", "deal_is_open", "is_free", "is_published", "is_featured", "is_upcoming", "early_access_enabled", "prebooking_enabled", "download_count")
@@ -82,7 +89,21 @@ class AssetAdmin(admin.ModelAdmin):
     search_fields = ("title", "short_description", "description")
     prepopulated_fields = {"slug": ("title",)}
     filter_horizontal = ("early_access_required_assets",)
-    inlines = [AssetImageInline, AssetFileInline, UpdateLogInline]
+    inlines = [AssetImageInline, AssetFileInline, AssetFeatureAddonInline, UpdateLogInline]
+
+
+@admin.register(AssetFeatureAddon)
+class AssetFeatureAddonAdmin(admin.ModelAdmin):
+    list_display = ("title", "asset", "version", "upgrade_price", "bundle_price_addition", "is_active", "download_count")
+    list_filter = ("is_active", "asset")
+    search_fields = ("title", "asset__title", "version")
+
+
+@admin.register(UserAssetAddonUnlock)
+class UserAssetAddonUnlockAdmin(admin.ModelAdmin):
+    list_display = ("id", "user", "addon", "order", "unlocked_at")
+    list_filter = ("addon__asset", "unlocked_at")
+    search_fields = ("user__username", "user__email", "addon__title")
 
 
 @admin.register(Category)
@@ -93,11 +114,9 @@ class CategoryAdmin(admin.ModelAdmin):
 
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
-    list_display = ("id", "user", "asset", "amount", "currency", "status", "created_at")
-    list_display = ("id", "user", "asset", "board_template", "amount", "currency", "status", "created_at")
-    list_filter = ("status", "currency")
-    search_fields = ("user__username", "asset__title", "provider_order_id")
-    search_fields = ("user__username", "asset__title", "board_template__name", "provider_order_id")
+    list_display = ("id", "user", "order_type", "asset", "asset_addon", "board_template", "amount", "currency", "status", "created_at")
+    list_filter = ("order_type", "status", "currency")
+    search_fields = ("user__username", "asset__title", "asset_addon__title", "board_template__name", "provider_order_id")
 
 
 admin.site.register(Payment)

@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Download, FileText, PackageCheck, ShoppingCart, TrainFront, Trash2 } from "lucide-react";
 import { PriceDisplay } from "@/components/price-display";
-import type { Asset } from "@/lib/api";
-import { downloadAsset, downloadInvoice, removeFromWishlist, type DownloadLog, type StoreOrder, type WishlistItem, userGet, verifyPayment } from "@/lib/store-api";
+import type { Asset, AssetFeatureAddon } from "@/lib/api";
+import { downloadAsset, downloadAddon, downloadInvoice, removeFromWishlist, type DownloadLog, type StoreOrder, type WishlistItem, userGet, verifyPayment } from "@/lib/store-api";
 
 type AccountListProps = {
   type: "purchases" | "downloads" | "wishlist";
@@ -13,7 +13,11 @@ type AccountListProps = {
 
 type Row = {
   id: number;
+  orderType?: "BASE" | "UPGRADE" | "BUNDLE";
+  isBundle?: boolean;
   asset?: Asset | null;
+  assetAddon?: AssetFeatureAddon | null;
+  unlockedAddons?: AssetFeatureAddon[];
   boardTemplate?: {
     id: string;
     name: string;
@@ -56,7 +60,11 @@ export function AccountList({ type }: AccountListProps) {
           const isBoard = Boolean(order.board_template);
           return {
             id: item.id,
+            orderType: order.order_type,
+            isBundle: order.is_bundle,
             asset: "asset" in item ? (item as any).asset : null,
+            assetAddon: order.asset_addon || null,
+            unlockedAddons: order.unlocked_addons || [],
             boardTemplate: isBoard ? order.board_template : null,
             amount: "amount" in item ? (item as StoreOrder).amount : undefined,
             currency: "currency" in item ? (item as StoreOrder).currency : "INR",
@@ -108,6 +116,26 @@ export function AccountList({ type }: AccountListProps) {
       if (download.revoke) setTimeout(download.revoke, 1000);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not start download.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function handleDownloadAddon(addon: AssetFeatureAddon) {
+    setBusyId(addon.id);
+    setMessage(`Preparing secure download for ${addon.title}...`);
+    try {
+      const download = await downloadAddon(addon.id);
+      setMessage(`Download ready for ${addon.title}. Starting download...`);
+      const link = document.createElement("a");
+      link.href = download.url;
+      link.download = download.filename || `${addon.slug || "addon"}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      if (download.revoke) setTimeout(download.revoke, 1000);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not start addon download.");
     } finally {
       setBusyId(null);
     }
@@ -177,9 +205,36 @@ export function AccountList({ type }: AccountListProps) {
                   {row.status ? <span className="rounded border border-white/10 px-2 py-1">{row.status}</span> : null}
                 </div>
               </div>
+            ) : row.assetAddon ? (
+              <div>
+                <p className="text-xs font-semibold uppercase text-amber-400">Feature Upgrade</p>
+                <Link href={row.asset ? `/assets/${row.asset.slug}` : "#"} className="mt-1 block text-lg font-semibold text-white hover:text-rail-amber">
+                  {row.assetAddon.title}
+                </Link>
+                <p className="mt-1 text-xs text-slate-300">
+                  Add-on for {row.asset?.title || "Product"}
+                </p>
+                <p className="mt-2 text-sm text-slate-400">{row.meta}</p>
+                <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-300">
+                  <span className="rounded border border-white/10 px-2 py-1">v{row.assetAddon.version}</span>
+                  {row.assetAddon.file_size ? <span className="rounded border border-white/10 px-2 py-1">{row.assetAddon.file_size}</span> : null}
+                  <span className="rounded border border-white/10 px-2 py-1">₹{row.amount || row.assetAddon.upgrade_price}</span>
+                  {row.status ? <span className="rounded border border-white/10 px-2 py-1">{row.status}</span> : null}
+                  <span className="rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-amber-300 font-semibold">
+                    {row.assetAddon.badge || "UPGRADE"}
+                  </span>
+                </div>
+              </div>
             ) : row.asset ? (
               <div>
-                <p className="text-xs font-semibold uppercase text-rail-amber">{row.asset.category?.name}</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-xs font-semibold uppercase text-rail-amber">{row.asset.category?.name}</p>
+                  {row.isBundle && (
+                    <span className="rounded bg-gradient-to-r from-emerald-500/20 to-teal-500/20 border border-emerald-400/30 px-2 py-0.5 text-[10px] font-bold text-emerald-300 uppercase">
+                      Complete Bundle
+                    </span>
+                  )}
+                </div>
                 <Link href={`/assets/${row.asset.slug}`} className="mt-1 block text-lg font-semibold text-white hover:text-rail-amber">
                   {row.asset.title}
                 </Link>
@@ -257,7 +312,22 @@ export function AccountList({ type }: AccountListProps) {
                     </button>
                   )}
 
-                  {row.boardTemplate ? (
+                  {row.assetAddon ? (
+                    row.downloadEnabled ? (
+                      <button
+                        onClick={() => handleDownloadAddon(row.assetAddon!)}
+                        disabled={busyId === row.assetAddon.id}
+                        className="flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-amber-600 to-orange-600 px-3.5 py-2 text-xs font-bold text-white shadow-glow transition-all hover:from-amber-500 hover:to-orange-500 disabled:opacity-60"
+                      >
+                        <Download size={15} />
+                        <span>Download Add-on</span>
+                      </button>
+                    ) : (
+                      <span className="rounded-lg border border-rail-amber/30 bg-rail-amber/10 px-3 py-1.5 text-xs font-semibold text-rail-amber">
+                        Payment Pending
+                      </span>
+                    )
+                  ) : row.boardTemplate ? (
                     row.downloadEnabled ? (
                       <Link
                         href={`/board-studio?template=${row.boardTemplate.id}`}
@@ -282,6 +352,18 @@ export function AccountList({ type }: AccountListProps) {
                           <PackageCheck size={15} />
                           <span>Download</span>
                         </button>
+                        {row.unlockedAddons && row.unlockedAddons.map((addon) => (
+                          <button
+                            key={addon.id}
+                            onClick={() => handleDownloadAddon(addon)}
+                            disabled={busyId === addon.id}
+                            className="flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-amber-600 to-orange-600 px-3.5 py-2 text-xs font-bold text-white shadow-glow transition-all hover:from-amber-500 hover:to-orange-500 disabled:opacity-60"
+                            title={`Download ${addon.title}`}
+                          >
+                            <Download size={15} />
+                            <span>{addon.title}</span>
+                          </button>
+                        ))}
                         {row.asset.board_template && (row.asset.bundle_board_template_free || (row.asset.board_template as any).is_bundled_free) && (
                           <Link
                             href={`/board-studio?template=${row.asset.board_template.id}`}

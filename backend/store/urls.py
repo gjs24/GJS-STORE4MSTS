@@ -31,6 +31,7 @@ from .views import (
     AdminNotifyRequestView,
     admin_settings,
     admin_stats,
+    addon_download_by_id,
     asset_download_by_id,
     cashfree_webhook,
     razorpay_webhook,
@@ -58,6 +59,7 @@ router.register("admin/special-access-requests", AdminSpecialAccessRequestViewSe
 
 urlpatterns = [
     path("assets/<int:pk>/download/", asset_download_by_id, name="asset-download-by-id"),
+    path("addons/<int:pk>/download/", addon_download_by_id, name="addon-download-by-id"),
     path("site-settings/", site_settings, name="site-settings"),
     path("community-stats/", community_stats, name="community-stats"),
     path("verify-maintenance-bypass/", verify_maintenance_bypass, name="verify-maintenance-bypass"),

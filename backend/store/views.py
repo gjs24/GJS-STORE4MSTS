@@ -52,6 +52,8 @@ from .models import (
     SiteSetting,
     SpecialAccessClaimRequest,
     SpecialAccessInviteLink,
+    AssetFeatureAddon,
+    UserAssetAddonUnlock,
     UserBoardUnlock,
     UserCustomBoard,
     UserProfile,
@@ -61,6 +63,7 @@ from .models import (
 from .permissions import IsAdminOrReadOnly
 from .serializers import (
     AssetDetailSerializer,
+    AssetFeatureAddonSerializer,
     AssetListSerializer,
     AssetWriteSerializer,
     AdminActivityLogSerializer,
@@ -254,6 +257,24 @@ def fetch_cashfree_order(provider_order_id):
     return data, ""
 
 
+def grant_addon_unlock_if_applicable(order):
+    if not order or not order.user:
+        return
+    if order.asset_addon:
+        UserAssetAddonUnlock.objects.get_or_create(
+            user=order.user,
+            addon=order.asset_addon,
+            defaults={"order": order},
+        )
+    if getattr(order, "is_bundle", False) and order.asset:
+        for addon in order.asset.addons.filter(is_active=True):
+            UserAssetAddonUnlock.objects.get_or_create(
+                user=order.user,
+                addon=addon,
+                defaults={"order": order},
+            )
+
+
 def grant_board_unlock_if_applicable(order):
     if not order or not order.user:
         return
@@ -261,6 +282,7 @@ def grant_board_unlock_if_applicable(order):
         UserBoardUnlock.objects.get_or_create(user=order.user, template=order.board_template, defaults={"order": order})
     if order.asset and order.asset.board_template and getattr(order.asset, "bundle_board_template_free", False):
         UserBoardUnlock.objects.get_or_create(user=order.user, template=order.asset.board_template, defaults={"order": order})
+    grant_addon_unlock_if_applicable(order)
 
 
 def sync_cashfree_order(order):
@@ -526,6 +548,8 @@ def log_admin_activity(request, action, target_type="", target_id="", message=""
 def order_has_download_access(order):
     if order.status == Order.Status.BLOCKED or not order.download_enabled:
         return False
+    if order.asset_addon:
+        return order.status in DOWNLOAD_READY_STATUSES
     if order.board_template:
         return order.status in DOWNLOAD_READY_STATUSES
     return (order.asset.is_free if order.asset else False) or order.status in DOWNLOAD_READY_STATUSES
@@ -539,7 +563,9 @@ def sync_order_download_access(order):
         return order
 
     is_free = False
-    if order.asset:
+    if order.asset_addon:
+        is_free = order.asset_addon.upgrade_price <= Decimal("0.00")
+    elif order.asset:
         is_free = order.asset.is_free
     elif order.board_template:
         is_free = not order.board_template.is_paid
@@ -1504,7 +1530,134 @@ class OrderCreateView(generics.CreateAPIView):
             data = OrderSerializer(order, context={"request": request}).data
             return Response(data, status=status.HTTP_201_CREATED)
 
+        asset_addon_id = request.data.get("asset_addon_id")
+        if asset_addon_id:
+            addon = get_object_or_404(AssetFeatureAddon, id=asset_addon_id, is_active=True)
+            asset = addon.asset
+            already_unlocked = UserAssetAddonUnlock.objects.filter(user=request.user, addon=addon).exists()
+            if already_unlocked:
+                existing_order = Order.objects.filter(
+                    user=request.user,
+                    asset_addon=addon,
+                    status__in=[Order.Status.APPROVED, Order.Status.PAID],
+                ).order_by("-id").first()
+                if existing_order:
+                    return Response(OrderSerializer(existing_order, context={"request": request}).data, status=status.HTTP_200_OK)
+                order = Order.objects.create(
+                    user=request.user,
+                    asset=asset,
+                    asset_addon=addon,
+                    order_type=Order.OrderType.UPGRADE,
+                    amount=Decimal("0.00"),
+                    currency="INR",
+                    status=Order.Status.APPROVED,
+                    download_enabled=True,
+                )
+                order.provider_order_id = f"GJS-U{order.id:05d}"
+                order.save(update_fields=["provider_order_id"])
+                return Response(OrderSerializer(order, context={"request": request}).data, status=status.HTTP_201_CREATED)
+
+            owns_base = (
+                asset.is_free
+                or user_has_special_access(request.user, asset)
+                or Order.objects.filter(
+                    user=request.user,
+                    asset=asset,
+                    asset_addon__isnull=True,
+                    status__in=[Order.Status.APPROVED, Order.Status.PAID],
+                ).exists()
+            )
+            if not owns_base:
+                return Response(
+                    {"detail": "You must own the base product before purchasing this upgrade add-on. Please purchase the base product or full bundle."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            target_amount = addon.upgrade_price
+            existing_order = Order.objects.filter(
+                user=request.user,
+                asset_addon=addon,
+                status__in=[Order.Status.PENDING, Order.Status.VERIFICATION_PENDING, Order.Status.APPROVED, Order.Status.PAID],
+            ).order_by("-id").first()
+
+            force_fresh = bool(request.data.get("force_new") or request.data.get("refresh"))
+            if (
+                existing_order
+                and existing_order.status == Order.Status.PENDING
+                and (
+                    force_fresh
+                    or existing_order.amount != target_amount
+                    or (existing_order.created_at and existing_order.created_at < timezone.now() - timedelta(minutes=2))
+                )
+            ):
+                existing_order.status = Order.Status.EXPIRED
+                existing_order.download_enabled = False
+                existing_order.save(update_fields=["status", "download_enabled"])
+                Payment.objects.filter(order=existing_order).update(status="expired")
+                existing_order = None
+
+            if existing_order:
+                sync_order_download_access(existing_order)
+                if not order_has_download_access(existing_order):
+                    payment = getattr(existing_order, "payment", None)
+                    if payment and payment.provider == Payment.Provider.RAZORPAY:
+                        if razorpay_is_configured():
+                            sync_razorpay_order(existing_order)
+                    elif payment and payment.provider == Payment.Provider.CASHFREE:
+                        synced, sync_error = sync_cashfree_order(existing_order)
+                        if not synced and not cashfree_order_missing_error(sync_error):
+                            return Response({"detail": sync_error or "Payment status could not be checked."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+                    if existing_order.status == Order.Status.FAILED:
+                        existing_order = None
+
+            if existing_order:
+                req_phone = request.data.get("customer_phone") or request.data.get("phone")
+                if req_phone:
+                    import re
+                    digits = re.sub(r"\D", "", str(req_phone))[-10:]
+                    if len(digits) == 10 and existing_order.customer_phone != digits:
+                        existing_order.customer_phone = digits
+                        existing_order.save(update_fields=["customer_phone"])
+                if not order_has_download_access(existing_order):
+                    gateway_ready, gateway_error = ensure_payment_gateway(existing_order, request)
+                    if not gateway_ready:
+                        return Response({"detail": gateway_error or "Payment checkout is not available."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+                return Response(OrderSerializer(existing_order, context={"request": request}).data, status=status.HTTP_200_OK)
+
+            phone_input = request.data.get("customer_phone") or request.data.get("phone") or ""
+            if not phone_input and hasattr(request.user, "profile") and request.user.profile.phone_number:
+                phone_input = request.user.profile.phone_number
+            if not phone_input:
+                prev = Order.objects.filter(user=request.user).exclude(customer_phone="").order_by("-id").first()
+                if prev:
+                    phone_input = prev.customer_phone
+            import re
+            cleaned_phone = re.sub(r"\D", "", str(phone_input))[-10:] if len(re.sub(r"\D", "", str(phone_input))) >= 10 else ""
+
+            is_free_addon = target_amount <= Decimal("0.00")
+            order = Order.objects.create(
+                user=request.user,
+                asset=asset,
+                asset_addon=addon,
+                order_type=Order.OrderType.UPGRADE,
+                customer_phone=cleaned_phone,
+                amount=target_amount,
+                currency="INR",
+                status=Order.Status.APPROVED if is_free_addon else Order.Status.PENDING,
+                download_enabled=is_free_addon,
+            )
+            order.provider_order_id = f"GJS-U{order.id:05d}"
+            order.save(update_fields=["provider_order_id"])
+            if is_free_addon:
+                grant_addon_unlock_if_applicable(order)
+            else:
+                gateway_ready, gateway_error = ensure_payment_gateway(order, request)
+                if not gateway_ready:
+                    return Response({"detail": gateway_error or "Payment checkout is not available."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            return Response(OrderSerializer(order, context={"request": request}).data, status=status.HTTP_201_CREATED)
+
         asset = get_object_or_404(Asset, id=request.data.get("asset_id"), is_published=True)
+        is_bundle = bool(request.data.get("is_bundle"))
         ea_status = get_cached_early_access_status(asset, request)
         now = timezone.now()
         is_released_by_schedule = bool(asset.release_date and now >= asset.release_date)
@@ -1513,6 +1666,7 @@ class OrderCreateView(generics.CreateAPIView):
         existing_order = Order.objects.filter(
             user=request.user,
             asset=asset,
+            asset_addon__isnull=True,
             status__in=[Order.Status.PENDING, Order.Status.VERIFICATION_PENDING, Order.Status.APPROVED, Order.Status.PAID],
         ).order_by("-id").first()
 
@@ -1538,6 +1692,10 @@ class OrderCreateView(generics.CreateAPIView):
                 )
 
         target_amount = ea_status["effective_price"]
+        if is_bundle:
+            active_addons = asset.addons.filter(is_active=True)
+            if active_addons.exists():
+                target_amount += sum([a.bundle_price_addition for a in active_addons], Decimal("0.00"))
 
         # A pending order is an unpaid checkout quote, not a price lock.  Do
         # not reuse it after an administrator changes the product price or discount.
@@ -1548,6 +1706,7 @@ class OrderCreateView(generics.CreateAPIView):
             and (
                 force_fresh
                 or existing_order.amount != target_amount
+                or existing_order.is_bundle != is_bundle
                 or (existing_order.created_at and existing_order.created_at < timezone.now() - timedelta(minutes=2))
             )
         ):
@@ -1587,8 +1746,7 @@ class OrderCreateView(generics.CreateAPIView):
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
         order = serializer.instance
-        ea_status = get_cached_early_access_status(asset, request)
-        is_free_purchase = asset.is_free or ea_status["effective_price"] <= Decimal("0.00") or user_has_special_access(request.user, asset)
+        is_free_purchase = order.amount <= Decimal("0.00")
         if not is_free_purchase:
             gateway_ready, gateway_error = ensure_payment_gateway(order, request)
             if not gateway_ready:
@@ -1605,12 +1763,18 @@ class OrderCreateView(generics.CreateAPIView):
             order.save(update_fields=["provider_order_id"])
             return
 
+        is_bundle = bool(self.request.data.get("is_bundle"))
         ea_status = get_cached_early_access_status(asset, self.request)
         final_amount = ea_status["effective_price"]
+        if is_bundle:
+            active_addons = asset.addons.filter(is_active=True)
+            if active_addons.exists():
+                final_amount += sum([a.bundle_price_addition for a in active_addons], Decimal("0.00"))
+
         has_special = user_has_special_access(self.request.user, asset)
         if has_special:
             final_amount = Decimal("0.00")
-        is_free_purchase = asset.is_free or final_amount <= Decimal("0.00") or has_special
+        is_free_purchase = (asset.is_free and not is_bundle) or final_amount <= Decimal("0.00") or has_special
         status_value = Order.Status.APPROVED if is_free_purchase else Order.Status.PENDING
 
         phone_input = self.request.data.get("customer_phone") or self.request.data.get("phone") or ""
@@ -1630,6 +1794,8 @@ class OrderCreateView(generics.CreateAPIView):
             customer_phone=cleaned_phone,
             status=status_value,
             download_enabled=is_free_purchase,
+            is_bundle=is_bundle,
+            order_type=Order.OrderType.BUNDLE if is_bundle else Order.OrderType.BASE,
         )
         order.provider_order_id = f"GJS-{order.id:06d}"
         order.save(update_fields=["provider_order_id"])
@@ -1833,7 +1999,7 @@ class PurchaseListView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return Order.objects.filter(user=self.request.user).select_related("asset", "asset__category", "board_template")
+        return Order.objects.filter(user=self.request.user).select_related("asset", "asset__category", "board_template", "asset_addon")
 
 
 @api_view(["GET"])
@@ -2926,6 +3092,89 @@ def asset_download_by_id(request, pk):
         logger.exception("Asset download failed")
         return Response(
             {"detail": f"Download setup failed on the server: {type(exc).__name__}. Check the asset download source and Google Drive/Cloud storage settings."},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+
+
+def record_addon_download(request, addon):
+    try:
+        DownloadLog.objects.create(
+            user=request.user,
+            asset=addon.asset,
+            ip_address=request.META.get("REMOTE_ADDR"),
+            user_agent=request.META.get("HTTP_USER_AGENT", "")[:255],
+        )
+        addon.asset.download_count += 1
+        addon.asset.save(update_fields=["download_count"])
+    except Exception:
+        logger.exception("Addon download logging failed")
+
+
+@api_view(["GET", "POST"])
+@permission_classes([permissions.IsAuthenticated])
+@throttle_classes([DownloadRateThrottle])
+def addon_download_by_id(request, pk):
+    addon = get_object_or_404(AssetFeatureAddon, pk=pk, is_active=True)
+    allowed = (
+        request.user.is_staff
+        or getattr(request.user, "is_superuser", False)
+        or user_has_special_access(request.user, addon.asset)
+        or UserAssetAddonUnlock.objects.filter(user=request.user, addon=addon).exists()
+    )
+    if not allowed:
+        return Response(
+            {"detail": f"Upgrade required before downloading '{addon.title}'."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    try:
+        if addon.private_download_key:
+            signed_url = create_private_download_url(addon.private_download_key)
+            if not signed_url:
+                return Response({"detail": "Private download storage is not configured. Please contact the admin."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            record_addon_download(request, addon)
+            return Response({"download_url": signed_url})
+        if addon.google_drive_file_id:
+            if not request.user.email:
+                return Response({"detail": "Your account needs an email address before Drive access can be granted."}, status=status.HTTP_400_BAD_REQUEST)
+            drive_url, drive_error = grant_google_drive_access(addon.google_drive_file_id, request.user.email)
+            if not drive_url:
+                return Response({"detail": drive_error}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            record_addon_download(request, addon)
+            return Response({"download_url": drive_url})
+        if addon.external_download_url:
+            record_addon_download(request, addon)
+            return Response({"download_url": addon.external_download_url})
+        if not addon.download_file:
+            return Response({"detail": "Download file is not available yet. Add a download source in admin."}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            file_exists = addon.download_file.storage.exists(addon.download_file.name)
+        except Exception:
+            logger.exception("Addon download file storage check failed")
+            return Response(
+                {"detail": "Uploaded file storage is not accessible. Add a download source in admin."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        if not file_exists:
+            return Response(
+                {"detail": "Download file is missing from storage. Please contact the admin."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        record_addon_download(request, addon)
+        filename = PurePath(addon.download_file.name).name
+        try:
+            return FileResponse(addon.download_file.open("rb"), as_attachment=True, filename=filename)
+        except Exception:
+            logger.exception("Addon download file open failed")
+            return Response(
+                {"detail": "Uploaded file could not be opened. Add a download source in admin."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+    except Exception as exc:
+        logger.exception("Addon download failed")
+        return Response(
+            {"detail": f"Download setup failed on the server: {type(exc).__name__}."},
             status=status.HTTP_503_SERVICE_UNAVAILABLE,
         )
 

@@ -176,6 +176,65 @@ class AssetFile(models.Model):
         return f"{self.asset.title} v{self.version}"
 
 
+class AssetFeatureAddon(models.Model):
+    asset = models.ForeignKey(
+        Asset,
+        related_name="addons",
+        on_delete=models.CASCADE,
+        help_text="Parent asset this feature addon belongs to",
+    )
+    title = models.CharField(max_length=180, help_text="e.g. V2.0 Realistic Sound & 3D Interior Pack")
+    slug = models.SlugField(max_length=200, blank=True)
+    version = models.CharField(max_length=40, default="2.0.0")
+    badge = models.CharField(max_length=60, default="NEW FEATURE", blank=True)
+    short_description = models.CharField(max_length=260, blank=True)
+    description = models.TextField(blank=True)
+
+    # Pricing
+    upgrade_price = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("10.00"),
+        help_text="Price for customers who already own the base asset (e.g. ₹10.00)",
+    )
+    bundle_price_addition = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("10.00"),
+        help_text="Amount added to base asset price for new customers buying the complete bundle",
+    )
+
+    # Files & Downloads
+    download_file = models.FileField(
+        upload_to="assets/addons/",
+        blank=True,
+        null=True,
+        storage=RawAssetStorage(),
+        validators=[FileExtensionValidator(["zip", "rar", "7z"])],
+    )
+    external_download_url = models.URLField(blank=True)
+    google_drive_file_id = models.CharField(max_length=200, blank=True)
+    private_download_key = models.CharField(max_length=500, blank=True)
+    file_size = models.CharField(max_length=40, blank=True)
+
+    is_active = models.BooleanField(default=True)
+    download_count = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["created_at"]
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            self.slug = slugify(f"{self.asset.slug}-{self.title}")
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.asset.title} - {self.title} (v{self.version})"
+
+
+
 class BoardTemplate(models.Model):
     id = models.CharField(max_length=100, primary_key=True, help_text="Unique slug ID e.g. amrit-bharat-led-1024")
     name = models.CharField(max_length=180)
@@ -275,9 +334,24 @@ class Order(models.Model):
         REFUNDED = "REFUNDED", "Refunded"
         BLOCKED = "BLOCKED", "Blocked / Revoked"
 
+    class OrderType(models.TextChoices):
+        BASE = "BASE", "Base Asset"
+        UPGRADE = "UPGRADE", "Feature Add-on Upgrade"
+        BUNDLE = "BUNDLE", "Complete Bundle"
+
+    order_type = models.CharField(max_length=20, choices=OrderType.choices, default=OrderType.BASE)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="orders", on_delete=models.CASCADE)
     asset = models.ForeignKey(Asset, related_name="orders", on_delete=models.PROTECT, null=True, blank=True)
+    asset_addon = models.ForeignKey(
+        AssetFeatureAddon,
+        related_name="orders",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        help_text="Associated feature add-on or upgrade pack",
+    )
     board_template = models.ForeignKey(BoardTemplate, related_name="orders", on_delete=models.SET_NULL, null=True, blank=True)
+    is_bundle = models.BooleanField(default=False, help_text="True if this order bundles base asset with its feature add-ons")
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     currency = models.CharField(max_length=8, default="INR")
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
@@ -303,8 +377,13 @@ class Order(models.Model):
         constraints = [
             models.UniqueConstraint(
                 fields=["user", "asset"],
-                condition=models.Q(status="PAID", asset__isnull=False),
+                condition=models.Q(status="PAID", asset__isnull=False, asset_addon__isnull=True),
                 name="one_paid_order_per_user_asset",
+            ),
+            models.UniqueConstraint(
+                fields=["user", "asset_addon"],
+                condition=models.Q(status="PAID", asset_addon__isnull=False),
+                name="one_paid_order_per_user_asset_addon",
             ),
             models.UniqueConstraint(
                 fields=["user", "board_template"],
@@ -314,8 +393,32 @@ class Order(models.Model):
         ]
 
     def __str__(self):
-        item_title = self.asset.title if self.asset else (self.board_template.name if self.board_template else f"Order #{self.id}")
+        item_title = (
+            f"{self.asset.title} [{self.asset_addon.title}]"
+            if self.asset and self.asset_addon
+            else (
+                self.asset_addon.title
+                if self.asset_addon
+                else (self.asset.title if self.asset else (self.board_template.name if self.board_template else f"Order #{self.id}"))
+            )
+        )
         return f"Order #{self.id} - {item_title} ({self.status})"
+
+
+class UserAssetAddonUnlock(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="addon_unlocks", on_delete=models.CASCADE)
+    addon = models.ForeignKey(AssetFeatureAddon, related_name="user_unlocks", on_delete=models.CASCADE)
+    order = models.ForeignKey(Order, related_name="addon_unlocks", on_delete=models.SET_NULL, null=True, blank=True)
+    unlocked_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-unlocked_at"]
+        constraints = [
+            models.UniqueConstraint(fields=["user", "addon"], name="unique_user_addon_unlock")
+        ]
+
+    def __str__(self):
+        return f"{self.user.username} - {self.addon.title}"
 
 
 class Payment(models.Model):

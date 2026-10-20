@@ -1,8 +1,13 @@
-import { API_URL, clearAuth, type Asset } from "@/lib/api";
+import { API_URL, clearAuth, type Asset, type AssetFeatureAddon } from "@/lib/api";
 
 export type StoreOrder = {
   id: number;
+  order_type?: "BASE" | "UPGRADE" | "BUNDLE";
+  is_bundle?: boolean;
   asset?: Asset | null;
+  asset_addon?: AssetFeatureAddon | null;
+  asset_addon_id?: number | null;
+  unlocked_addons?: AssetFeatureAddon[];
   board_template?: {
     id: string;
     name: string;
@@ -153,9 +158,40 @@ export async function userPatch<T>(path: string, body: Record<string, unknown>):
   return res.json();
 }
 
-export async function createOrder(assetId: number, customerPhone?: string, forceNew: boolean = false): Promise<StoreOrder> {
+export async function createOrder(
+  assetId: number,
+  customerPhone?: string,
+  forceNew: boolean = false,
+  isBundle: boolean = false
+): Promise<StoreOrder> {
   await validAccessToken();
   const payload: Record<string, any> = { asset_id: assetId };
+  if (customerPhone) payload.customer_phone = customerPhone;
+  if (forceNew) payload.force_new = true;
+  if (isBundle) payload.is_bundle = true;
+  let res = await fetch(`${API_URL}/orders/create/`, {
+    method: "POST",
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  if (res.status === 401 && await refreshAccessToken()) {
+    res = await fetch(`${API_URL}/orders/create/`, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+  }
+  if (!res.ok) throw new Error(await parseError(res, "Could not create order."));
+  return res.json();
+}
+
+export async function createAddonOrder(
+  addonId: number,
+  customerPhone?: string,
+  forceNew: boolean = false
+): Promise<StoreOrder> {
+  await validAccessToken();
+  const payload: Record<string, any> = { asset_addon_id: addonId };
   if (customerPhone) payload.customer_phone = customerPhone;
   if (forceNew) payload.force_new = true;
   let res = await fetch(`${API_URL}/orders/create/`, {
@@ -170,7 +206,7 @@ export async function createOrder(assetId: number, customerPhone?: string, force
       body: JSON.stringify(payload)
     });
   }
-  if (!res.ok) throw new Error(await parseError(res, "Could not create order."));
+  if (!res.ok) throw new Error(await parseError(res, "Could not create upgrade order."));
   return res.json();
 }
 
@@ -238,6 +274,33 @@ export async function downloadAsset(assetId: number): Promise<DownloadResult> {
   });
   if (res.status === 401 && await refreshAccessToken()) {
     res = await fetch(`${API_URL}/assets/${assetId}/download/`, {
+      method: "POST",
+      headers: authHeaders()
+    });
+  }
+  if (!res.ok) throw new Error(await parseError(res, "Download is not available."));
+  const contentType = res.headers.get("Content-Type") || "";
+  if (!contentType.includes("application/json")) {
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    return {
+      url,
+      filename: filenameFromDisposition(res.headers.get("Content-Disposition")),
+      revoke: () => URL.revokeObjectURL(url)
+    };
+  }
+  const data = await res.json();
+  return { url: data.download_url };
+}
+
+export async function downloadAddon(addonId: number): Promise<DownloadResult> {
+  await validAccessToken();
+  let res = await fetch(`${API_URL}/addons/${addonId}/download/`, {
+    method: "POST",
+    headers: authHeaders()
+  });
+  if (res.status === 401 && await refreshAccessToken()) {
+    res = await fetch(`${API_URL}/addons/${addonId}/download/`, {
       method: "POST",
       headers: authHeaders()
     });

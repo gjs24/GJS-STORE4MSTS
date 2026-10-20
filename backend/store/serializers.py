@@ -12,6 +12,7 @@ from .models import AdminActivityLog, Asset, AssetImage, Category, DownloadLog, 
 from .models import (
     AdminActivityLog,
     Asset,
+    AssetFeatureAddon,
     AssetImage,
     BoardTemplate,
     Category,
@@ -25,6 +26,7 @@ from .models import (
     SpecialAccessClaimRequest,
     SpecialAccessInviteLink,
     UpdateLog,
+    UserAssetAddonUnlock,
     UserBoardUnlock,
     UserCustomBoard,
     UserProfile,
@@ -219,6 +221,43 @@ class AssetImageSerializer(serializers.ModelSerializer):
             return None
         request = self.context.get("request")
         return request.build_absolute_uri(url) if request and not url.startswith(("http://", "https://")) else url
+
+
+class AssetFeatureAddonSerializer(serializers.ModelSerializer):
+    is_unlocked = serializers.SerializerMethodField()
+    has_download_file = serializers.SerializerMethodField()
+
+    class Meta:
+        model = AssetFeatureAddon
+        fields = [
+            "id",
+            "asset",
+            "title",
+            "slug",
+            "version",
+            "badge",
+            "short_description",
+            "description",
+            "upgrade_price",
+            "bundle_price_addition",
+            "file_size",
+            "is_active",
+            "is_unlocked",
+            "has_download_file",
+            "created_at",
+            "updated_at",
+        ]
+
+    def get_is_unlocked(self, obj):
+        request = self.context.get("request")
+        if not request or not request.user or not request.user.is_authenticated:
+            return False
+        if request.user.is_staff or getattr(request.user, "is_superuser", False):
+            return True
+        return UserAssetAddonUnlock.objects.filter(user=request.user, addon=obj).exists()
+
+    def get_has_download_file(self, obj):
+        return bool(obj.download_file or obj.external_download_url or obj.google_drive_file_id or obj.private_download_key)
 
 
 class UpdateLogSerializer(serializers.ModelSerializer):
@@ -491,6 +530,9 @@ class AssetDetailSerializer(AssetListSerializer):
     reviews = serializers.SerializerMethodField()
     updates = UpdateLogSerializer(many=True, read_only=True)
     can_download = serializers.SerializerMethodField()
+    addons = serializers.SerializerMethodField()
+    bundle_price = serializers.SerializerMethodField()
+    user_owns_base = serializers.SerializerMethodField()
 
     class Meta(AssetListSerializer.Meta):
         fields = AssetListSerializer.Meta.fields + [
@@ -506,8 +548,37 @@ class AssetDetailSerializer(AssetListSerializer):
             "reviews",
             "updates",
             "can_download",
+            "addons",
+            "bundle_price",
+            "user_owns_base",
             "updated_at",
         ]
+
+    def get_addons(self, obj):
+        active_addons = obj.addons.filter(is_active=True).order_by("created_at")
+        return AssetFeatureAddonSerializer(active_addons, many=True, context=self.context).data
+
+    def get_bundle_price(self, obj):
+        addons_total = sum(
+            addon.bundle_price_addition for addon in obj.addons.filter(is_active=True)
+        )
+        return str(obj.price + addons_total)
+
+    def get_user_owns_base(self, obj):
+        request = self.context.get("request")
+        user = getattr(request, "user", None) if request else None
+        if not user or not user.is_authenticated:
+            return False
+        if obj.is_free:
+            return True
+        if user_has_special_access(user, obj):
+            return True
+        return Order.objects.filter(
+            user=user,
+            asset=obj,
+            status__in=[Order.Status.PAID, Order.Status.APPROVED],
+            download_enabled=True,
+        ).exists()
 
     def get_reviews(self, obj):
         approved = obj.reviews.filter(is_approved=True).select_related("user", "replied_by")
@@ -759,6 +830,11 @@ class OrderSerializer(serializers.ModelSerializer):
     asset_id = serializers.PrimaryKeyRelatedField(source="asset", queryset=Asset.objects.all(), write_only=True, required=False, allow_null=True)
     board_template = BoardTemplateSerializer(read_only=True)
     board_template_id = serializers.PrimaryKeyRelatedField(source="board_template", queryset=BoardTemplate.objects.all(), write_only=True, required=False, allow_null=True)
+    asset_addon = AssetFeatureAddonSerializer(read_only=True)
+    asset_addon_id = serializers.PrimaryKeyRelatedField(source="asset_addon", queryset=AssetFeatureAddon.objects.all(), write_only=True, required=False, allow_null=True)
+    order_type = serializers.CharField(read_only=True)
+    is_bundle = serializers.BooleanField(read_only=True)
+    unlocked_addons = serializers.SerializerMethodField()
     user = UserSerializer(read_only=True)
     order_id = serializers.CharField(source="provider_order_id", read_only=True)
     download_enabled = serializers.SerializerMethodField()
@@ -774,9 +850,14 @@ class OrderSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "order_id",
+            "order_type",
+            "is_bundle",
             "user",
             "asset",
             "asset_id",
+            "asset_addon",
+            "asset_addon_id",
+            "unlocked_addons",
             "board_template",
             "board_template_id",
             "amount",
@@ -801,9 +882,23 @@ class OrderSerializer(serializers.ModelSerializer):
     def get_download_enabled(self, obj):
         if obj.status == Order.Status.BLOCKED or not obj.download_enabled:
             return False
+        if obj.asset_addon:
+            return obj.status in [Order.Status.PAID, Order.Status.APPROVED]
         if obj.board_template:
             return obj.status in [Order.Status.PAID, Order.Status.APPROVED]
         return (obj.asset.is_free if obj.asset else False) or obj.status in [Order.Status.PAID, Order.Status.APPROVED]
+
+    def get_unlocked_addons(self, obj):
+        if not obj.asset:
+            return []
+        user = obj.user
+        if not user or not user.is_authenticated:
+            return []
+        unlocked_ids = UserAssetAddonUnlock.objects.filter(
+            user=user, addon__asset=obj.asset
+        ).values_list("addon_id", flat=True)
+        addons = obj.asset.addons.filter(id__in=unlocked_ids, is_active=True)
+        return AssetFeatureAddonSerializer(addons, many=True, context=self.context).data
 
     def get_manual_payment(self, obj):
         payment = getattr(obj, "payment", None)

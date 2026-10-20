@@ -99,6 +99,9 @@ export type Asset = {
   board_template_id?: string | null;
   bundle_board_template_free?: boolean;
   allow_separate_board_purchase?: boolean;
+  addons?: AssetFeatureAddon[];
+  bundle_price?: string;
+  user_owns_base?: boolean;
   created_at?: string;
   images?: Array<{ id: number; image?: string | null; alt_text: string; sort_order: number }>;
   updates?: Array<{ id: number; version: string; changelog: string; created_at: string }>;
@@ -112,6 +115,25 @@ export type Asset = {
     replied_at?: string;
     replied_by_name?: string;
   }>;
+};
+
+export type AssetFeatureAddon = {
+  id: number;
+  asset: number;
+  title: string;
+  slug: string;
+  version: string;
+  badge?: string;
+  short_description: string;
+  description?: string;
+  upgrade_price: string;
+  bundle_price_addition: string;
+  file_size?: string;
+  is_active: boolean;
+  is_unlocked?: boolean;
+  has_download_file?: boolean;
+  created_at?: string;
+  updated_at?: string;
 };
 
 export type CurrentUser = {
