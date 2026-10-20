@@ -2275,7 +2275,7 @@ class AdminAssetViewSet(viewsets.ModelViewSet):
         except Exception as exc:
             logger.exception("Admin asset upload failed")
             return Response(
-                {"detail": f"Asset upload failed while saving files: {type(exc).__name__}. Check Cloudinary storage settings, file size, and file type."},
+                {"detail": f"Asset upload failed while saving files: {type(exc).__name__}: {exc}. Check Cloudinary storage settings, file size, and file type."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
@@ -2302,7 +2302,7 @@ class AdminAssetViewSet(viewsets.ModelViewSet):
         except Exception as exc:
             logger.exception("Admin asset update failed")
             return Response(
-                {"detail": f"Asset update failed while saving files: {type(exc).__name__}. Check Cloudinary storage settings, file size, and file type."},
+                {"detail": f"Asset update failed while saving files: {type(exc).__name__}: {exc}. Check Cloudinary storage settings, file size, and file type."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
@@ -2325,7 +2325,7 @@ class AdminAssetViewSet(viewsets.ModelViewSet):
         except Exception as exc:
             logger.exception("Admin asset update failed")
             return Response(
-                {"detail": f"Asset update failed while saving files: {type(exc).__name__}. Check Cloudinary storage settings, file size, and file type."},
+                {"detail": f"Asset update failed while saving files: {type(exc).__name__}: {exc}. Check Cloudinary storage settings, file size, and file type."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
