@@ -33,6 +33,9 @@ def calculate_early_access_status(asset, user):
         is_early_access_active = False
 
     base_price = asset.price
+    if getattr(asset, "has_paid_update", False) and getattr(asset, "update_price", Decimal("0.00")) > Decimal("0.00"):
+        base_price = base_price + asset.update_price
+
     is_prebooking_enabled = bool(getattr(asset, "prebooking_enabled", False))
     prebooking_starts_at = getattr(asset, "prebooking_starts_at", None)
     prebooking_ends_at = getattr(asset, "prebooking_ends_at", None)
@@ -46,6 +49,10 @@ def calculate_early_access_status(asset, user):
     if is_prebooking and prebooking_price is not None and prebooking_price > Decimal("0.00"):
         base_price = prebooking_price
 
+    regular_full_price = asset.price + (asset.update_price if getattr(asset, "has_paid_update", False) and getattr(asset, "update_price", Decimal("0.00")) > Decimal("0.00") else Decimal("0.00"))
+    compare_price = asset.original_price or regular_full_price
+    default_discount = round(float((compare_price - base_price) / compare_price) * 100) if (compare_price and compare_price > base_price) else 0
+
     default_result = {
         "is_eligible": False,
         "can_access_early": False,
@@ -53,8 +60,8 @@ def calculate_early_access_status(asset, user):
         "is_early_access_active": is_early_access_active,
         "is_early_access_pending": is_early_access_pending,
         "effective_price": base_price,
-        "discount_percent": round(float((asset.price - base_price) / asset.price) * 100) if (asset.price > Decimal("0.00") and asset.price > base_price) else 0,
-        "savings_amount": f"{max(Decimal('0.00'), asset.price - base_price):.2f}",
+        "discount_percent": default_discount,
+        "savings_amount": f"{max(Decimal('0.00'), compare_price - base_price):.2f}",
         "is_prebooking": is_prebooking,
         "required_asset_ids": required_ids,
         "required_asset_titles": required_titles,
@@ -111,20 +118,20 @@ def calculate_early_access_status(asset, user):
         discount_pct = getattr(asset, "early_access_discount_percent", 0) or 0
         if early_price is not None and early_price > Decimal("0.00") and early_price < base_price:
             effective_price = early_price
-            if asset.price > Decimal("0.00") and asset.price > effective_price:
-                discount_percent = round(float((asset.price - effective_price) / asset.price) * 100)
+            if compare_price > Decimal("0.00") and compare_price > effective_price:
+                discount_percent = round(float((compare_price - effective_price) / compare_price) * 100)
             else:
                 discount_percent = 0
         elif discount_pct > 0:
             discount_percent = int(discount_pct)
             multiplier = (Decimal("100") - Decimal(discount_percent)) / Decimal("100")
             effective_price = round(base_price * multiplier, 2)
-            # Recalculate total discount percent relative to standard asset.price
-            if asset.price > Decimal("0.00") and asset.price > effective_price:
-                discount_percent = round(float((asset.price - effective_price) / asset.price) * 100)
+            # Recalculate total discount percent relative to compare_price
+            if compare_price > Decimal("0.00") and compare_price > effective_price:
+                discount_percent = round(float((compare_price - effective_price) / compare_price) * 100)
 
     effective_price = max(Decimal("0.00"), effective_price)
-    savings = max(Decimal("0.00"), asset.price - effective_price)
+    savings = max(Decimal("0.00"), compare_price - effective_price)
 
     return {
         "is_eligible": True,
