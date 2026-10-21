@@ -16,7 +16,7 @@ from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.mail import EmailMultiAlternatives
 from django.http import FileResponse, HttpResponse
-from django.db import transaction
+from django.db import models, transaction
 from django.db.models import Avg, Count, Q, Sum
 from django.db.models.deletion import ProtectedError
 from django.shortcuts import get_object_or_404
