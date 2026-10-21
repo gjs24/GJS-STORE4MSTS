@@ -320,6 +320,8 @@ class AssetListSerializer(serializers.ModelSerializer):
     user_has_prebooked = serializers.SerializerMethodField()
     prebooking_downloads_ready = serializers.SerializerMethodField()
     board_template = serializers.SerializerMethodField()
+    user_owns_base = serializers.SerializerMethodField()
+    user_requires_update = serializers.SerializerMethodField()
 
     class Meta:
         model = Asset
@@ -395,11 +397,53 @@ class AssetListSerializer(serializers.ModelSerializer):
             "update_price",
             "paid_update_version",
             "update_notes",
+            "user_owns_base",
+            "user_requires_update",
             "download_count",
             "average_rating",
             "review_count",
             "created_at",
         ]
+
+    def to_representation(self, instance):
+        ret = super().to_representation(instance)
+        # For new/unowned users, if a paid update exists, the effective purchase price is base price + update price
+        if getattr(instance, "has_paid_update", False) and getattr(instance, "update_price", Decimal("0.00")) > Decimal("0.00"):
+            total_price = instance.price + instance.update_price
+            ret["price"] = str(total_price)
+            ret["base_price"] = str(instance.price)
+            compare_price = instance.original_price or total_price
+            if compare_price > total_price:
+                ret["discount_percent"] = round(float((compare_price - total_price) / compare_price) * 100)
+                ret["savings_amount"] = f"{compare_price - total_price:.2f}"
+            else:
+                ret["discount_percent"] = 0
+                ret["savings_amount"] = "0.00"
+        return ret
+
+    def get_user_owns_base(self, obj):
+        request = self.context.get("request")
+        user = getattr(request, "user", None) if request else None
+        if not user or not user.is_authenticated:
+            return False
+        if obj.is_free:
+            return True
+        from .special_access import user_has_special_access
+        if user_has_special_access(user, obj):
+            return True
+        return Order.objects.filter(
+            user=user,
+            asset=obj,
+            status__in=[Order.Status.PAID, Order.Status.APPROVED],
+        ).exclude(status=Order.Status.BLOCKED).exists()
+
+    def get_user_requires_update(self, obj):
+        request = self.context.get("request")
+        user = getattr(request, "user", None) if request else None
+        if not user or not user.is_authenticated:
+            return False
+        has_access, requires_update = obj.check_user_update_access(user)
+        return requires_update
 
     def get_average_rating(self, obj):
         if hasattr(obj, "avg_rating") and obj.avg_rating is not None:
@@ -536,8 +580,6 @@ class AssetDetailSerializer(AssetListSerializer):
     can_download = serializers.SerializerMethodField()
     addons = serializers.SerializerMethodField()
     bundle_price = serializers.SerializerMethodField()
-    user_owns_base = serializers.SerializerMethodField()
-    user_requires_update = serializers.SerializerMethodField()
 
     class Meta(AssetListSerializer.Meta):
         fields = AssetListSerializer.Meta.fields + [
@@ -553,10 +595,8 @@ class AssetDetailSerializer(AssetListSerializer):
             "reviews",
             "updates",
             "can_download",
-            "user_requires_update",
             "addons",
             "bundle_price",
-            "user_owns_base",
             "updated_at",
         ]
 
@@ -569,30 +609,6 @@ class AssetDetailSerializer(AssetListSerializer):
             addon.bundle_price_addition for addon in obj.addons.filter(is_active=True)
         )
         return str(obj.price + addons_total)
-
-    def get_user_owns_base(self, obj):
-        request = self.context.get("request")
-        user = getattr(request, "user", None) if request else None
-        if not user or not user.is_authenticated:
-            return False
-        if obj.is_free:
-            return True
-        if user_has_special_access(user, obj):
-            return True
-        return Order.objects.filter(
-            user=user,
-            asset=obj,
-            status__in=[Order.Status.PAID, Order.Status.APPROVED],
-            download_enabled=True,
-        ).exists()
-
-    def get_user_requires_update(self, obj):
-        request = self.context.get("request")
-        user = getattr(request, "user", None) if request else None
-        if not user or not user.is_authenticated:
-            return False
-        has_access, requires_update = obj.check_user_update_access(user)
-        return requires_update
 
     def get_reviews(self, obj):
         approved = obj.reviews.filter(is_approved=True).select_related("user", "replied_by")
@@ -608,6 +624,7 @@ class AssetDetailSerializer(AssetListSerializer):
             return False
         if obj.is_free:
             return True
+        from .special_access import user_has_special_access
         if user_has_special_access(user, obj):
             return True
 
@@ -615,8 +632,7 @@ class AssetDetailSerializer(AssetListSerializer):
             user=user,
             asset=obj,
             status__in=[Order.Status.PAID, Order.Status.APPROVED],
-            download_enabled=True,
-        ).exists()
+        ).exclude(status=Order.Status.BLOCKED).exists()
 
         if not has_paid_order:
             return False

@@ -115,7 +115,17 @@ export function AccountList({ type }: AccountListProps) {
       link.remove();
       if (download.revoke) setTimeout(download.revoke, 1000);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Could not start download.");
+      const errMsg = error instanceof Error ? error.message : "Could not start download.";
+      if (errMsg.toLowerCase().includes("update")) {
+        setRows((prev) =>
+          prev.map((r) =>
+            r.asset?.id === asset.id
+              ? { ...r, asset: { ...r.asset, user_requires_update: true } }
+              : r
+          )
+        );
+      }
+      setMessage(errMsg);
     } finally {
       setBusyId(null);
     }

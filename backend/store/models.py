@@ -187,18 +187,16 @@ class Asset(models.Model):
         """
         if not user or not user.is_authenticated:
             return False, False
-        if user.is_staff or getattr(user, "is_superuser", False):
-            return True, False
+
         from .special_access import user_has_special_access
         if user_has_special_access(user, self):
             return True, False
 
-        # Check if user owns base
+        # Check if user owns base product (paid/approved non-blocked order)
         has_paid_base = self.orders.filter(
             user=user,
             status__in=["PAID", "APPROVED"],
-            download_enabled=True,
-        ).exists()
+        ).exclude(status="BLOCKED").exists()
 
         if not has_paid_base:
             return False, False
@@ -207,20 +205,26 @@ class Asset(models.Model):
         if not self.has_paid_update or self.update_price <= Decimal("0.00"):
             return True, False
 
-        effective_version = self.paid_update_version or self.version
+        effective_version = (self.paid_update_version or self.version or "").strip()
 
         # Has the user unlocked this update version?
-        if self.user_update_unlocks.filter(user=user, version=effective_version).exists():
+        unlock_qs = self.user_update_unlocks.filter(user=user)
+        if unlock_qs.filter(
+            models.Q(version=effective_version)
+            | models.Q(version=self.version)
+            | models.Q(version__iexact=effective_version.lstrip("v"))
+            | models.Q(version__iexact=f"v{effective_version.lstrip('v')}")
+            | models.Q(version="")
+        ).exists():
             return True, False
 
         # Did the user buy the asset AFTER the update was released?
         if self.update_released_at and self.orders.filter(
             user=user,
-            order_type__in=["BASE", "BUNDLE"],
             status__in=["PAID", "APPROVED"],
             created_at__gte=self.update_released_at,
-        ).exists():
-            # Auto-unlock for them
+        ).exclude(order_type="UPGRADE").exclude(status="BLOCKED").exists():
+            # Auto-unlock for new buyers who purchased after update release
             self.user_update_unlocks.get_or_create(user=user, version=effective_version)
             return True, False
 

@@ -19,6 +19,7 @@ export function AssetActions({ asset }: { asset: Asset }) {
   const [currentAsset, setCurrentAsset] = useState<Asset>(asset);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const [forceRequiresUpdate, setForceRequiresUpdate] = useState(false);
   const [order, setOrder] = useState<StoreOrder | null>(null);
   const [utr, setUtr] = useState("");
   const [payerName, setPayerName] = useState("");
@@ -31,15 +32,19 @@ export function AssetActions({ asset }: { asset: Asset }) {
   }, []);
 
   useEffect(() => {
-    setCurrentAsset(asset);
     if (isLoggedIn()) {
       userGet<Asset>(`/assets/${asset.slug}/`)
         .then((fresh) => {
           setCurrentAsset(fresh);
+          if (fresh.user_requires_update) {
+            setForceRequiresUpdate(true);
+          }
         })
-        .catch(() => {});
+        .catch((err) => {
+          console.error("Failed to load user asset details:", err);
+        });
     }
-  }, [asset.slug, asset]);
+  }, [asset.slug]);
 
   const activeAsset = currentAsset;
   const releaseMs = activeAsset.release_date ? new Date(activeAsset.release_date).getTime() : NaN;
@@ -84,6 +89,13 @@ export function AssetActions({ asset }: { asset: Asset }) {
   const activeAddons = activeAsset.addons || [];
   const hasAddons = activeAddons.length > 0;
   const userOwnsBase = Boolean(activeAsset.can_download || activeAsset.user_owns_base || activeAsset.is_free);
+  const hasUpdateErrorMessage = Boolean(message && message.toLowerCase().includes("paid version update"));
+  const requiresUpdate = Boolean(
+    forceRequiresUpdate ||
+    hasUpdateErrorMessage ||
+    activeAsset.user_requires_update ||
+    (userOwnsBase && !activeAsset.can_download && activeAsset.has_paid_update && Number(activeAsset.update_price || 0) > 0)
+  );
 
   async function requireLogin() {
     if (!isLoggedIn()) {
@@ -206,15 +218,31 @@ export function AssetActions({ asset }: { asset: Asset }) {
   }
 
   async function startDownload() {
-    const download = await downloadAsset(activeAsset.id);
-    setMessage("Download ready. Starting package download...");
-    const link = document.createElement("a");
-    link.href = download.url;
-    link.download = download.filename || `${activeAsset.slug}.zip`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    if (download.revoke) setTimeout(download.revoke, 1000);
+    try {
+      const download = await downloadAsset(activeAsset.id);
+      setMessage("Download ready. Starting package download...");
+      const link = document.createElement("a");
+      link.href = download.url;
+      link.download = download.filename || `${activeAsset.slug}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      if (download.revoke) setTimeout(download.revoke, 1000);
+    } catch (err: any) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.toLowerCase().includes("update")) {
+        setForceRequiresUpdate(true);
+        if (isLoggedIn()) {
+          userGet<Asset>(`/assets/${activeAsset.slug}/`)
+            .then((fresh) => {
+              setCurrentAsset(fresh);
+              setForceRequiresUpdate(true);
+            })
+            .catch(() => {});
+        }
+      }
+      throw err;
+    }
   }
 
   async function handlePayUpdateAction() {
@@ -265,7 +293,7 @@ export function AssetActions({ asset }: { asset: Asset }) {
   }
 
   async function handlePrimaryAction() {
-    if (activeAsset.user_requires_update) {
+    if (requiresUpdate) {
       return handlePayUpdateAction();
     }
     if (activeAsset.user_early_access_pending) {
@@ -383,7 +411,13 @@ export function AssetActions({ asset }: { asset: Asset }) {
       }
       await startDownload();
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Could not complete this action.");
+      const errMsg = error instanceof Error ? error.message : "Could not complete this action.";
+      if (errMsg.toLowerCase().includes("update")) {
+        if (isLoggedIn()) {
+          userGet<Asset>(`/assets/${activeAsset.slug}/`).then(setCurrentAsset).catch(() => {});
+        }
+      }
+      setMessage(errMsg);
     } finally {
       setBusy(false);
     }
@@ -475,7 +509,7 @@ export function AssetActions({ asset }: { asset: Asset }) {
   }
 
   function getButtonLabel() {
-    if (activeAsset.user_requires_update) {
+    if (requiresUpdate) {
       return `Pay ₹${activeAsset.update_price || "0"} to Unlock Update (v${activeAsset.paid_update_version || activeAsset.version})`;
     }
     if (activeAsset.user_early_access_pending) {
@@ -515,6 +549,9 @@ export function AssetActions({ asset }: { asset: Asset }) {
     }
     if (activeAsset.user_has_early_discount && activeAsset.user_discount_percent) {
       return `Buy for ₹${effectivePrice} (${activeAsset.user_discount_percent}% Loyalty Discount)`;
+    }
+    if (activeAsset.has_paid_update && Number(activeAsset.update_price || 0) > 0) {
+      return `Buy for ₹${effectivePrice} (Includes v${activeAsset.paid_update_version || activeAsset.version} Update)`;
     }
     return `Buy for ${priceLabel(activeAsset)}`;
   }
@@ -726,7 +763,7 @@ export function AssetActions({ asset }: { asset: Asset }) {
       ) : null}
 
       {/* Paid Version Update Banner for Existing Owners */}
-      {activeAsset.user_requires_update && (
+      {requiresUpdate && (
         <div className="rounded-xl border border-amber-500/40 bg-gradient-to-r from-amber-950/40 via-amber-900/20 to-black/60 p-4 space-y-3 shadow-lg shadow-amber-950/20">
           <div className="flex items-start gap-3">
             <div className="rounded-lg bg-amber-500/20 p-2 text-amber-400 border border-amber-500/30 shrink-0 mt-0.5">
@@ -760,7 +797,7 @@ export function AssetActions({ asset }: { asset: Asset }) {
           onClick={handlePrimaryAction}
           disabled={busy || isPrebookingSoldOut}
           className={`rounded px-5 py-3 font-semibold text-white transition disabled:opacity-60 ${
-            activeAsset.user_requires_update
+            requiresUpdate
               ? "bg-gradient-to-r from-amber-600 via-orange-600 to-amber-500 hover:from-amber-500 hover:to-orange-500 shadow-md shadow-amber-900/30 ring-1 ring-amber-400/40 font-bold"
               : hasPrebooked
               ? downloadsReady
@@ -773,7 +810,7 @@ export function AssetActions({ asset }: { asset: Asset }) {
               : "bg-rail-red hover:bg-rail-red/90"
           }`}
         >
-          {activeAsset.user_requires_update ? (
+          {requiresUpdate ? (
             <Sparkles className="mr-2 inline text-amber-200" size={18} />
           ) : hasPrebooked ? (
             downloadsReady ? (

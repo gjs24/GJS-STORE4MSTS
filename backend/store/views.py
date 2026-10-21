@@ -579,7 +579,7 @@ def sync_order_download_access(order):
     elif order.board_template:
         is_free = not order.board_template.is_paid
 
-    should_enable = (is_free or order.status in DOWNLOAD_READY_STATUSES) and order.download_enabled
+    should_enable = (is_free or order.status in DOWNLOAD_READY_STATUSES)
     should_disable = (
         not should_enable
         or order.status in [Order.Status.REJECTED, Order.Status.FAILED, Order.Status.REFUNDED, Order.Status.BLOCKED]
