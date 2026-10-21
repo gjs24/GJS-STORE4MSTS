@@ -33,8 +33,9 @@ def calculate_early_access_status(asset, user):
         is_early_access_active = False
 
     base_price = asset.price
-    if getattr(asset, "has_paid_update", False) and getattr(asset, "update_price", Decimal("0.00")) > Decimal("0.00"):
-        base_price = base_price + asset.update_price
+    update_price = getattr(asset, "update_price", None) or Decimal("0.00")
+    if getattr(asset, "has_paid_update", False) and update_price > Decimal("0.00"):
+        base_price = base_price + update_price
 
     is_prebooking_enabled = bool(getattr(asset, "prebooking_enabled", False))
     prebooking_starts_at = getattr(asset, "prebooking_starts_at", None)
@@ -49,7 +50,7 @@ def calculate_early_access_status(asset, user):
     if is_prebooking and prebooking_price is not None and prebooking_price > Decimal("0.00"):
         base_price = prebooking_price
 
-    regular_full_price = asset.price + (asset.update_price if getattr(asset, "has_paid_update", False) and getattr(asset, "update_price", Decimal("0.00")) > Decimal("0.00") else Decimal("0.00"))
+    regular_full_price = asset.price + (update_price if getattr(asset, "has_paid_update", False) and update_price > Decimal("0.00") else Decimal("0.00"))
     compare_price = asset.original_price or regular_full_price
     default_discount = round(float((compare_price - base_price) / compare_price) * 100) if (compare_price and compare_price > base_price) else 0
 

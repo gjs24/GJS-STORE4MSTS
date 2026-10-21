@@ -275,13 +275,20 @@ def grant_addon_unlock_if_applicable(order):
                 defaults={"order": order},
             )
     if order.asset and order.asset.has_paid_update:
-        effective_version = order.asset.paid_update_version or order.asset.version
-        UserAssetUpdateUnlock.objects.get_or_create(
-            user=order.user,
-            asset=order.asset,
-            version=effective_version,
-            defaults={"order": order},
+        is_upgrade_order = (order.order_type == Order.OrderType.UPGRADE)
+        is_post_release_order = bool(
+            order.asset.update_released_at
+            and order.created_at
+            and order.created_at >= order.asset.update_released_at
         )
+        if is_upgrade_order or is_post_release_order:
+            effective_version = (order.asset.paid_update_version or order.asset.version or "").strip()
+            UserAssetUpdateUnlock.objects.get_or_create(
+                user=order.user,
+                asset=order.asset,
+                version=effective_version,
+                defaults={"order": order},
+            )
 
 
 def grant_board_unlock_if_applicable(order):
@@ -1668,21 +1675,29 @@ class OrderCreateView(generics.CreateAPIView):
         is_update = bool(request.data.get("is_update"))
         if is_update:
             asset = get_object_or_404(Asset, id=request.data.get("asset_id"), is_published=True)
-            if not asset.has_paid_update or asset.update_price <= Decimal("0.00"):
+            update_price = asset.update_price or Decimal("0.00")
+            if not asset.has_paid_update or update_price <= Decimal("0.00"):
                 return Response(
                     {"detail": "This product does not have an active paid update."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            effective_version = asset.paid_update_version or asset.version
-            already_unlocked = asset.user_update_unlocks.filter(user=request.user, version=effective_version).exists()
+            effective_version = (asset.paid_update_version or asset.version or "").strip()
+            unlock_qs = asset.user_update_unlocks.filter(user=request.user)
+            already_unlocked = unlock_qs.filter(
+                models.Q(version=effective_version)
+                | models.Q(version=asset.version)
+                | models.Q(version__iexact=effective_version.lstrip("v"))
+                | models.Q(version__iexact=f"v{effective_version.lstrip('v')}")
+                | models.Q(version="")
+            ).exists()
             if already_unlocked:
                 existing_order = Order.objects.filter(
                     user=request.user,
                     asset=asset,
                     order_type=Order.OrderType.UPGRADE,
                     status__in=[Order.Status.APPROVED, Order.Status.PAID],
-                ).order_by("-id").first()
+                ).exclude(status=Order.Status.BLOCKED).order_by("-id").first()
                 if existing_order:
                     return Response(OrderSerializer(existing_order, context={"request": request}).data, status=status.HTTP_200_OK)
                 return Response({"detail": f"You already have access to update {effective_version}."}, status=status.HTTP_200_OK)
@@ -1694,7 +1709,7 @@ class OrderCreateView(generics.CreateAPIView):
                     user=request.user,
                     asset=asset,
                     status__in=[Order.Status.APPROVED, Order.Status.PAID],
-                ).exists()
+                ).exclude(status=Order.Status.BLOCKED).exists()
             )
             if not owns_base:
                 return Response(
@@ -1702,7 +1717,7 @@ class OrderCreateView(generics.CreateAPIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            target_amount = asset.update_price
+            target_amount = update_price
             existing_order = Order.objects.filter(
                 user=request.user,
                 asset=asset,
@@ -3046,19 +3061,22 @@ def create_download_response(request, asset):
             status=status.HTTP_403_FORBIDDEN,
         )
 
+    has_paid_order = Order.objects.filter(
+        user=request.user,
+        asset=asset,
+        status__in=DOWNLOAD_READY_STATUSES,
+    ).exclude(status=Order.Status.BLOCKED).exists()
+
     allowed = (
         asset.is_free
         or user_has_special_access(request.user, asset)
-        or Order.objects.filter(
-            user=request.user,
-            asset=asset,
-            status__in=DOWNLOAD_READY_STATUSES,
-            download_enabled=True,
-        ).exists()
+        or has_paid_order
     )
     if not allowed:
         return Response({"detail": "Purchase required before downloading this asset."}, status=status.HTTP_403_FORBIDDEN)
-    if asset.has_paid_update and asset.update_price > Decimal("0.00"):
+
+    update_price = getattr(asset, "update_price", None) or Decimal("0.00")
+    if asset.has_paid_update and update_price > Decimal("0.00"):
         has_access, requires_update = asset.check_user_update_access(request.user)
         if requires_update:
             version_str = asset.paid_update_version or asset.version
@@ -3066,7 +3084,7 @@ def create_download_response(request, asset):
                 {
                     "detail": f"A paid version update ({version_str}) is required to download this asset. Please unlock the update to continue.",
                     "requires_update": True,
-                    "update_price": str(asset.update_price),
+                    "update_price": str(update_price),
                     "update_version": version_str,
                 },
                 status=status.HTTP_403_FORBIDDEN,

@@ -36,8 +36,12 @@ export function AssetActions({ asset }: { asset: Asset }) {
       userGet<Asset>(`/assets/${asset.slug}/`)
         .then((fresh) => {
           setCurrentAsset(fresh);
-          if (fresh.user_requires_update) {
+          if (fresh.can_download) {
+            setForceRequiresUpdate(false);
+          } else if (fresh.user_requires_update) {
             setForceRequiresUpdate(true);
+          } else {
+            setForceRequiresUpdate(false);
           }
         })
         .catch((err) => {
@@ -278,6 +282,7 @@ export function AssetActions({ asset }: { asset: Asset }) {
         return;
       } else if (nextOrder.download_enabled || nextOrder.status === "APPROVED" || nextOrder.status === "PAID") {
         setMessage(`🎉 Update v${versionLabel} unlocked successfully!`);
+        setForceRequiresUpdate(false);
         if (isLoggedIn()) {
           const fresh = await userGet<Asset>(`/assets/${activeAsset.slug}/`);
           setCurrentAsset(fresh);

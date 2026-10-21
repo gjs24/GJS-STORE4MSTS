@@ -1,3 +1,4 @@
+from decimal import Decimal
 import re
 from urllib.parse import quote
 from django.contrib.auth.models import User
@@ -408,8 +409,9 @@ class AssetListSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         ret = super().to_representation(instance)
         # For new/unowned users, if a paid update exists, the effective purchase price is base price + update price
-        if getattr(instance, "has_paid_update", False) and getattr(instance, "update_price", Decimal("0.00")) > Decimal("0.00"):
-            total_price = instance.price + instance.update_price
+        update_price = getattr(instance, "update_price", None) or Decimal("0.00")
+        if getattr(instance, "has_paid_update", False) and update_price > Decimal("0.00"):
+            total_price = instance.price + update_price
             ret["price"] = str(total_price)
             ret["base_price"] = str(instance.price)
             compare_price = instance.original_price or total_price

@@ -202,7 +202,8 @@ class Asset(models.Model):
             return False, False
 
         # User owns the product. Does the product require a paid update?
-        if not self.has_paid_update or self.update_price <= Decimal("0.00"):
+        update_price = self.update_price or Decimal("0.00")
+        if not self.has_paid_update or update_price <= Decimal("0.00"):
             return True, False
 
         effective_version = (self.paid_update_version or self.version or "").strip()
