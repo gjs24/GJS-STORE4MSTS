@@ -187,7 +187,7 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ sl
                   {asset.prebooking_download_unlock_at ? (
                     <div className="rounded border border-cyan-500/20 bg-black/40 p-3">
                       <p className="text-xs text-slate-400">Pre-Bookers Early Download Unlock</p>
-                      <p className="text-sm font-bold text-white mt-0.5">
+                      <p className="text-sm font-bold text-white mt-0.5" suppressHydrationWarning>
                         ⏰{" "}
                         {new Date(asset.prebooking_download_unlock_at).toLocaleString("en-IN", {
                           dateStyle: "medium",
@@ -201,7 +201,7 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ sl
                   ) : asset.release_date ? (
                     <div className="rounded border border-cyan-500/20 bg-black/40 p-3">
                       <p className="text-xs text-slate-400">General Public Release</p>
-                      <p className="text-sm font-bold text-white mt-0.5">
+                      <p className="text-sm font-bold text-white mt-0.5" suppressHydrationWarning>
                         🚀{" "}
                         {new Date(asset.release_date).toLocaleString("en-IN", {
                           dateStyle: "medium",
@@ -243,7 +243,7 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ sl
                   {asset.release_date ? (
                     <p className="inline-flex items-center gap-1.5 rounded bg-black/40 border border-rail-amber/30 px-3 py-2 text-sm font-medium text-white">
                       <span>🚀 Official Release:</span>
-                      <strong className="text-rail-amber">
+                      <strong className="text-rail-amber" suppressHydrationWarning>
                         {new Date(asset.release_date).toLocaleString("en-IN", {
                           dateStyle: "medium",
                           timeStyle: "short",

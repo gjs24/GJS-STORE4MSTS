@@ -1444,6 +1444,16 @@ class OrderCreateView(generics.CreateAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def create(self, request, *args, **kwargs):
+        try:
+            return self._create_impl(request, *args, **kwargs)
+        except Exception as exc:
+            logger.exception("Order creation failed: %s", exc)
+            return Response(
+                {"detail": f"Order could not be created: {str(exc)}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+    def _create_impl(self, request, *args, **kwargs):
         board_template_id = request.data.get("board_template_id")
         if board_template_id:
             if request.user.is_staff:
@@ -1683,13 +1693,12 @@ class OrderCreateView(generics.CreateAPIView):
                 )
 
             effective_version = (asset.paid_update_version or asset.version or "").strip()
+            clean_v = effective_version.lstrip("vV")
             unlock_qs = asset.user_update_unlocks.filter(user=request.user)
-            already_unlocked = unlock_qs.filter(
+            already_unlocked = bool(effective_version) and unlock_qs.filter(
                 models.Q(version=effective_version)
-                | models.Q(version=asset.version)
-                | models.Q(version__iexact=effective_version.lstrip("v"))
-                | models.Q(version__iexact=f"v{effective_version.lstrip('v')}")
-                | models.Q(version="")
+                | models.Q(version=f"v{clean_v}")
+                | models.Q(version=clean_v)
             ).exists()
             if already_unlocked:
                 existing_order = Order.objects.filter(
@@ -1792,6 +1801,10 @@ class OrderCreateView(generics.CreateAPIView):
             )
             order.provider_order_id = f"GJS-U{order.id:05d}"
             order.save(update_fields=["provider_order_id"])
+            Payment.objects.get_or_create(
+                order=order,
+                defaults={"provider": Payment.Provider.MANUAL, "status": "approved" if is_free_update else "pending"},
+            )
             if is_free_update:
                 grant_addon_unlock_if_applicable(order)
             else:

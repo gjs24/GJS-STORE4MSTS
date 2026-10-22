@@ -213,7 +213,7 @@ function SpecialAccessContent() {
                         : "🛡️ VIP Access Request Link"}
                     </span>
                     {linkData.access_expires_at ? (
-                      <span className="inline-flex items-center gap-1 text-xs text-slate-400">
+                      <span className="inline-flex items-center gap-1 text-xs text-slate-400" suppressHydrationWarning>
                         <Clock size={13} className="text-amber-400" />
                         Access valid until{" "}
                         {new Date(linkData.access_expires_at).toLocaleDateString("en-IN", {

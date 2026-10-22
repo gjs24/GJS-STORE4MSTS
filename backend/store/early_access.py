@@ -49,6 +49,8 @@ def calculate_early_access_status(asset, user):
     prebooking_price = getattr(asset, "prebooking_price", None)
     if is_prebooking and prebooking_price is not None and prebooking_price > Decimal("0.00"):
         base_price = prebooking_price
+        if getattr(asset, "has_paid_update", False) and update_price > Decimal("0.00"):
+            base_price = base_price + update_price
 
     regular_full_price = asset.price + (update_price if getattr(asset, "has_paid_update", False) and update_price > Decimal("0.00") else Decimal("0.00"))
     compare_price = asset.original_price or regular_full_price

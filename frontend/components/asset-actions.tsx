@@ -659,7 +659,7 @@ export function AssetActions({ asset }: { asset: Asset }) {
             {activeAsset.prebooking_download_unlock_at ? (
               <p className="text-cyan-300 text-xs">
                 ⏰ Early Download Schedule: Pre-booked customers unlock downloads on{" "}
-                <strong className="text-white">
+                <strong className="text-white" suppressHydrationWarning>
                   {new Date(activeAsset.prebooking_download_unlock_at).toLocaleString("en-IN", {
                     dateStyle: "medium",
                     timeStyle: "short",
@@ -700,7 +700,7 @@ export function AssetActions({ asset }: { asset: Asset }) {
               </p>
               <p className="text-amber-200 mt-0.5 leading-relaxed">
                 As a loyal customer, VIP early access will open for you on:{" "}
-                <strong className="text-white">
+                <strong className="text-white" suppressHydrationWarning>
                   {activeAsset.early_access_starts_at
                     ? new Date(activeAsset.early_access_starts_at).toLocaleString("en-IN", {
                         dateStyle: "medium",
@@ -756,7 +756,7 @@ export function AssetActions({ asset }: { asset: Asset }) {
             {activeAsset.release_date ? (
               <p className="text-xs text-slate-400">
                 🚀 General release scheduled for:{" "}
-                <span className="font-semibold text-white">
+                <span className="font-semibold text-white" suppressHydrationWarning>
                   {new Date(activeAsset.release_date).toLocaleString("en-IN", {
                     dateStyle: "medium",
                     timeStyle: "short",
@@ -785,7 +785,7 @@ export function AssetActions({ asset }: { asset: Asset }) {
                 </span>
               </div>
               <p className="text-xs text-amber-200/90 leading-relaxed">
-                You already own a previous version of this asset! Pay only the update charge of <strong className="text-white">₹{activeAsset.update_price}</strong> to unlock and download this updated release.
+                You already own a previous version of this asset! Pay only the update charge of <strong className="text-white" suppressHydrationWarning>₹{activeAsset.update_price}</strong> to unlock and download this updated release.
               </p>
               {activeAsset.update_notes ? (
                 <div className="mt-2 rounded-lg bg-black/40 border border-white/10 p-3 text-xs text-slate-300">
@@ -938,9 +938,9 @@ export function AssetActions({ asset }: { asset: Asset }) {
           <div className="grid gap-4 sm:grid-cols-[220px_1fr]">
             <img src={qrCodeUrl(order.manual_payment.upi_uri)} alt={`UPI QR code for order ${order.order_id || order.id}`} className="h-[220px] w-[220px] rounded bg-white p-2" />
             <div className="space-y-2">
-              <p><span className="font-semibold text-white">Order ID:</span> {order.order_id || order.provider_order_id || `#${order.id}`}</p>
-              <p><span className="font-semibold text-white">Amount:</span> {order.currency} {order.amount}</p>
-              <p><span className="font-semibold text-white">UPI ID:</span> {order.manual_payment.upi_id || "Not configured"}</p>
+              <p><span className="font-semibold text-white" suppressHydrationWarning>Order ID:</span> {order.order_id || order.provider_order_id || `#${order.id}`}</p>
+              <p><span className="font-semibold text-white" suppressHydrationWarning>Amount:</span> {order.currency} {order.amount}</p>
+              <p><span className="font-semibold text-white" suppressHydrationWarning>UPI ID:</span> {order.manual_payment.upi_id || "Not configured"}</p>
               <p>{order.manual_payment.instructions}</p>
             </div>
           </div>

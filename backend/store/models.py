@@ -184,10 +184,16 @@ class Asset(models.Model):
     def save(self, *args, **kwargs):
         if not self.slug:
             self.slug = slugify(self.title)
-        self.is_free = self.price <= Decimal("0.00")
-        if self.has_paid_update and not self.update_released_at:
-            self.update_released_at = timezone.now()
-        elif not self.has_paid_update:
+        self.is_free = (self.price or Decimal("0.00")) <= Decimal("0.00")
+        if self.has_paid_update:
+            if not self.update_released_at:
+                self.update_released_at = timezone.now()
+            elif self.pk:
+                orig = Asset.objects.filter(pk=self.pk).values("paid_update_version", "version").first()
+                if orig:
+                    if orig.get("paid_update_version") != self.paid_update_version or orig.get("version") != self.version:
+                        self.update_released_at = timezone.now()
+        else:
             self.update_released_at = None
         super().save(*args, **kwargs)
 
@@ -198,9 +204,13 @@ class Asset(models.Model):
         if not user or not user.is_authenticated:
             return False, False
 
-        from .special_access import user_has_special_access
-        if user_has_special_access(user, self):
-            return True, False
+        # Explicit complimentary all-access granted via Special Access
+        try:
+            special_access = getattr(user, "special_access", None)
+            if special_access and special_access.is_active() and special_access.is_all_access_free:
+                return True, False
+        except Exception:
+            pass
 
         # Check if user owns base product (paid/approved non-blocked order)
         has_paid_base = self.orders.filter(
@@ -217,15 +227,17 @@ class Asset(models.Model):
             return True, False
 
         effective_version = (self.paid_update_version or self.version or "").strip()
+        if not effective_version:
+            return True, False
+
+        clean_v = effective_version.lstrip("vV")
 
         # Has the user unlocked this update version?
         unlock_qs = self.user_update_unlocks.filter(user=user)
         if unlock_qs.filter(
             models.Q(version=effective_version)
-            | models.Q(version=self.version)
-            | models.Q(version__iexact=effective_version.lstrip("v"))
-            | models.Q(version__iexact=f"v{effective_version.lstrip('v')}")
-            | models.Q(version="")
+            | models.Q(version=f"v{clean_v}")
+            | models.Q(version=clean_v)
         ).exists():
             return True, False
 

@@ -626,6 +626,14 @@ class AssetDetailSerializer(AssetListSerializer):
         # If user has an explicit BLOCKED order for this asset, immediately revoke access
         if Order.objects.filter(user=user, asset=obj, status=Order.Status.BLOCKED).exists():
             return False
+
+        # If asset has an active paid update, check if user needs to pay update first
+        update_price = obj.update_price or Decimal("0.00")
+        if obj.has_paid_update and update_price > Decimal("0.00"):
+            has_access, requires_update = obj.check_user_update_access(user)
+            if requires_update:
+                return False
+
         if obj.is_free:
             return True
         from .special_access import user_has_special_access
@@ -640,11 +648,6 @@ class AssetDetailSerializer(AssetListSerializer):
 
         if not has_paid_order:
             return False
-
-        if obj.has_paid_update and obj.update_price > Decimal("0.00"):
-            has_access, requires_update = obj.check_user_update_access(user)
-            if requires_update:
-                return False
 
         if obj.is_upcoming:
             now = timezone.now()
@@ -727,6 +730,7 @@ class AssetWriteSerializer(serializers.ModelSerializer):
             "prebooking_starts_at",
             "prebooking_ends_at",
             "prebooking_download_unlock_at",
+            "update_released_at",
         ):
             if dt_field in data:
                 val = data.get(dt_field) if hasattr(data, "get") else data[dt_field]
@@ -736,7 +740,7 @@ class AssetWriteSerializer(serializers.ModelSerializer):
                     data[dt_field] = None
 
         # Convert empty strings for optional decimal/numeric fields to None or 0
-        for num_field in ("prebooking_price", "early_access_price"):
+        for num_field in ("prebooking_price", "early_access_price", "update_price"):
             if num_field in data:
                 val = data.get(num_field) if hasattr(data, "get") else data[num_field]
                 if val == "" or val is None or str(val).lower() == "null":
