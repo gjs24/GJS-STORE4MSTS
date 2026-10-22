@@ -790,6 +790,16 @@ export default function CreateAssetPage() {
           <textarea name="changelog" placeholder="### Version 1.0.0&#10;- Initial public release." rows={5} className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-3 font-mono text-sm" />
         </label>
         <label className="block md:col-span-2">
+          <span className="text-sm font-semibold text-slate-200">📘 Official User Manual URL (Direct PDF or Google Drive Link)</span>
+          <input name="manual_url" type="url" placeholder="https://drive.google.com/... or https://res.cloudinary.com/.../manual.pdf" className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-3" />
+          <span className="mt-1 block text-xs text-slate-400">Direct link to downloadable or viewable PDF manual. Appears as a 1-click button on product page.</span>
+        </label>
+        <label className="block md:col-span-2">
+          <span className="text-sm font-semibold text-slate-200">📘 Operations Manual & Custom Driver Guide (Markdown)</span>
+          <textarea name="manual_content" placeholder="### Train Operations Guide&#10;&#10;1. Reverser forward...&#10;2. Pantograph up..." rows={6} className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-3 font-mono text-sm" />
+          <span className="mt-1 block text-xs text-slate-400">Custom driving instructions, operating guidelines, and sound configurations for this train.</span>
+        </label>
+        <label className="block md:col-span-2">
           <span className="text-sm text-slate-300">Asset ZIP file</span>
           <input name="download_file" type="file" accept=".zip" onChange={(event) => setPackageInfo(fileStatus(event.currentTarget.files?.[0]))} className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-3 text-sm" />
           <span className="mt-1 block text-xs text-slate-500">Upload the downloadable MSTS/Open Rails package here. Cloudinary works best with .zip files.</span>

@@ -590,6 +590,8 @@ class AssetDetailSerializer(AssetListSerializer):
             "requirements",
             "installation_steps",
             "changelog",
+            "manual_url",
+            "manual_content",
             "external_download_url",
             "private_download_key",
             "google_drive_file_id",

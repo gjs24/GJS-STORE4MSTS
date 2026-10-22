@@ -88,6 +88,8 @@ export type Asset = {
   requirements?: string;
   installation_steps?: string;
   changelog?: string;
+  manual_url?: string;
+  manual_content?: string;
   download_count: number;
   average_rating: number;
   review_count: number;

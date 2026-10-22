@@ -80,7 +80,14 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ sl
             href="#specifications"
             className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-rail-amber hover:text-rail-yellow hover:underline transition-colors"
           >
-            <span>Read full product overview & technical features</span>
+            <span>Features & Specifications</span>
+          </a>
+          <span className="text-white/20">•</span>
+          <a
+            href="#specifications"
+            className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-cyan-300 hover:text-cyan-200 hover:underline transition-colors"
+          >
+            <span>📘 Operations Manual & Controls</span>
             <span>↓</span>
           </a>
           <div className="mt-5 flex flex-wrap gap-3 text-sm">

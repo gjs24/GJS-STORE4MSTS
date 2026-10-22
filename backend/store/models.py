@@ -112,6 +112,16 @@ class Asset(models.Model):
     requirements = models.TextField(blank=True)
     installation_steps = models.TextField(blank=True)
     changelog = models.TextField(blank=True)
+    manual_url = models.URLField(
+        blank=True,
+        default="",
+        help_text="Direct link to official PDF/online user manual or Google Drive guide",
+    )
+    manual_content = models.TextField(
+        blank=True,
+        default="",
+        help_text="Markdown user manual, driving controls guide, and operations documentation",
+    )
     download_file = models.FileField(
         upload_to="assets/files/",
         blank=True,

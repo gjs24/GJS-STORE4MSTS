@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Download, FileText, PackageCheck, ShoppingCart, Sparkles, TrainFront, Trash2 } from "lucide-react";
+import { BookOpen, Download, FileText, PackageCheck, ShoppingCart, Sparkles, TrainFront, Trash2 } from "lucide-react";
 import { PriceDisplay } from "@/components/price-display";
 import type { Asset, AssetFeatureAddon } from "@/lib/api";
 import { downloadAsset, downloadAddon, downloadInvoice, removeFromWishlist, type DownloadLog, type StoreOrder, type WishlistItem, userGet, verifyPayment } from "@/lib/store-api";
@@ -372,6 +372,14 @@ export function AccountList({ type }: AccountListProps) {
                             <span>Download</span>
                           </button>
                         )}
+                        <Link
+                          href={`/assets/${row.asset.slug}#specifications`}
+                          className="flex items-center gap-1.5 rounded-lg border border-cyan-500/30 bg-cyan-950/20 px-3 py-2 text-xs font-semibold text-cyan-200 transition-colors hover:bg-cyan-900/40"
+                          title="View Operating Manual & Controls Guide"
+                        >
+                          <BookOpen size={14} className="text-cyan-400" />
+                          <span>Manual & Controls</span>
+                        </Link>
                         {row.unlockedAddons && row.unlockedAddons.map((addon) => (
                           <button
                             key={addon.id}
