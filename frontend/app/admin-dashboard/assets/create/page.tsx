@@ -203,12 +203,12 @@ export default function CreateAssetPage() {
           <span className="mt-1 block text-xs text-slate-500">{isFree ? "Free product price will be saved as ₹0.00." : "Example: 149.00, 349.00, 999.00"}</span>
         </label>
         <label className="block md:col-span-2">
-          <span className="text-sm text-slate-300">Short description</span>
+          <span className="text-sm font-semibold text-slate-200">Short description (for product cards & sidebar)</span>
           <input name="short_description" required placeholder="One-line product summary for listing cards" className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-3" />
         </label>
         <label className="block md:col-span-2">
-          <span className="text-sm text-slate-300">Full description</span>
-          <textarea name="description" required rows={5} className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-3" />
+          <span className="text-sm font-semibold text-slate-200">Full description (Markdown supported: # Headings, * Lists, **Bold**)</span>
+          <textarea name="description" required rows={10} placeholder="# 🚆 Product Title&#10;&#10;### ✨ Key Features&#10;* Feature 1&#10;* Feature 2" className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-3 font-mono text-sm leading-relaxed" />
         </label>
         <label className="block">
           <span className="text-sm text-slate-300">Preview video URL</span>
@@ -777,9 +777,18 @@ export default function CreateAssetPage() {
           ) : null}
         </div>
 
-        <textarea name="requirements" placeholder="Requirements" rows={4} className="rounded border border-white/10 bg-black/40 px-3 py-3" />
-        <textarea name="installation_steps" placeholder="Installation steps" rows={4} className="rounded border border-white/10 bg-black/40 px-3 py-3" />
-        <textarea name="changelog" placeholder="Changelog" rows={4} className="rounded border border-white/10 bg-black/40 px-3 py-3 md:col-span-2" />
+        <label className="block">
+          <span className="text-sm font-semibold text-slate-200">💻 System Requirements (Markdown)</span>
+          <textarea name="requirements" placeholder="* Microsoft Train Simulator (MSTS) or Open Rails&#10;* Windows 10/11&#10;* At least 2 GB free disk space" rows={5} className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-3 font-mono text-sm" />
+        </label>
+        <label className="block">
+          <span className="text-sm font-semibold text-slate-200">🛠️ Installation Steps (Markdown)</span>
+          <textarea name="installation_steps" placeholder="1. Download and extract archive.&#10;2. Copy into MSTS\TRAINS\TRAINSET." rows={5} className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-3 font-mono text-sm" />
+        </label>
+        <label className="block md:col-span-2">
+          <span className="text-sm font-semibold text-slate-200">📋 Update Changelog & Release Notes (Markdown)</span>
+          <textarea name="changelog" placeholder="### Version 1.0.0&#10;- Initial public release." rows={5} className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-3 font-mono text-sm" />
+        </label>
         <label className="block md:col-span-2">
           <span className="text-sm text-slate-300">Asset ZIP file</span>
           <input name="download_file" type="file" accept=".zip" onChange={(event) => setPackageInfo(fileStatus(event.currentTarget.files?.[0]))} className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-3 text-sm" />

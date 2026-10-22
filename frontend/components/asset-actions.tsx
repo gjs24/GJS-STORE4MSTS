@@ -7,6 +7,7 @@ import { CheckCircle2, Download, Lock, ShoppingCart, Sparkles, Zap } from "lucid
 import { CountdownTimer } from "@/components/countdown-timer";
 import { getStoredUser, priceLabel, type Asset, type AssetFeatureAddon } from "@/lib/api";
 import { WishlistButton } from "@/components/wishlist-button";
+import { MarkdownContent } from "@/components/markdown-content";
 import { createOrder, createAddonOrder, createUpdateOrder, downloadAsset, downloadAddon, isLoggedIn, notifyMe, userGet, verifyPayment, type StoreOrder } from "@/lib/store-api";
 
 function qrCodeUrl(value: string) {
@@ -789,7 +790,7 @@ export function AssetActions({ asset }: { asset: Asset }) {
               {activeAsset.update_notes ? (
                 <div className="mt-2 rounded-lg bg-black/40 border border-white/10 p-3 text-xs text-slate-300">
                   <p className="font-semibold text-amber-300 mb-1">What&apos;s new in this update:</p>
-                  <p className="whitespace-pre-line text-slate-300">{activeAsset.update_notes}</p>
+                  <MarkdownContent content={activeAsset.update_notes} className="text-xs text-slate-300" />
                 </div>
               ) : null}
             </div>

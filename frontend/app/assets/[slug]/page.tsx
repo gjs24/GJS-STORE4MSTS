@@ -7,6 +7,7 @@ import { AssetActions } from "@/components/asset-actions";
 import { CountdownTimer } from "@/components/countdown-timer";
 import { PriceDisplay } from "@/components/price-display";
 import { ProductGallery } from "@/components/product-gallery";
+import { ProductSpecifications } from "@/components/product-specifications";
 import { ReviewSection } from "@/components/review-section";
 import { API_URL, Asset, fallbackAssets } from "@/lib/api";
 
@@ -71,7 +72,17 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ sl
               <p className="mt-1 text-sm text-emerald-300">{asset.deal_title || "Launch Offer"} - You save ₹{asset.savings_amount}</p>
             ) : null}
           </div>
-          <p className="mt-4 text-slate-300">{asset.description || asset.short_description}</p>
+          {/* Clean Short Description */}
+          <p className="mt-4 text-base text-slate-300 leading-relaxed font-normal">
+            {asset.short_description || "High-quality MSTS and Open Rails digital simulation add-on by GJS Production."}
+          </p>
+          <a
+            href="#specifications"
+            className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-rail-amber hover:text-rail-yellow hover:underline transition-colors"
+          >
+            <span>Read full product overview & technical features</span>
+            <span>↓</span>
+          </a>
           <div className="mt-5 flex flex-wrap gap-3 text-sm">
             <span className="rounded border border-white/10 px-3 py-2">{asset.simulator_type.replace("_", " ")}</span>
             <span className="rounded border border-white/10 px-3 py-2">{asset.file_size}</span>
@@ -416,18 +427,10 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ sl
           </div>
         </div>
       </div>
-      <div className="mx-auto mt-10 grid max-w-7xl gap-5 lg:grid-cols-3">
-        {[
-          ["Requirements", asset.requirements],
-          ["Installation", asset.installation_steps],
-          ["Changelog", asset.changelog]
-        ].map(([title, content]) => (
-          <div key={title} className="rounded border border-white/10 bg-white/[0.03] p-5">
-            <h2 className="text-lg font-semibold">{title}</h2>
-            <p className="mt-3 text-sm text-slate-400">{content || "Details will be included with this asset release."}</p>
-          </div>
-        ))}
+      <div id="specifications">
+        <ProductSpecifications asset={asset} />
       </div>
+
       <ReviewSection assetId={asset.id} initialReviews={asset.reviews} />
       <div className="mx-auto mt-12 max-w-7xl">
         <Link href="/assets" className="text-sm text-rail-amber hover:underline">← Back to marketplace</Link>
