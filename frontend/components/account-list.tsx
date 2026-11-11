@@ -254,6 +254,11 @@ export function AccountList({ type }: AccountListProps) {
                   <span className="rounded border border-white/10 px-2 py-1">{row.asset.file_size}</span>
                   <span className="rounded border border-white/10 px-2 py-1"><PriceDisplay asset={row.asset} compact /></span>
                   {row.status ? <span className="rounded border border-white/10 px-2 py-1">{row.status}</span> : null}
+                  {row.asset.distribution_stopped ? (
+                    <span className="rounded border border-rose-500/40 bg-rose-500/15 px-2 py-1 font-semibold text-rose-200">
+                      {row.asset.distribution_stopped_reason || "Distribution Stopped"}
+                    </span>
+                  ) : null}
                   {row.asset.board_template && (row.asset.bundle_board_template_free || (row.asset.board_template as any).is_bundled_free) && (
                     <span className="rounded border border-emerald-500/40 bg-emerald-500/10 px-2 py-1 text-emerald-300 font-semibold flex items-center gap-1">
                       <span>🎁</span> Free Name Board: {row.asset.board_template.name}
@@ -282,12 +287,20 @@ export function AccountList({ type }: AccountListProps) {
                   {row.downloadEnabled ? (
                     <button
                       onClick={() => handleDownload(row.asset!)}
-                      disabled={busyId === row.asset.id}
+                      disabled={busyId === row.asset.id || Boolean(row.asset.distribution_stopped && row.asset.distribution_stop_downloads)}
                       className="flex items-center gap-1.5 rounded-lg bg-rail-red px-3.5 py-2 text-xs font-bold text-white shadow-glow transition-all hover:bg-rail-red/90 disabled:opacity-60"
                     >
                       <Download size={15} />
-                      <span>Download</span>
+                      <span>
+                        {row.asset.distribution_stopped && row.asset.distribution_stop_downloads
+                          ? "Downloads Paused"
+                          : "Download"}
+                      </span>
                     </button>
+                  ) : row.asset.distribution_stopped ? (
+                    <span className="rounded-lg border border-rose-500/40 bg-rose-950/30 px-3 py-2 text-xs font-semibold text-rose-200">
+                      Purchases Paused
+                    </span>
                   ) : !row.asset.is_upcoming ? (
                     <Link
                       href={`/assets/${row.asset.slug}`}
@@ -354,14 +367,24 @@ export function AccountList({ type }: AccountListProps) {
                   ) : row.asset ? (
                     row.downloadEnabled ? (
                       <>
-                        {row.asset.user_requires_update ? (
-                          <Link
-                            href={`/assets/${row.asset.slug}`}
-                            className="flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-amber-600 to-orange-600 px-3.5 py-2 text-xs font-bold text-white shadow-glow transition-all hover:from-amber-500 hover:to-orange-500"
-                          >
-                            <Sparkles size={15} />
-                            <span>Unlock v{row.asset.paid_update_version || row.asset.version} (₹{row.asset.update_price || "10"})</span>
-                          </Link>
+                        {row.asset.distribution_stopped && row.asset.distribution_stop_downloads ? (
+                          <span className="rounded-lg border border-rose-500/40 bg-rose-950/30 px-3.5 py-2 text-xs font-bold text-rose-200">
+                            Downloads Paused
+                          </span>
+                        ) : row.asset.user_requires_update ? (
+                          row.asset.distribution_stopped ? (
+                            <span className="rounded-lg border border-rose-500/40 bg-rose-950/30 px-3.5 py-2 text-xs font-bold text-rose-200">
+                              Update Purchases Paused
+                            </span>
+                          ) : (
+                            <Link
+                              href={`/assets/${row.asset.slug}`}
+                              className="flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-amber-600 to-orange-600 px-3.5 py-2 text-xs font-bold text-white shadow-glow transition-all hover:from-amber-500 hover:to-orange-500"
+                            >
+                              <Sparkles size={15} />
+                              <span>Unlock v{row.asset.paid_update_version || row.asset.version} (₹{row.asset.update_price || "10"})</span>
+                            </Link>
+                          )
                         ) : (
                           <button
                             onClick={() => handleDownload(row.asset!)}
@@ -380,18 +403,21 @@ export function AccountList({ type }: AccountListProps) {
                           <BookOpen size={14} className="text-cyan-400" />
                           <span>Manual & Controls</span>
                         </Link>
-                        {row.unlockedAddons && row.unlockedAddons.map((addon) => (
-                          <button
-                            key={addon.id}
-                            onClick={() => handleDownloadAddon(addon)}
-                            disabled={busyId === addon.id}
-                            className="flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-amber-600 to-orange-600 px-3.5 py-2 text-xs font-bold text-white shadow-glow transition-all hover:from-amber-500 hover:to-orange-500 disabled:opacity-60"
-                            title={`Download ${addon.title}`}
-                          >
-                            <Download size={15} />
-                            <span>{addon.title}</span>
-                          </button>
-                        ))}
+                        {row.unlockedAddons && row.unlockedAddons.map((addon) => {
+                          const addonDownloadsPaused = Boolean(row.asset?.distribution_stopped && row.asset?.distribution_stop_downloads);
+                          return (
+                            <button
+                              key={addon.id}
+                              onClick={() => handleDownloadAddon(addon)}
+                              disabled={busyId === addon.id || addonDownloadsPaused}
+                              className="flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-amber-600 to-orange-600 px-3.5 py-2 text-xs font-bold text-white shadow-glow transition-all hover:from-amber-500 hover:to-orange-500 disabled:opacity-50"
+                              title={addonDownloadsPaused ? "Downloads temporarily paused" : `Download ${addon.title}`}
+                            >
+                              <Download size={15} />
+                              <span>{addonDownloadsPaused ? `${addon.title} (Paused)` : addon.title}</span>
+                            </button>
+                          );
+                        })}
                         {row.asset.board_template && (row.asset.bundle_board_template_free || (row.asset.board_template as any).is_bundled_free) && (
                           <Link
                             href={`/board-studio?template=${row.asset.board_template.id}`}
@@ -415,11 +441,15 @@ export function AccountList({ type }: AccountListProps) {
               {type === "downloads" && row.asset && (
                 <button
                   onClick={() => handleDownload(row.asset!)}
-                  disabled={busyId === row.asset.id}
+                  disabled={busyId === row.asset.id || Boolean(row.asset.distribution_stopped && row.asset.distribution_stop_downloads)}
                   className="flex items-center gap-1.5 rounded-lg bg-rail-red px-3.5 py-2 text-xs font-bold text-white shadow-glow transition-all hover:bg-rail-red/90 disabled:opacity-60"
                 >
                   <Download size={15} />
-                  <span>Download Again</span>
+                  <span>
+                    {row.asset.distribution_stopped && row.asset.distribution_stop_downloads
+                      ? "Downloads Paused"
+                      : "Download Again"}
+                  </span>
                 </button>
               )}
             </div>

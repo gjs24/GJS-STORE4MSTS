@@ -9,7 +9,7 @@ from urllib.parse import quote
 from rest_framework import serializers
 
 from .early_access import get_cached_early_access_status
-from .models import AdminActivityLog, Asset, AssetImage, Category, DownloadLog, EmailOTP, NotifyRequest, Order, Payment, Review, SiteSetting, UpdateLog, UserSpecialAccess, Wishlist
+from .festival import calculate_festival_asset_price, get_live_festival_data
 from .models import (
     AdminActivityLog,
     Asset,
@@ -19,6 +19,8 @@ from .models import (
     Category,
     DownloadLog,
     EmailOTP,
+    FestivalAssetPrice,
+    FestivalSchedule,
     NotifyRequest,
     Order,
     Payment,
@@ -398,6 +400,11 @@ class AssetListSerializer(serializers.ModelSerializer):
             "update_price",
             "paid_update_version",
             "update_notes",
+            "distribution_stopped",
+            "distribution_stopped_reason",
+            "distribution_stopped_message",
+            "distribution_stop_downloads",
+            "festival_price",
             "user_owns_base",
             "user_requires_update",
             "download_count",
@@ -408,19 +415,55 @@ class AssetListSerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         ret = super().to_representation(instance)
-        # For new/unowned users, if a paid update exists, the effective purchase price is base price + update price
+        admin_raw = bool(self.context.get("admin_raw"))
         update_price = getattr(instance, "update_price", None) or Decimal("0.00")
-        if getattr(instance, "has_paid_update", False) and update_price > Decimal("0.00"):
-            total_price = instance.price + update_price
-            ret["price"] = str(total_price)
+        has_update_fee = bool(getattr(instance, "has_paid_update", False) and update_price > Decimal("0.00"))
+        regular_price = instance.price + (update_price if has_update_fee else Decimal("0.00"))
+
+        if admin_raw:
+            ret["price"] = f"{instance.price:.2f}"
+            ret["base_price"] = f"{instance.price:.2f}"
+            ret["regular_price"] = f"{regular_price:.2f}"
+            ret["festival_offer_active"] = False
+            ret["festival_badge"] = None
+            ret["festival_ends_at"] = None
+            ret["festival_discount_percent"] = 0
+            ret["user_festival_offer_active"] = False
+            return ret
+
+        request = self.context.get("request")
+        live_festival = get_live_festival_data(request=request)
+        fest_price, fest_active, fest_meta = calculate_festival_asset_price(
+            instance, regular_price, live_festival
+        )
+
+        if has_update_fee:
             ret["base_price"] = str(instance.price)
-            compare_price = instance.original_price or total_price
-            if compare_price > total_price:
-                ret["discount_percent"] = round(float((compare_price - total_price) / compare_price) * 100)
-                ret["savings_amount"] = f"{compare_price - total_price:.2f}"
+        ret["regular_price"] = f"{regular_price:.2f}"
+
+        display_price = fest_price if fest_active else regular_price
+        if fest_active or has_update_fee:
+            ret["price"] = f"{display_price:.2f}"
+            compare_price = (
+                instance.original_price
+                if (instance.original_price and instance.original_price > display_price)
+                else regular_price
+            )
+            if fest_active and compare_price > display_price:
+                ret["original_price"] = f"{compare_price:.2f}"
+            if compare_price > display_price:
+                ret["discount_percent"] = round(float((compare_price - display_price) / compare_price) * 100)
+                ret["savings_amount"] = f"{compare_price - display_price:.2f}"
             else:
                 ret["discount_percent"] = 0
                 ret["savings_amount"] = "0.00"
+
+        ea = get_cached_early_access_status(instance, request)
+        ret["festival_offer_active"] = bool(fest_active)
+        ret["festival_badge"] = fest_meta["festival_badge"] if fest_meta else None
+        ret["festival_ends_at"] = fest_meta["festival_ends_at"] if fest_meta else None
+        ret["festival_discount_percent"] = ret["discount_percent"] if fest_active else 0
+        ret["user_festival_offer_active"] = bool(ea.get("festival_offer_active"))
         return ret
 
     def get_user_owns_base(self, obj):
@@ -609,10 +652,12 @@ class AssetDetailSerializer(AssetListSerializer):
         return AssetFeatureAddonSerializer(active_addons, many=True, context=self.context).data
 
     def get_bundle_price(self, obj):
+        ea = get_cached_early_access_status(obj, self.context.get("request"))
         addons_total = sum(
-            addon.bundle_price_addition for addon in obj.addons.filter(is_active=True)
+            (addon.bundle_price_addition for addon in obj.addons.filter(is_active=True)),
+            Decimal("0.00"),
         )
-        return str(obj.price + addons_total)
+        return f"{ea['effective_price'] + addons_total:.2f}"
 
     def get_reviews(self, obj):
         approved = obj.reviews.filter(is_approved=True).select_related("user", "replied_by")
@@ -623,8 +668,12 @@ class AssetDetailSerializer(AssetListSerializer):
         user = getattr(request, "user", None) if request else None
         if not user or not user.is_authenticated:
             return False
+        is_staff = bool(getattr(user, "is_staff", False) or getattr(user, "is_superuser", False))
         # If user has an explicit BLOCKED order for this asset, immediately revoke access
         if Order.objects.filter(user=user, asset=obj, status=Order.Status.BLOCKED).exists():
+            return False
+
+        if obj.distribution_stopped and obj.distribution_stop_downloads and not is_staff:
             return False
 
         # If asset has an active paid update, check if user needs to pay update first
@@ -634,7 +683,7 @@ class AssetDetailSerializer(AssetListSerializer):
             if requires_update:
                 return False
 
-        if obj.is_free:
+        if obj.is_free and (not obj.distribution_stopped or is_staff):
             return True
         from .special_access import user_has_special_access
         if user_has_special_access(user, obj):
@@ -740,7 +789,7 @@ class AssetWriteSerializer(serializers.ModelSerializer):
                     data[dt_field] = None
 
         # Convert empty strings for optional decimal/numeric fields to None or 0
-        for num_field in ("prebooking_price", "early_access_price", "update_price"):
+        for num_field in ("prebooking_price", "early_access_price", "update_price", "festival_price"):
             if num_field in data:
                 val = data.get(num_field) if hasattr(data, "get") else data[num_field]
                 if val == "" or val is None or str(val).lower() == "null":
@@ -1154,6 +1203,10 @@ class SiteSettingSerializer(serializers.ModelSerializer):
             "festival_discount_percent",
             "festival_announcement_bar",
             "festival_popup_card",
+            "festival_schedule_enabled",
+            "festival_starts_at",
+            "festival_ends_at",
+            "festival_apply_discount_to_prices",
             "special_access_email_subject",
             "special_access_email_heading",
             "special_access_email_body",
@@ -1161,6 +1214,29 @@ class SiteSettingSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ["updated_at"]
+
+    def to_internal_value(self, data):
+        for dt_field in ("festival_starts_at", "festival_ends_at"):
+            if dt_field in data:
+                val = data.get(dt_field) if hasattr(data, "get") else data[dt_field]
+                if not val or val == "" or str(val).lower() == "null":
+                    if hasattr(data, "copy"):
+                        data = data.copy()
+                    data[dt_field] = None
+        return super().to_internal_value(data)
+
+    def validate(self, attrs):
+        starts_at = attrs.get("festival_starts_at", getattr(self.instance, "festival_starts_at", None))
+        ends_at = attrs.get("festival_ends_at", getattr(self.instance, "festival_ends_at", None))
+        schedule_enabled = attrs.get(
+            "festival_schedule_enabled",
+            getattr(self.instance, "festival_schedule_enabled", False),
+        )
+        if schedule_enabled and starts_at and ends_at and ends_at <= starts_at:
+            raise serializers.ValidationError(
+                {"festival_ends_at": "Festival end date & time must be after the start date & time."}
+            )
+        return attrs
 
 
 class SpecialAccessInviteLinkSerializer(serializers.ModelSerializer):
@@ -1329,4 +1405,137 @@ class SpecialAccessClaimRequestSerializer(serializers.ModelSerializer):
             return list(obj.invite_link.granted_board_templates.values_list("name", flat=True))
         except Exception:
             return []
+
+
+class FestivalAssetPriceSerializer(serializers.ModelSerializer):
+    asset_title = serializers.CharField(source="asset.title", read_only=True)
+    asset_slug = serializers.CharField(source="asset.slug", read_only=True)
+    asset_regular_price = serializers.DecimalField(source="asset.price", max_digits=10, decimal_places=2, read_only=True)
+    asset_original_price = serializers.DecimalField(source="asset.original_price", max_digits=10, decimal_places=2, read_only=True)
+    asset_is_free = serializers.BooleanField(source="asset.is_free", read_only=True)
+
+    class Meta:
+        model = FestivalAssetPrice
+        fields = [
+            "id",
+            "asset",
+            "asset_title",
+            "asset_slug",
+            "asset_regular_price",
+            "asset_original_price",
+            "asset_is_free",
+            "festival_price",
+            "is_included",
+        ]
+
+
+class FestivalScheduleSerializer(serializers.ModelSerializer):
+    asset_prices = FestivalAssetPriceSerializer(many=True, read_only=True)
+    status_label = serializers.SerializerMethodField()
+
+    class Meta:
+        model = FestivalSchedule
+        fields = [
+            "id",
+            "name",
+            "is_active",
+            "starts_at",
+            "ends_at",
+            "priority",
+            "theme_type",
+            "title",
+            "subtitle",
+            "badge",
+            "button_text",
+            "button_url",
+            "effect",
+            "banner_image",
+            "discount_percent",
+            "apply_discount_to_prices",
+            "announcement_bar",
+            "popup_card",
+            "status_label",
+            "asset_prices",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["created_at", "updated_at", "status_label", "asset_prices"]
+
+    def get_status_label(self, obj):
+        if not obj.is_active:
+            return "paused"
+        now = timezone.now()
+        if now < obj.starts_at:
+            return "upcoming"
+        if now >= obj.ends_at:
+            return "ended"
+        return "live"
+
+    def validate(self, attrs):
+        starts_at = attrs.get("starts_at", getattr(self.instance, "starts_at", None))
+        ends_at = attrs.get("ends_at", getattr(self.instance, "ends_at", None))
+        if starts_at and ends_at and ends_at <= starts_at:
+            raise serializers.ValidationError({"ends_at": "End date & time must be later than Start date & time."})
+
+        raw_items = None
+        if isinstance(self.initial_data, dict) and "asset_prices" in self.initial_data:
+            raw_items = self.initial_data.get("asset_prices")
+            if raw_items is not None and not isinstance(raw_items, list):
+                raise serializers.ValidationError({"asset_prices": "asset_prices must be a list."})
+            cleaned_items = []
+            for entry in raw_items or []:
+                if not isinstance(entry, dict) or entry.get("asset") in (None, ""):
+                    continue
+                try:
+                    asset_id = int(entry["asset"])
+                except (TypeError, ValueError):
+                    raise serializers.ValidationError({"asset_prices": "Each item must specify a valid asset id."})
+                raw_fp = entry.get("festival_price")
+                if raw_fp in ("", None) or str(raw_fp).lower() == "null":
+                    fp_val = None
+                else:
+                    try:
+                        fp_val = Decimal(str(raw_fp))
+                    except Exception:
+                        raise serializers.ValidationError({"asset_prices": f"Invalid festival_price for asset {asset_id}."})
+                    if fp_val < Decimal("0.00"):
+                        raise serializers.ValidationError({"asset_prices": "Festival price cannot be negative."})
+                cleaned_items.append(
+                    {
+                        "asset_id": asset_id,
+                        "festival_price": fp_val,
+                        "is_included": bool(entry.get("is_included", True)),
+                    }
+                )
+            self._validated_asset_prices = cleaned_items
+        return attrs
+
+    def _sync_asset_prices(self, schedule):
+        items = getattr(self, "_validated_asset_prices", None)
+        if items is None:
+            return
+        valid_asset_ids = set(Asset.objects.filter(id__in=[i["asset_id"] for i in items]).values_list("id", flat=True))
+        for item in items:
+            aid = item["asset_id"]
+            if aid not in valid_asset_ids:
+                continue
+            FestivalAssetPrice.objects.update_or_create(
+                festival=schedule,
+                asset_id=aid,
+                defaults={
+                    "festival_price": item["festival_price"],
+                    "is_included": item["is_included"],
+                },
+            )
+
+    def create(self, validated_data):
+        schedule = super().create(validated_data)
+        self._sync_asset_prices(schedule)
+        return schedule
+
+    def update(self, instance, validated_data):
+        schedule = super().update(instance, validated_data)
+        self._sync_asset_prices(schedule)
+        return schedule
+
 

@@ -21,6 +21,7 @@ from .views import (
     WishlistDetailView,
     AdminAssetViewSet,
     AdminCategoryViewSet,
+    AdminFestivalScheduleViewSet,
     AdminOrderViewSet,
     AdminReviewViewSet,
     AdminSpecialAccessLinkViewSet,
@@ -56,6 +57,7 @@ router.register("admin/users", AdminUserViewSet, basename="admin-user")
 router.register("admin/reviews", AdminReviewViewSet, basename="admin-review")
 router.register("admin/special-access-links", AdminSpecialAccessLinkViewSet, basename="admin-special-access-link")
 router.register("admin/special-access-requests", AdminSpecialAccessRequestViewSet, basename="admin-special-access-request")
+router.register("admin/festivals", AdminFestivalScheduleViewSet, basename="admin-festival")
 
 urlpatterns = [
     path("assets/<int:pk>/download/", asset_download_by_id, name="asset-download-by-id"),

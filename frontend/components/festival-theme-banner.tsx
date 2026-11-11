@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, Sparkles, X } from "lucide-react";
 import type { SiteSettings } from "@/lib/api";
+import { formatShortRemaining, useLiveSiteSettings } from "@/lib/use-live-festival";
 
 function getThemeStyles(type?: string) {
   switch (type) {
@@ -68,7 +69,9 @@ function getThemeStyles(type?: string) {
 }
 
 export function FestivalThemeBanner({ settings }: { settings?: SiteSettings | null }) {
+  const liveSettings = useLiveSiteSettings(settings);
   const [dismissed, setDismissed] = useState(false);
+  const [nowMs, setNowMs] = useState(0);
 
   useEffect(() => {
     try {
@@ -78,16 +81,24 @@ export function FestivalThemeBanner({ settings }: { settings?: SiteSettings | nu
     }
   }, []);
 
-  if (!settings || !settings.festival_theme_enabled || !settings.festival_announcement_bar) {
+  useEffect(() => {
+    if (!liveSettings?.festival_ends_at) return;
+    setNowMs(Date.now());
+    const id = window.setInterval(() => setNowMs(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [liveSettings?.festival_ends_at]);
+
+  if (!liveSettings || !liveSettings.festival_theme_enabled || !liveSettings.festival_announcement_bar) {
     return null;
   }
 
-  const themeStyle = getThemeStyles(settings.festival_theme_type);
-  const title = settings.festival_title || "🎉 Celebrating 1 Year of MSTS-GJS Production Store!";
-  const badge = settings.festival_badge || "1st Year Anniversary";
-  const buttonText = settings.festival_button_text || "Explore Anniversary Specials";
-  const buttonUrl = settings.festival_button_url || "/assets";
-  const discount = settings.festival_discount_percent ? Number(settings.festival_discount_percent) : 0;
+  const themeStyle = getThemeStyles(liveSettings.festival_theme_type);
+  const title = liveSettings.festival_title || "🎉 Celebrating 1 Year of MSTS-GJS Production Store!";
+  const badge = liveSettings.festival_badge || "1st Year Anniversary";
+  const buttonText = liveSettings.festival_button_text || "Explore Anniversary Specials";
+  const buttonUrl = liveSettings.festival_button_url || "/assets";
+  const discount = liveSettings.festival_discount_percent ? Number(liveSettings.festival_discount_percent) : 0;
+  const remaining = formatShortRemaining(liveSettings.festival_ends_at, nowMs);
 
   // When collapsed, show a subtle compact ribbon so users can easily click to re-open
   // And whenever the page is refreshed, the full banner is automatically shown again
@@ -129,6 +140,11 @@ export function FestivalThemeBanner({ settings }: { settings?: SiteSettings | nu
             {discount > 0 ? (
               <span className="ml-2 inline-block rounded bg-emerald-500/20 border border-emerald-400/40 px-2 py-0.5 text-[11px] font-extrabold text-emerald-300">
                 🏷️ {discount}% Festive Offer
+              </span>
+            ) : null}
+            {remaining ? (
+              <span className="ml-2 inline-block rounded bg-white/10 border border-white/20 px-2 py-0.5 text-[11px] font-bold text-amber-200">
+                ⏳ Ends in {remaining}
               </span>
             ) : null}
           </p>

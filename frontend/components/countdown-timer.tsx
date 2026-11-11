@@ -314,7 +314,7 @@ export function AssetCardTimer({ asset }: { asset: Asset }) {
   }
 
   // 3. Special Offer / Deal start or close countdown
-  if (asset.deal_is_open && !asset.is_upcoming) {
+  if (asset.deal_is_open && !asset.is_upcoming && !asset.distribution_stopped) {
     if (!Number.isNaN(dealStartMs) && nowMs < dealStartMs) {
       return (
         <CountdownTimer
@@ -335,6 +335,23 @@ export function AssetCardTimer({ asset }: { asset: Asset }) {
           variant="card"
           theme="emerald"
           icon="flame"
+          hideWhenCompleted
+        />
+      );
+    }
+  }
+
+  // 4. Scheduled Festival Offer countdown
+  if (asset.festival_offer_active && asset.festival_ends_at && !asset.distribution_stopped && !asset.is_upcoming) {
+    const festEndMs = Date.parse(asset.festival_ends_at);
+    if (!Number.isNaN(festEndMs) && nowMs < festEndMs) {
+      return (
+        <CountdownTimer
+          endDate={asset.festival_ends_at}
+          endLabel={asset.festival_badge ? `${asset.festival_badge} Ends` : "Festival Offer Ends"}
+          variant="card"
+          theme="purple"
+          icon="sparkles"
           hideWhenCompleted
         />
       );

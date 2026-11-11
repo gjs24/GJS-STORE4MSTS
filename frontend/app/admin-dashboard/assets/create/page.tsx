@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { CheckCircle2, Loader2, Save } from "lucide-react";
 import { AdminLoginNote } from "@/components/admin-login-note";
 import { AdminLayout } from "@/components/admin-table";
-import { adminGet, adminPostForm } from "@/lib/admin-api";
+import { adminGet, adminPostForm, toIsoDateTimeOrEmpty } from "@/lib/admin-api";
 import { fallbackCategories, type Asset, type Category } from "@/lib/api";
 
 type CreatedAsset = {
@@ -48,6 +48,13 @@ export default function CreateAssetPage() {
   const [selectedBoardTemplateId, setSelectedBoardTemplateId] = useState<string>("");
   const [bundleBoardTemplateFree, setBundleBoardTemplateFree] = useState<boolean>(false);
   const [allowSeparateBoardPurchase, setAllowSeparateBoardPurchase] = useState<boolean>(true);
+  const [distributionStopped, setDistributionStopped] = useState<boolean>(false);
+  const [distributionStoppedReason, setDistributionStoppedReason] = useState<string>("Distribution Stopped");
+  const [distributionStoppedMessage, setDistributionStoppedMessage] = useState<string>(
+    "New purchases for this product are temporarily paused by the creator."
+  );
+  const [distributionStopDownloads, setDistributionStopDownloads] = useState<boolean>(false);
+  const [festivalPrice, setFestivalPrice] = useState<string>("");
 
   useEffect(() => {
     adminGet<Category[]>("/admin/categories/", fallbackCategories).then(setCategories);
@@ -83,8 +90,8 @@ export default function CreateAssetPage() {
       formData.set("early_access_price", earlyAccessPrice || "0.00");
       formData.set("early_access_badge", earlyAccessBadge);
       formData.set("early_access_message", earlyAccessMessage);
-      formData.set("early_access_starts_at", earlyAccessStartsAt || "");
-      formData.set("early_access_ends_at", earlyAccessEndsAt || "");
+      formData.set("early_access_starts_at", toIsoDateTimeOrEmpty(earlyAccessStartsAt));
+      formData.set("early_access_ends_at", toIsoDateTimeOrEmpty(earlyAccessEndsAt));
       formData.set("prebooking_enabled", String(prebookingEnabled));
       if (prebookingPrice && prebookingPrice.trim() !== "") {
         formData.set("prebooking_price", prebookingPrice.trim());
@@ -93,9 +100,17 @@ export default function CreateAssetPage() {
       }
       formData.set("prebooking_badge", prebookingBadge);
       formData.set("prebooking_message", prebookingMessage);
-      formData.set("prebooking_starts_at", prebookingStartsAt || "");
-      formData.set("prebooking_ends_at", prebookingEndsAt || "");
-      formData.set("prebooking_download_unlock_at", prebookingDownloadUnlockAt || "");
+      formData.set("prebooking_starts_at", toIsoDateTimeOrEmpty(prebookingStartsAt));
+      formData.set("prebooking_ends_at", toIsoDateTimeOrEmpty(prebookingEndsAt));
+      formData.set("prebooking_download_unlock_at", toIsoDateTimeOrEmpty(prebookingDownloadUnlockAt));
+      formData.set("distribution_stopped", String(distributionStopped));
+      formData.set("distribution_stopped_reason", distributionStoppedReason.trim() || "Distribution Stopped");
+      formData.set(
+        "distribution_stopped_message",
+        distributionStoppedMessage.trim() || "New purchases for this product are temporarily paused by the creator."
+      );
+      formData.set("distribution_stop_downloads", String(distributionStopDownloads));
+      formData.set("festival_price", !isFree && festivalPrice.trim() !== "" ? festivalPrice.trim() : "");
       formData.set("prebooking_downloads_unlocked", String(prebookingDownloadsUnlocked));
       formData.set("prebooking_slots", String(prebookingSlots || 0));
       formData.delete("early_access_required_assets");
@@ -117,12 +132,18 @@ export default function CreateAssetPage() {
       }
       if (!formData.get("deal_starts_at")) {
         formData.delete("deal_starts_at");
+      } else {
+        formData.set("deal_starts_at", toIsoDateTimeOrEmpty(String(formData.get("deal_starts_at"))));
       }
       if (!formData.get("deal_ends_at")) {
         formData.delete("deal_ends_at");
+      } else {
+        formData.set("deal_ends_at", toIsoDateTimeOrEmpty(String(formData.get("deal_ends_at"))));
       }
       if (!formData.get("release_date")) {
         formData.delete("release_date");
+      } else {
+        formData.set("release_date", toIsoDateTimeOrEmpty(String(formData.get("release_date"))));
       }
       if (file instanceof File && file.size === 0) {
         formData.delete("download_file");
@@ -202,6 +223,22 @@ export default function CreateAssetPage() {
           <input name="price" type="number" min="0" step="0.01" disabled={isFree} defaultValue="99.00" className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-3 disabled:opacity-50" />
           <span className="mt-1 block text-xs text-slate-500">{isFree ? "Free product price will be saved as ₹0.00." : "Example: 149.00, 349.00, 999.00"}</span>
         </label>
+        <label className="block">
+          <span className="text-sm text-amber-300">Pre-defined Festival Price in ₹ / INR (Optional)</span>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            disabled={isFree}
+            value={festivalPrice}
+            onChange={(e) => setFestivalPrice(e.target.value)}
+            placeholder="Leave empty to use Festival % discount"
+            className="mt-2 w-full rounded border border-amber-500/30 bg-black/40 px-3 py-3 text-amber-100 disabled:opacity-50"
+          />
+          <span className="mt-1 block text-xs text-slate-500">
+            Applied automatically during active festival themes/schedules (unless overridden per campaign).
+          </span>
+        </label>
         <label className="block md:col-span-2">
           <span className="text-sm font-semibold text-slate-200">Short description (for product cards & sidebar)</span>
           <input name="short_description" required placeholder="One-line product summary for listing cards" className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-3" />
@@ -249,6 +286,67 @@ export default function CreateAssetPage() {
           <input name="is_upcoming" type="checkbox" />
           <span>Upcoming product / coming soon</span>
         </label>
+
+        {/* Product Distribution Control */}
+        <div className="space-y-3 rounded-lg border border-rose-500/35 bg-rose-950/20 p-4 md:col-span-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="font-bold text-rose-300 flex items-center gap-2">
+                <span>🛑</span> Product Distribution Control
+              </h2>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Stop new purchases while keeping this product visible in the catalog with a customer notice.
+              </p>
+            </div>
+            <label className="inline-flex items-center gap-2.5 rounded-lg border border-rose-500/40 bg-black/40 px-3.5 py-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={distributionStopped}
+                onChange={(e) => setDistributionStopped(e.target.checked)}
+                className="h-4 w-4 accent-rose-500"
+              />
+              <span className="text-sm font-bold text-white">Stop Purchases / Distribution</span>
+            </label>
+          </div>
+          {distributionStopped ? (
+            <div className="grid gap-3 md:grid-cols-2 pt-2 border-t border-rose-500/20">
+              <label className="block">
+                <span className="text-xs font-semibold text-rose-200">Status Badge Label</span>
+                <input
+                  type="text"
+                  value={distributionStoppedReason}
+                  onChange={(e) => setDistributionStoppedReason(e.target.value)}
+                  placeholder="Distribution Stopped"
+                  className="mt-1 w-full rounded border border-white/10 bg-black/40 px-3 py-2 text-sm text-white"
+                />
+              </label>
+              <div className="flex items-center rounded border border-white/10 bg-black/30 px-3 py-2">
+                <label className="flex items-start gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={distributionStopDownloads}
+                    onChange={(e) => setDistributionStopDownloads(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 accent-rose-500"
+                  />
+                  <div>
+                    <span className="text-xs font-semibold text-rose-200 block">Also pause downloads for existing owners</span>
+                    <span className="text-[11px] text-slate-400">Leave unchecked so past buyers can still download their files.</span>
+                  </div>
+                </label>
+              </div>
+              <label className="block md:col-span-2">
+                <span className="text-xs font-semibold text-rose-200">Customer Notice Message</span>
+                <textarea
+                  rows={2}
+                  value={distributionStoppedMessage}
+                  onChange={(e) => setDistributionStoppedMessage(e.target.value)}
+                  placeholder="New purchases for this product are temporarily paused by the creator."
+                  className="mt-1 w-full rounded border border-white/10 bg-black/40 px-3 py-2 text-sm text-white"
+                />
+              </label>
+            </div>
+          ) : null}
+        </div>
 
         {/* Associated Name Board Template Selector */}
         <div className="space-y-3 rounded-lg border border-rail-amber/30 bg-rail-amber/5 p-4 md:col-span-2">

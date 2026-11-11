@@ -19,9 +19,10 @@ import {
 } from "lucide-react";
 import { AdminLoginNote } from "@/components/admin-login-note";
 import { AdminLayout } from "@/components/admin-table";
+import { FestivalSchedulerSection } from "@/components/festival-scheduler-admin";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { adminGet, adminPatch, type AdminSettings } from "@/lib/admin-api";
+import { adminGet, adminPatch, formatDateTimeLocal, toIsoDateTimeOrEmpty, type AdminSettings } from "@/lib/admin-api";
 import { fallbackSiteSettings, type SiteSettings } from "@/lib/api";
 
 type FestivalPreset = {
@@ -140,6 +141,8 @@ const FESTIVAL_PRESETS: FestivalPreset[] = [
 
 export default function FestivalThemesAdminPage() {
   const [siteForm, setSiteForm] = useState<SiteSettings>(fallbackSiteSettings);
+  const [quickStartsLocal, setQuickStartsLocal] = useState("");
+  const [quickEndsLocal, setQuickEndsLocal] = useState("");
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
@@ -147,6 +150,8 @@ export default function FestivalThemesAdminPage() {
     adminGet<AdminSettings>("/admin/settings/", { site: fallbackSiteSettings } as any).then((data) => {
       if (data && data.site) {
         setSiteForm({ ...fallbackSiteSettings, ...data.site });
+        setQuickStartsLocal(formatDateTimeLocal(data.site.festival_starts_at));
+        setQuickEndsLocal(formatDateTimeLocal(data.site.festival_ends_at));
       }
     });
   }, []);
@@ -173,13 +178,24 @@ export default function FestivalThemesAdminPage() {
     });
   }
 
+  function buildSitePayload(overrides?: Partial<SiteSettings>): SiteSettings {
+    return {
+      ...siteForm,
+      ...overrides,
+      festival_starts_at: toIsoDateTimeOrEmpty(quickStartsLocal) || null,
+      festival_ends_at: toIsoDateTimeOrEmpty(quickEndsLocal) || null,
+    };
+  }
+
   async function handleToggleTheme(enabled: boolean) {
     setSaving(true);
     setStatus(null);
     try {
-      const nextForm = { ...siteForm, festival_theme_enabled: enabled };
+      const nextForm = buildSitePayload({ festival_theme_enabled: enabled });
       const updated = await adminPatch<AdminSettings>("/admin/settings/", { site: nextForm });
-      setSiteForm(updated.site);
+      setSiteForm({ ...fallbackSiteSettings, ...updated.site });
+      setQuickStartsLocal(formatDateTimeLocal(updated.site.festival_starts_at));
+      setQuickEndsLocal(formatDateTimeLocal(updated.site.festival_ends_at));
       setStatus({
         type: "success",
         message: enabled
@@ -198,11 +214,23 @@ export default function FestivalThemesAdminPage() {
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    if (siteForm.festival_schedule_enabled && quickStartsLocal && quickEndsLocal) {
+      if (new Date(quickEndsLocal).getTime() <= new Date(quickStartsLocal).getTime()) {
+        setStatus({
+          type: "error",
+          message: "Festival End Date & Time must be strictly after Start Date & Time.",
+        });
+        return;
+      }
+    }
     setSaving(true);
     setStatus(null);
     try {
-      const updated = await adminPatch<AdminSettings>("/admin/settings/", { site: siteForm });
-      setSiteForm(updated.site);
+      const payload = buildSitePayload();
+      const updated = await adminPatch<AdminSettings>("/admin/settings/", { site: payload });
+      setSiteForm({ ...fallbackSiteSettings, ...updated.site });
+      setQuickStartsLocal(formatDateTimeLocal(updated.site.festival_starts_at));
+      setQuickEndsLocal(formatDateTimeLocal(updated.site.festival_ends_at));
       setStatus({
         type: "success",
         message: "Festival & celebration theme settings saved successfully!",
@@ -529,6 +557,65 @@ export default function FestivalThemesAdminPage() {
                   />
                 </div>
 
+                <div className="sm:col-span-2 rounded-xl border border-emerald-500/30 bg-emerald-950/15 p-4 space-y-3">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={siteForm.festival_apply_discount_to_prices !== false}
+                      onChange={(e) => updateField("festival_apply_discount_to_prices", e.target.checked)}
+                      className="h-4 w-4 rounded border-white/20 bg-black/50 text-emerald-500 focus:ring-emerald-400"
+                    />
+                    <div className="space-y-0.5">
+                      <span className="text-xs font-bold text-emerald-200">
+                        Apply Festival Pricing &amp; Discount % to Product Prices &amp; Checkout Orders
+                      </span>
+                      <p className="text-[11px] text-slate-400">
+                        When enabled, any product&apos;s pre-defined Festival Price (₹) or the storewide Festival Discount % automatically lowers live storefront prices and payment gateway totals.
+                      </p>
+                    </div>
+                  </label>
+
+                  <label className="flex items-center gap-3 cursor-pointer pt-2 border-t border-white/10">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(siteForm.festival_schedule_enabled)}
+                      onChange={(e) => updateField("festival_schedule_enabled", e.target.checked)}
+                      className="h-4 w-4 rounded border-white/20 bg-black/50 text-cyan-500 focus:ring-cyan-400"
+                    />
+                    <div className="space-y-0.5">
+                      <span className="text-xs font-bold text-cyan-200">
+                        ⏰ Schedule Quick Festival Dates &amp; Time (Auto-Start &amp; Auto-End)
+                      </span>
+                      <p className="text-[11px] text-slate-400">
+                        Automatically enable banner, effects &amp; festival pricing between From Date/Time and End Date/Time.
+                      </p>
+                    </div>
+                  </label>
+
+                  {siteForm.festival_schedule_enabled ? (
+                    <div className="grid gap-4 md:grid-cols-2 pt-2">
+                      <label className="block">
+                        <span className="text-xs font-semibold text-emerald-300">🟢 From Date &amp; Time</span>
+                        <input
+                          type="datetime-local"
+                          value={quickStartsLocal}
+                          onChange={(e) => setQuickStartsLocal(e.target.value)}
+                          className="mt-1.5 w-full rounded-lg border border-white/15 bg-black/60 px-3 py-2 text-xs text-white"
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="text-xs font-semibold text-rose-300">🔴 End Date &amp; Time</span>
+                        <input
+                          type="datetime-local"
+                          value={quickEndsLocal}
+                          onChange={(e) => setQuickEndsLocal(e.target.value)}
+                          className="mt-1.5 w-full rounded-lg border border-white/15 bg-black/60 px-3 py-2 text-xs text-white"
+                        />
+                      </label>
+                    </div>
+                  ) : null}
+                </div>
+
                 {/* Announcement Bar Toggle */}
                 <div className="sm:col-span-2 pt-2 border-t border-white/10">
                   <label className="flex items-center gap-3 cursor-pointer">
@@ -576,6 +663,9 @@ export default function FestivalThemesAdminPage() {
             </CardContent>
           </Card>
         </form>
+
+        {/* Multi-Campaign Scheduler with Per-Product Pre-Defined Festival Prices */}
+        <FestivalSchedulerSection onStatus={setStatus} />
       </div>
     </AdminLayout>
   );

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { load } from "@cashfreepayments/cashfree-js";
-import { CheckCircle2, Download, Lock, ShoppingCart, Sparkles, Zap } from "lucide-react";
+import { Ban, CheckCircle2, Download, Lock, ShoppingCart, Sparkles, Zap } from "lucide-react";
 import { CountdownTimer } from "@/components/countdown-timer";
 import { getStoredUser, priceLabel, type Asset, type AssetFeatureAddon } from "@/lib/api";
 import { WishlistButton } from "@/components/wishlist-button";
@@ -100,6 +100,14 @@ export function AssetActions({ asset }: { asset: Asset }) {
     hasUpdateErrorMessage ||
     activeAsset.user_requires_update ||
     (userOwnsBase && !activeAsset.can_download && activeAsset.has_paid_update && Number(activeAsset.update_price || 0) > 0)
+  );
+  const isDistributionStopped = Boolean(activeAsset.distribution_stopped);
+  const isDownloadsPausedByStop = Boolean(isDistributionStopped && activeAsset.distribution_stop_downloads);
+  const canExistingOwnerStillDownload = Boolean(
+    ((activeAsset.can_download && !requiresUpdate) || (hasPrebooked && downloadsReady)) && !isDownloadsPausedByStop
+  );
+  const isPurchaseBlockedByDistribution = Boolean(
+    isDownloadsPausedByStop || (isDistributionStopped && !canExistingOwnerStillDownload && !(hasPrebooked && !downloadsReady))
   );
 
   async function requireLogin() {
@@ -299,6 +307,20 @@ export function AssetActions({ asset }: { asset: Asset }) {
   }
 
   async function handlePrimaryAction() {
+    if (isDownloadsPausedByStop) {
+      setMessage(
+        activeAsset.distribution_stopped_message ||
+          "Downloads and distribution for this product are currently paused by GJS Production."
+      );
+      return;
+    }
+    if (isPurchaseBlockedByDistribution) {
+      setMessage(
+        activeAsset.distribution_stopped_message ||
+          "New purchases and distribution for this product are currently stopped."
+      );
+      return;
+    }
     if (requiresUpdate) {
       return handlePayUpdateAction();
     }
@@ -356,7 +378,7 @@ export function AssetActions({ asset }: { asset: Asset }) {
     if (!(await requireLogin())) return;
     setBusy(true);
     setMessage(
-      activeAsset.is_free
+      activeAsset.is_free || Number(effectivePrice || 0) <= 0
         ? "Preparing secure download..."
         : isPrebooking
         ? "Setting up your pre-order..."
@@ -364,16 +386,20 @@ export function AssetActions({ asset }: { asset: Asset }) {
     );
     try {
       if (!activeAsset.is_free && !activeAsset.can_download) {
-        const storedUser = getStoredUser();
-        let phone = storedUser?.phone_number || (typeof window !== "undefined" ? (localStorage.getItem("gjs_customer_phone") || "") : "");
-        if (!phone || phone.replace(/\D/g, "").length !== 10) {
-          const userPhone = window.prompt(
-            "Enter your 10-digit mobile number for order receipt & OTP:",
-            phone
-          );
-          if (userPhone && userPhone.replace(/\D/g, "").length >= 10) {
-            phone = userPhone.replace(/\D/g, "").slice(-10);
-            localStorage.setItem("gjs_customer_phone", phone);
+        const isZeroPriceOrder = Number(effectivePrice || 0) <= 0;
+        let phone = "";
+        if (!isZeroPriceOrder) {
+          const storedUser = getStoredUser();
+          phone = storedUser?.phone_number || (typeof window !== "undefined" ? (localStorage.getItem("gjs_customer_phone") || "") : "");
+          if (!phone || phone.replace(/\D/g, "").length !== 10) {
+            const userPhone = window.prompt(
+              "Enter your 10-digit mobile number for order receipt & OTP:",
+              phone
+            );
+            if (userPhone && userPhone.replace(/\D/g, "").length >= 10) {
+              phone = userPhone.replace(/\D/g, "").slice(-10);
+              localStorage.setItem("gjs_customer_phone", phone);
+            }
           }
         }
         const nextOrder = await createOrder(activeAsset.id, phone || undefined, true);
@@ -430,6 +456,13 @@ export function AssetActions({ asset }: { asset: Asset }) {
   }
 
   async function handleUpgradeAction(addon: AssetFeatureAddon) {
+    if (isDistributionStopped) {
+      setMessage(
+        activeAsset.distribution_stopped_message ||
+          "New purchases and upgrades are temporarily paused for this product."
+      );
+      return;
+    }
     if (!(await requireLogin())) return;
     setBusy(true);
     setMessage(`Creating upgrade order for ${addon.title}...`);
@@ -476,6 +509,13 @@ export function AssetActions({ asset }: { asset: Asset }) {
   }
 
   async function handleAddonDownload(addon: AssetFeatureAddon) {
+    if (isDownloadsPausedByStop) {
+      setMessage(
+        activeAsset.distribution_stopped_message ||
+          "Downloads for this product and its add-ons are currently paused."
+      );
+      return;
+    }
     setBusy(true);
     setMessage(`Preparing download for ${addon.title}...`);
     try {
@@ -515,6 +555,12 @@ export function AssetActions({ asset }: { asset: Asset }) {
   }
 
   function getButtonLabel() {
+    if (isDownloadsPausedByStop) {
+      return "Downloads Temporarily Paused";
+    }
+    if (isPurchaseBlockedByDistribution) {
+      return activeAsset.distribution_stopped_reason || "Distribution Stopped";
+    }
     if (requiresUpdate) {
       return `Pay ₹${activeAsset.update_price || "0"} to Unlock Update (v${activeAsset.paid_update_version || activeAsset.version})`;
     }
@@ -553,17 +599,57 @@ export function AssetActions({ asset }: { asset: Asset }) {
     if (isUpcoming) {
       return `VIP Early Access: Buy for ₹${effectivePrice}`;
     }
+    if (Number(effectivePrice || 0) <= 0 && !activeAsset.is_free) {
+      return activeAsset.festival_offer_active
+        ? `🎉 Claim Free (${activeAsset.festival_badge || "Festival Offer"})`
+        : "Claim for ₹0.00";
+    }
+    if (activeAsset.festival_offer_active && activeAsset.user_festival_offer_active) {
+      if (activeAsset.has_paid_update && Number(activeAsset.update_price || 0) > 0) {
+        return `🎉 Buy for ₹${effectivePrice} (${activeAsset.festival_badge || "Festival Offer"} + v${activeAsset.paid_update_version || activeAsset.version})`;
+      }
+      return `🎉 Buy for ₹${effectivePrice} (${activeAsset.festival_badge || "Festival Offer"})`;
+    }
     if (activeAsset.user_has_early_discount && activeAsset.user_discount_percent) {
       return `Buy for ₹${effectivePrice} (${activeAsset.user_discount_percent}% Loyalty Discount)`;
+    }
+    if (activeAsset.festival_offer_active) {
+      if (activeAsset.has_paid_update && Number(activeAsset.update_price || 0) > 0) {
+        return `🎉 Buy for ₹${effectivePrice} (${activeAsset.festival_badge || "Festival Offer"} + v${activeAsset.paid_update_version || activeAsset.version})`;
+      }
+      return `🎉 Buy for ₹${effectivePrice} (${activeAsset.festival_badge || "Festival Offer"})`;
     }
     if (activeAsset.has_paid_update && Number(activeAsset.update_price || 0) > 0) {
       return `Buy for ₹${effectivePrice} (Includes v${activeAsset.paid_update_version || activeAsset.version} Update)`;
     }
-    return `Buy for ${priceLabel(activeAsset)}`;
+    return `Buy for ${effectivePrice ? `₹${effectivePrice}` : priceLabel(activeAsset)}`;
   }
 
   return (
     <div className="mt-8 space-y-4">
+      {isDistributionStopped ? (
+        <div className="rounded-lg border border-rose-500/40 bg-rose-950/30 p-4 text-xs text-rose-100 flex items-start gap-3 shadow-sm">
+          <Ban className="mt-0.5 shrink-0 text-rose-400" size={18} />
+          <div className="space-y-1 flex-1">
+            <p className="font-bold text-rose-200 text-sm">
+              {activeAsset.distribution_stopped_reason || "Distribution Stopped"}
+            </p>
+            <p className="text-rose-100/90 leading-relaxed">
+              {activeAsset.distribution_stopped_message ||
+                "New purchases and distribution for this product are temporarily paused by GJS Production."}
+            </p>
+            {isDownloadsPausedByStop ? (
+              <p className="text-[11px] font-medium text-rose-300">
+                Downloads are also temporarily paused for maintenance or compliance.
+              </p>
+            ) : canExistingOwnerStillDownload ? (
+              <p className="text-[11px] font-medium text-emerald-300">
+                You already own this product and can still download your package below.
+              </p>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
       {/* Pre-Booking Confirmed Status */}
       {hasPrebooked ? (
         <div className="rounded-lg border border-emerald-400/40 bg-emerald-950/30 p-4 text-xs text-emerald-200 flex items-start gap-3 shadow-sm">
@@ -801,9 +887,11 @@ export function AssetActions({ asset }: { asset: Asset }) {
       <div className="flex flex-wrap gap-3">
         <button
           onClick={handlePrimaryAction}
-          disabled={busy || isPrebookingSoldOut}
+          disabled={busy || isPrebookingSoldOut || isPurchaseBlockedByDistribution}
           className={`rounded px-5 py-3 font-semibold text-white transition disabled:opacity-60 ${
-            requiresUpdate
+            isPurchaseBlockedByDistribution
+              ? "cursor-not-allowed border border-rose-500/40 bg-rose-950/60 text-rose-200"
+              : requiresUpdate
               ? "bg-gradient-to-r from-amber-600 via-orange-600 to-amber-500 hover:from-amber-500 hover:to-orange-500 shadow-md shadow-amber-900/30 ring-1 ring-amber-400/40 font-bold"
               : hasPrebooked
               ? downloadsReady
@@ -813,10 +901,14 @@ export function AssetActions({ asset }: { asset: Asset }) {
               ? "bg-gradient-to-r from-cyan-600 via-teal-600 to-emerald-600 hover:from-cyan-500 hover:to-emerald-500 shadow-md shadow-cyan-900/30"
               : canEarlyAccess
               ? "bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 shadow-md shadow-purple-900/30"
+              : Number(effectivePrice || 0) <= 0 && !activeAsset.is_free
+              ? "bg-gradient-to-r from-fuchsia-600 to-emerald-600 hover:from-fuchsia-500 hover:to-emerald-500 shadow-md shadow-fuchsia-900/30"
               : "bg-rail-red hover:bg-rail-red/90"
           }`}
         >
-          {requiresUpdate ? (
+          {isPurchaseBlockedByDistribution ? (
+            <Ban className="mr-2 inline text-rose-300" size={18} />
+          ) : requiresUpdate ? (
             <Sparkles className="mr-2 inline text-amber-200" size={18} />
           ) : hasPrebooked ? (
             downloadsReady ? (
@@ -824,7 +916,7 @@ export function AssetActions({ asset }: { asset: Asset }) {
             ) : (
               <CheckCircle2 className="mr-2 inline text-cyan-300" size={18} />
             )
-          ) : activeAsset.is_free || activeAsset.can_download ? (
+          ) : activeAsset.is_free || activeAsset.can_download || Number(effectivePrice || 0) <= 0 ? (
             <Download className="mr-2 inline" size={18} />
           ) : isUpcomingBlocked ? null : (
             <ShoppingCart className="mr-2 inline" size={18} />
@@ -887,11 +979,11 @@ export function AssetActions({ asset }: { asset: Asset }) {
                     <button
                       type="button"
                       onClick={() => handleAddonDownload(addon)}
-                      disabled={busy}
-                      className="flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-2.5 text-xs font-bold text-white shadow-md transition-all hover:from-emerald-500 hover:to-teal-500 disabled:opacity-60"
+                      disabled={busy || isDownloadsPausedByStop}
+                      className="flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-2.5 text-xs font-bold text-white shadow-md transition-all hover:from-emerald-500 hover:to-teal-500 disabled:opacity-50"
                     >
                       <Download size={15} />
-                      <span>Download {addon.title}</span>
+                      <span>{isDownloadsPausedByStop ? "Downloads Paused" : `Download ${addon.title}`}</span>
                     </button>
                   ) : userOwnsBase ? (
                     <div className="flex items-center gap-3">
@@ -902,16 +994,20 @@ export function AssetActions({ asset }: { asset: Asset }) {
                       <button
                         type="button"
                         onClick={() => handleUpgradeAction(addon)}
-                        disabled={busy}
-                        className="flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-amber-600 to-orange-600 px-4 py-2.5 text-xs font-bold text-white shadow-md transition-all hover:from-amber-500 hover:to-orange-500 disabled:opacity-60"
+                        disabled={busy || isDistributionStopped}
+                        className={`flex items-center gap-1.5 rounded-lg px-4 py-2.5 text-xs font-bold text-white shadow-md transition-all disabled:opacity-50 ${
+                          isDistributionStopped
+                            ? "cursor-not-allowed border border-rose-500/40 bg-rose-950/60 text-rose-200"
+                            : "bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500"
+                        }`}
                       >
-                        <Sparkles size={14} />
-                        <span>Upgrade for ₹{addon.upgrade_price}</span>
+                        {isDistributionStopped ? <Ban size={14} /> : <Sparkles size={14} />}
+                        <span>{isDistributionStopped ? "Upgrades Paused" : `Upgrade for ₹${addon.upgrade_price}`}</span>
                       </button>
                     </div>
                   ) : (
                     <div className="text-xs text-slate-400 italic">
-                      Included in Complete Bundle or buy base first
+                      {isDistributionStopped ? "New bundle purchases paused" : "Included in Complete Bundle or buy base first"}
                     </div>
                   )}
                 </div>

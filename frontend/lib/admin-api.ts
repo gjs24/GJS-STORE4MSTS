@@ -513,6 +513,20 @@ export async function adminDeleteReviewReply(
   return adminDelete<AdminReview>(`/admin/reviews/${reviewId}/reply/`);
 }
 
+export function formatDateTimeLocal(value?: string | null): string {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+export function toIsoDateTimeOrEmpty(localValue?: string | null): string {
+  if (!localValue || !localValue.trim()) return "";
+  const date = new Date(localValue.trim());
+  return Number.isNaN(date.getTime()) ? localValue.trim() : date.toISOString();
+}
+
 export const fallbackStats: AdminStats = {
   total_users: 0,
   total_downloads: 0,

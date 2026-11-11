@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { CheckCircle2, Loader2, Save } from "lucide-react";
 import { AdminLoginNote } from "@/components/admin-login-note";
 import { AdminLayout } from "@/components/admin-table";
-import { adminGet, adminGetRequired, adminPatchForm, type AdminNotifyRequest } from "@/lib/admin-api";
+import { adminGet, adminGetRequired, adminPatchForm, formatDateTimeLocal, toIsoDateTimeOrEmpty, type AdminNotifyRequest } from "@/lib/admin-api";
 import { fallbackCategories, type Asset, type Category } from "@/lib/api";
 import type { DownloadLog } from "@/lib/store-api";
 
@@ -56,6 +56,13 @@ export default function EditAssetPage({ params }: { params: Promise<{ id: string
   const [updatePrice, setUpdatePrice] = useState<string>("10.00");
   const [paidUpdateVersion, setPaidUpdateVersion] = useState<string>("");
   const [updateNotes, setUpdateNotes] = useState<string>("");
+  const [distributionStopped, setDistributionStopped] = useState<boolean>(false);
+  const [distributionStoppedReason, setDistributionStoppedReason] = useState<string>("Distribution Stopped");
+  const [distributionStoppedMessage, setDistributionStoppedMessage] = useState<string>(
+    "New purchases for this product are temporarily paused by the creator."
+  );
+  const [distributionStopDownloads, setDistributionStopDownloads] = useState<boolean>(false);
+  const [festivalPrice, setFestivalPrice] = useState<string>("");
 
   useEffect(() => {
     params.then(({ id }) => {
@@ -94,6 +101,15 @@ export default function EditAssetPage({ params }: { params: Promise<{ id: string
           setUpdatePrice((data as any).update_price && (data as any).update_price !== "0.00" ? (data as any).update_price : "10.00");
           setPaidUpdateVersion((data as any).paid_update_version || "");
           setUpdateNotes((data as any).update_notes || "");
+          setDistributionStopped(Boolean(data.distribution_stopped));
+          setDistributionStoppedReason(data.distribution_stopped_reason || "Distribution Stopped");
+          setDistributionStoppedMessage(
+            data.distribution_stopped_message || "New purchases for this product are temporarily paused by the creator."
+          );
+          setDistributionStopDownloads(Boolean(data.distribution_stop_downloads));
+          setFestivalPrice(
+            data.festival_price !== null && data.festival_price !== undefined ? String(data.festival_price) : ""
+          );
           setMessage("");
         })
         .catch((error) => {
@@ -131,8 +147,8 @@ export default function EditAssetPage({ params }: { params: Promise<{ id: string
     formData.set("early_access_discount_percent", String(earlyAccessDiscountPercent || 0));
     formData.set("early_access_price", earlyAccessPrice || "0.00");
     formData.set("early_access_badge", earlyAccessBadge);
-    formData.set("early_access_starts_at", earlyAccessStartsAt || "");
-    formData.set("early_access_ends_at", earlyAccessEndsAt || "");
+    formData.set("early_access_starts_at", toIsoDateTimeOrEmpty(earlyAccessStartsAt));
+    formData.set("early_access_ends_at", toIsoDateTimeOrEmpty(earlyAccessEndsAt));
     formData.set("prebooking_enabled", String(prebookingEnabled));
     if (prebookingPrice && prebookingPrice.trim() !== "") {
       formData.set("prebooking_price", prebookingPrice.trim());
@@ -141,9 +157,9 @@ export default function EditAssetPage({ params }: { params: Promise<{ id: string
     }
     formData.set("prebooking_badge", prebookingBadge);
     formData.set("prebooking_message", prebookingMessage);
-    formData.set("prebooking_starts_at", prebookingStartsAt || "");
-    formData.set("prebooking_ends_at", prebookingEndsAt || "");
-    formData.set("prebooking_download_unlock_at", prebookingDownloadUnlockAt || "");
+    formData.set("prebooking_starts_at", toIsoDateTimeOrEmpty(prebookingStartsAt));
+    formData.set("prebooking_ends_at", toIsoDateTimeOrEmpty(prebookingEndsAt));
+    formData.set("prebooking_download_unlock_at", toIsoDateTimeOrEmpty(prebookingDownloadUnlockAt));
     formData.set("prebooking_downloads_unlocked", String(prebookingDownloadsUnlocked));
     formData.set("prebooking_slots", String(prebookingSlots || 0));
     formData.delete("early_access_required_assets");
@@ -154,8 +170,8 @@ export default function EditAssetPage({ params }: { params: Promise<{ id: string
     } else {
       formData.set("early_access_required_assets", "[]");
     }
-    formData.set("deal_starts_at", String(formData.get("deal_starts_at") || ""));
-    formData.set("deal_ends_at", String(formData.get("deal_ends_at") || ""));
+    formData.set("deal_starts_at", toIsoDateTimeOrEmpty(String(formData.get("deal_starts_at") || "")));
+    formData.set("deal_ends_at", toIsoDateTimeOrEmpty(String(formData.get("deal_ends_at") || "")));
     if (selectedBoardTemplateId) {
       formData.set("board_template", selectedBoardTemplateId);
       formData.set("bundle_board_template_free", bundleBoardTemplateFree ? "true" : "false");
@@ -165,11 +181,19 @@ export default function EditAssetPage({ params }: { params: Promise<{ id: string
       formData.set("bundle_board_template_free", "false");
       formData.set("allow_separate_board_purchase", "true");
     }
-    formData.set("release_date", String(formData.get("release_date") || ""));
+    formData.set("release_date", toIsoDateTimeOrEmpty(String(formData.get("release_date") || "")));
     formData.set("has_paid_update", String(hasPaidUpdate));
     formData.set("update_price", updatePrice.trim() || "0.00");
     formData.set("paid_update_version", paidUpdateVersion.trim());
     formData.set("update_notes", updateNotes.trim());
+    formData.set("distribution_stopped", String(distributionStopped));
+    formData.set("distribution_stopped_reason", distributionStoppedReason.trim() || "Distribution Stopped");
+    formData.set(
+      "distribution_stopped_message",
+      distributionStoppedMessage.trim() || "New purchases for this product are temporarily paused by the creator."
+    );
+    formData.set("distribution_stop_downloads", String(distributionStopDownloads));
+    formData.set("festival_price", !isFree && festivalPrice.trim() !== "" ? festivalPrice.trim() : "");
 
     if (file instanceof File && file.size === 0) {
       formData.delete("download_file");
@@ -257,6 +281,22 @@ export default function EditAssetPage({ params }: { params: Promise<{ id: string
           <span className="text-sm text-slate-300">Selling price in ₹ / INR</span>
           <input name="price" type="number" min="0" step="0.01" disabled={isFree} defaultValue={asset.price} className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-3 disabled:opacity-50" />
         </label>
+        <label className="block">
+          <span className="text-sm text-amber-300">Pre-defined Festival Price in ₹ / INR (Optional)</span>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            disabled={isFree}
+            value={festivalPrice}
+            onChange={(e) => setFestivalPrice(e.target.value)}
+            placeholder="Leave empty to use Festival % discount"
+            className="mt-2 w-full rounded border border-amber-500/30 bg-black/40 px-3 py-3 text-amber-100 disabled:opacity-50"
+          />
+          <span className="mt-1 block text-xs text-slate-500">
+            Applied automatically during active festival themes/schedules (unless overridden per campaign).
+          </span>
+        </label>
         <label className="block md:col-span-2">
           <span className="text-sm font-semibold text-slate-200">Short description (for product cards & sidebar)</span>
           <input name="short_description" required defaultValue={asset.short_description} className="mt-2 w-full rounded border border-white/10 bg-black/40 px-3 py-3" />
@@ -307,6 +347,67 @@ export default function EditAssetPage({ params }: { params: Promise<{ id: string
             <input name="is_upcoming" type="checkbox" defaultChecked={asset.is_upcoming} />
             <span>Upcoming product / coming soon</span>
           </label>
+        </div>
+
+        {/* Product Distribution Control */}
+        <div className="space-y-3 rounded-lg border border-rose-500/35 bg-rose-950/20 p-4 md:col-span-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="font-bold text-rose-300 flex items-center gap-2">
+                <span>🛑</span> Product Distribution Control
+              </h2>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Stop new purchases while keeping this product visible in the store with a customer notice.
+              </p>
+            </div>
+            <label className="inline-flex items-center gap-2.5 rounded-lg border border-rose-500/40 bg-black/40 px-3.5 py-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={distributionStopped}
+                onChange={(e) => setDistributionStopped(e.target.checked)}
+                className="h-4 w-4 accent-rose-500"
+              />
+              <span className="text-sm font-bold text-white">Stop Purchases / Distribution</span>
+            </label>
+          </div>
+          {distributionStopped ? (
+            <div className="grid gap-3 md:grid-cols-2 pt-2 border-t border-rose-500/20">
+              <label className="block">
+                <span className="text-xs font-semibold text-rose-200">Status Badge Label</span>
+                <input
+                  type="text"
+                  value={distributionStoppedReason}
+                  onChange={(e) => setDistributionStoppedReason(e.target.value)}
+                  placeholder="Distribution Stopped"
+                  className="mt-1 w-full rounded border border-white/10 bg-black/40 px-3 py-2 text-sm text-white"
+                />
+              </label>
+              <div className="flex items-center rounded border border-white/10 bg-black/30 px-3 py-2">
+                <label className="flex items-start gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={distributionStopDownloads}
+                    onChange={(e) => setDistributionStopDownloads(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 accent-rose-500"
+                  />
+                  <div>
+                    <span className="text-xs font-semibold text-rose-200 block">Also pause downloads for existing owners</span>
+                    <span className="text-[11px] text-slate-400">Leave unchecked so past buyers can still download their files.</span>
+                  </div>
+                </label>
+              </div>
+              <label className="block md:col-span-2">
+                <span className="text-xs font-semibold text-rose-200">Customer Notice Message</span>
+                <textarea
+                  rows={2}
+                  value={distributionStoppedMessage}
+                  onChange={(e) => setDistributionStoppedMessage(e.target.value)}
+                  placeholder="New purchases for this product are temporarily paused by the creator."
+                  className="mt-1 w-full rounded border border-white/10 bg-black/40 px-3 py-2 text-sm text-white"
+                />
+              </label>
+            </div>
+          ) : null}
         </div>
 
         {/* Associated Name Board Template Selector */}
@@ -1044,9 +1145,3 @@ function fileStatus(file?: File) {
   return `Selected: ${file.name} (${sizeMb.toFixed(sizeMb >= 10 ? 0 : 1)} MB)`;
 }
 
-function formatDateTimeLocal(value?: string | null) {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  return date.toISOString().slice(0, 16);
-}

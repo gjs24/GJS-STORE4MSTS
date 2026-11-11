@@ -12,6 +12,7 @@ import {
   Package,
   Pencil,
   Search,
+  Ban,
   Star,
   Trash2,
   X
@@ -25,7 +26,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { adminDelete, adminGet, adminPatch, adminPost } from "@/lib/admin-api";
 import type { Asset } from "@/lib/api";
 
-type AssetFilter = "all" | "published" | "hidden" | "free" | "premium" | "featured" | "upcoming" | "deal";
+type AssetFilter = "all" | "published" | "hidden" | "free" | "premium" | "featured" | "upcoming" | "deal" | "stopped";
 type AssetSort = "newest" | "oldest" | "price_high" | "price_low" | "downloads_desc" | "name_asc";
 
 function AssetsContent() {
@@ -88,7 +89,8 @@ function AssetsContent() {
         (filter === "premium" && !asset.is_free) ||
         (filter === "featured" && asset.is_featured) ||
         (filter === "upcoming" && asset.is_upcoming) ||
-        (filter === "deal" && asset.deal_is_open);
+        (filter === "deal" && asset.deal_is_open) ||
+        (filter === "stopped" && asset.distribution_stopped);
       return matchesQuery && matchesFilter;
     });
 
@@ -153,6 +155,31 @@ function AssetsContent() {
       });
     } catch {
       setFeedback({ type: "error", message: `Failed to update deal status for ${asset.title}.` });
+    }
+  }
+
+  async function toggleDistribution(asset: Asset) {
+    const nextStopped = !asset.distribution_stopped;
+    try {
+      const updated = await adminPatch<Asset>(`/admin/assets/${asset.id}/`, {
+        distribution_stopped: nextStopped
+      });
+      setAssets((current) =>
+        current.map((item) =>
+          item.id === asset.id
+            ? { ...item, distribution_stopped: updated.distribution_stopped }
+            : item
+        )
+      );
+      setFeedback({
+        type: "success",
+        message: `"${asset.title}" distribution is now ${nextStopped ? "stopped (purchases paused)" : "active"}.`
+      });
+    } catch (error) {
+      setFeedback({
+        type: "error",
+        message: error instanceof Error ? error.message : "Could not update distribution status."
+      });
     }
   }
 
@@ -270,6 +297,7 @@ function AssetsContent() {
           <option value="featured">Featured Only</option>
           <option value="upcoming">Coming Soon</option>
           <option value="deal">Deal Open</option>
+          <option value="stopped">Distribution Stopped</option>
           <option value="free">Free Only</option>
           <option value="premium">Premium Only</option>
         </select>
@@ -322,6 +350,14 @@ function AssetsContent() {
                   {asset.is_featured ? <Badge variant="warning">Featured</Badge> : null}
                   {asset.is_upcoming ? <Badge variant="muted">Upcoming</Badge> : null}
                   {asset.deal_is_open ? <Badge variant="success">Deal Open</Badge> : null}
+                  {asset.distribution_stopped ? (
+                    <Badge variant="default" className="bg-rose-500/20 text-rose-200 ring-rose-500/40">
+                      {asset.distribution_stopped_reason || "Distribution Stopped"}
+                    </Badge>
+                  ) : null}
+                  {asset.festival_price !== null && asset.festival_price !== undefined && asset.festival_price !== "" ? (
+                    <Badge variant="warning">Festival ₹{asset.festival_price}</Badge>
+                  ) : null}
                   <Badge variant={asset.is_free ? "success" : "default"}>
                     {asset.is_free ? "Free" : "Premium"}
                   </Badge>
@@ -385,6 +421,18 @@ function AssetsContent() {
                   }`}
                 >
                   <BadgeIndianRupee size={16} />
+                </button>
+
+                <button
+                  title={asset.distribution_stopped ? "Resume purchases & distribution" : "Stop purchases & distribution"}
+                  onClick={() => toggleDistribution(asset)}
+                  className={`rounded border p-2 hover:bg-white/10 transition ${
+                    asset.distribution_stopped
+                      ? "border-rose-400 bg-rose-500/15 text-rose-300"
+                      : "border-white/10 text-slate-400 hover:text-rose-200"
+                  }`}
+                >
+                  <Ban size={16} />
                 </button>
 
                 <Link

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Sparkles } from "lucide-react";
 import type { SiteSettings } from "@/lib/api";
+import { useLiveSiteSettings } from "@/lib/use-live-festival";
 
 type StandardParticle = {
   x: number;
@@ -102,6 +103,7 @@ const SKYSHOT_PALETTES = [
 ];
 
 export function FestivalEffects({ settings }: { settings?: SiteSettings | null }) {
+  const liveSettings = useLiveSiteSettings(settings);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [enabled, setEnabled] = useState(true);
   const [mounted, setMounted] = useState(false);
@@ -126,8 +128,8 @@ export function FestivalEffects({ settings }: { settings?: SiteSettings | null }
     }
   };
 
-  const effectType = settings?.festival_effect || "confetti";
-  const isThemeActive = Boolean(settings?.festival_theme_enabled && effectType !== "none");
+  const effectType = liveSettings?.festival_effect || "confetti";
+  const isThemeActive = Boolean(liveSettings?.festival_theme_enabled && effectType !== "none");
   const isSkyShots = effectType === "skyshots" || effectType === "fireworks";
 
   useEffect(() => {

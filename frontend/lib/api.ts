@@ -84,6 +84,17 @@ export type Asset = {
   paid_update_version?: string;
   update_notes?: string;
   user_requires_update?: boolean;
+  distribution_stopped?: boolean;
+  distribution_stopped_reason?: string;
+  distribution_stopped_message?: string;
+  distribution_stop_downloads?: boolean;
+  festival_price?: string | null;
+  regular_price?: string;
+  festival_offer_active?: boolean;
+  festival_badge?: string | null;
+  festival_ends_at?: string | null;
+  festival_discount_percent?: number;
+  user_festival_offer_active?: boolean;
   preview_video_url?: string;
   requirements?: string;
   installation_steps?: string;
@@ -197,6 +208,23 @@ export type SiteSettings = {
   festival_discount_percent?: number;
   festival_announcement_bar?: boolean;
   festival_popup_card?: boolean;
+  festival_schedule_enabled?: boolean;
+  festival_starts_at?: string | null;
+  festival_ends_at?: string | null;
+  festival_apply_discount_to_prices?: boolean;
+  active_festival_schedule_id?: number | null;
+  active_festival_name?: string | null;
+  upcoming_festival?: {
+    schedule_id?: number | null;
+    name: string;
+    title: string;
+    badge: string;
+    theme_type: string;
+    discount_percent: number;
+    starts_at: string | null;
+    ends_at: string | null;
+  } | null;
+  server_time?: string;
   special_access_email_subject?: string;
   special_access_email_heading?: string;
   special_access_email_body?: string;
@@ -236,6 +264,10 @@ export const fallbackSiteSettings: SiteSettings = {
   festival_discount_percent: 0,
   festival_announcement_bar: true,
   festival_popup_card: false,
+  festival_schedule_enabled: false,
+  festival_starts_at: null,
+  festival_ends_at: null,
+  festival_apply_discount_to_prices: true,
   special_access_email_subject: "🎉 You've Received VIP Special Access - MSTS-GJS Production Store",
   special_access_email_heading: "VIP Special Access Granted",
   special_access_email_body:
@@ -292,8 +324,51 @@ export function clearAuth() {
 }
 
 
+export type FestivalAssetPrice = {
+  id?: number;
+  asset: number;
+  asset_title?: string;
+  asset_slug?: string;
+  asset_regular_price?: string;
+  asset_original_price?: string | null;
+  asset_is_free?: boolean;
+  festival_price: string | null;
+  is_included: boolean;
+};
+
+export type FestivalSchedule = {
+  id: number;
+  name: string;
+  is_active: boolean;
+  starts_at: string;
+  ends_at: string;
+  priority: number;
+  theme_type: string;
+  title: string;
+  subtitle: string;
+  badge: string;
+  button_text: string;
+  button_url: string;
+  effect: string;
+  banner_image: string;
+  discount_percent: number;
+  apply_discount_to_prices: boolean;
+  announcement_bar: boolean;
+  popup_card: boolean;
+  status_label?: "live" | "upcoming" | "ended" | "paused";
+  asset_prices: FestivalAssetPrice[];
+  created_at?: string;
+  updated_at?: string;
+};
+
 export async function apiGet<T>(path: string): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, { next: { revalidate: 60 } });
+  if (!res.ok) throw new Error(`API request failed: ${path}`);
+  return res.json();
+}
+
+export async function apiGetFresh<T>(path: string): Promise<T> {
+  const res = await fetch(`${API_URL}${path}`, { cache: "no-store" });
   if (!res.ok) throw new Error(`API request failed: ${path}`);
   return res.json();
 }
@@ -425,7 +500,7 @@ export async function getCategories() {
 
 export async function getSiteSettings() {
   try {
-    return await apiGet<SiteSettings>("/site-settings/");
+    return await apiGetFresh<SiteSettings>("/site-settings/");
   } catch {
     return fallbackSiteSettings;
   }

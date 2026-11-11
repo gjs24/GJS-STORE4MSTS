@@ -37,7 +37,7 @@ from rest_framework.exceptions import PermissionDenied
 from .throttles import DownloadRateThrottle
 
 from .early_access import get_cached_early_access_status
-from .models import AdminActivityLog, Asset, Category, DownloadLog, EmailOTP, NotifyRequest, Order, Payment, Review, SiteSetting, UserSpecialAccess, Wishlist
+from .festival import get_resolved_site_settings_dict
 from .models import (
     AdminActivityLog,
     Asset,
@@ -45,6 +45,7 @@ from .models import (
     Category,
     DownloadLog,
     EmailOTP,
+    FestivalSchedule,
     NotifyRequest,
     Order,
     Payment,
@@ -71,6 +72,7 @@ from .serializers import (
     BoardTemplateSerializer,
     CategorySerializer,
     DownloadLogSerializer,
+    FestivalScheduleSerializer,
     NotifyRequestSerializer,
     OrderSerializer,
     AdminOrderSerializer,
@@ -1583,6 +1585,15 @@ class OrderCreateView(generics.CreateAPIView):
                 order.save(update_fields=["provider_order_id"])
                 return Response(OrderSerializer(order, context={"request": request}).data, status=status.HTTP_201_CREATED)
 
+            if asset.distribution_stopped:
+                return Response(
+                    {
+                        "detail": asset.distribution_stopped_message
+                        or "New purchases and upgrades for this product are temporarily paused by the creator."
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
             owns_base = (
                 asset.is_free
                 or user_has_special_access(request.user, asset)
@@ -1711,6 +1722,15 @@ class OrderCreateView(generics.CreateAPIView):
                     return Response(OrderSerializer(existing_order, context={"request": request}).data, status=status.HTTP_200_OK)
                 return Response({"detail": f"You already have access to update {effective_version}."}, status=status.HTTP_200_OK)
 
+            if asset.distribution_stopped:
+                return Response(
+                    {
+                        "detail": asset.distribution_stopped_message
+                        or "Distribution and paid update purchases for this product are temporarily paused by the creator."
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
             owns_base = (
                 asset.is_free
                 or user_has_special_access(request.user, asset)
@@ -1830,6 +1850,15 @@ class OrderCreateView(generics.CreateAPIView):
         has_paid_existing = bool(
             existing_order and existing_order.status in [Order.Status.APPROVED, Order.Status.PAID]
         )
+
+        if asset.distribution_stopped and not has_paid_existing:
+            return Response(
+                {
+                    "detail": asset.distribution_stopped_message
+                    or "New purchases and distribution for this product are currently stopped by the creator."
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         if is_upcoming_effective and not ea_status["can_access_early"] and not has_paid_existing:
             if not getattr(asset, "prebooking_enabled", False):
@@ -2258,12 +2287,17 @@ class AdminAssetViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAdminUser]
     parser_classes = [JSONParser, FormParser, MultiPartParser]
 
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["admin_raw"] = True
+        return context
+
     def list(self, request, *args, **kwargs):
         assets = self.get_queryset().annotate(
             review_count=Count("reviews", filter=Q(reviews__is_approved=True)),
             avg_rating=Avg("reviews__rating", filter=Q(reviews__is_approved=True)),
         )
-        return Response(AssetListSerializer(assets, many=True, context={"request": request}).data)
+        return Response(AssetListSerializer(assets, many=True, context=self.get_serializer_context()).data)
 
     def clean_cloudinary_file_payload(self, request):
         if not settings.CLOUDINARY_CONFIGURED:
@@ -2316,6 +2350,7 @@ class AdminAssetViewSet(viewsets.ModelViewSet):
             previous_price = previous.price
             previous_file = previous.download_file.name if previous.download_file else ""
             previous_deal = previous.deal_is_open
+            previous_dist_stopped = previous.distribution_stopped
             response = super().update(request, *args, **kwargs)
             asset = self.get_object()
             log_admin_activity(request, "Product edited", "Asset", asset.id, f"Edited product {asset.title}")
@@ -2326,6 +2361,8 @@ class AdminAssetViewSet(viewsets.ModelViewSet):
                 log_admin_activity(request, "File changed", "Asset", asset.id, f"{asset.title} file source changed")
             if previous_deal != asset.deal_is_open:
                 log_admin_activity(request, "Deal opened" if asset.deal_is_open else "Deal closed", "Asset", asset.id, f"{asset.title} deal is now {'open' if asset.deal_is_open else 'closed'}")
+            if previous_dist_stopped != asset.distribution_stopped:
+                log_admin_activity(request, "Distribution stopped" if asset.distribution_stopped else "Distribution resumed", "Asset", asset.id, f"{asset.title} distribution is now {'stopped' if asset.distribution_stopped else 'active'}")
             return response
         except Exception as exc:
             logger.exception("Admin asset update failed")
@@ -2342,6 +2379,7 @@ class AdminAssetViewSet(viewsets.ModelViewSet):
             previous = self.get_object()
             previous_price = previous.price
             previous_deal = previous.deal_is_open
+            previous_dist_stopped = previous.distribution_stopped
             response = super().partial_update(request, *args, **kwargs)
             asset = self.get_object()
             log_admin_activity(request, "Product edited", "Asset", asset.id, f"Edited product {asset.title}")
@@ -2349,6 +2387,8 @@ class AdminAssetViewSet(viewsets.ModelViewSet):
                 log_admin_activity(request, "Price changed", "Asset", asset.id, f"{asset.title} price changed from {previous_price} to {asset.price}")
             if previous_deal != asset.deal_is_open:
                 log_admin_activity(request, "Deal opened" if asset.deal_is_open else "Deal closed", "Asset", asset.id, f"{asset.title} deal is now {'open' if asset.deal_is_open else 'closed'}")
+            if previous_dist_stopped != asset.distribution_stopped:
+                log_admin_activity(request, "Distribution stopped" if asset.distribution_stopped else "Distribution resumed", "Asset", asset.id, f"{asset.title} distribution is now {'stopped' if asset.distribution_stopped else 'active'}")
             return response
         except Exception as exc:
             logger.exception("Admin asset update failed")
@@ -3040,6 +3080,16 @@ class AdminActivityLogView(generics.ListAPIView):
 
 
 def create_download_response(request, asset):
+    is_staff = bool(request.user.is_staff or getattr(request.user, "is_superuser", False))
+    if asset.distribution_stopped and asset.distribution_stop_downloads and not is_staff:
+        return Response(
+            {
+                "detail": asset.distribution_stopped_message
+                or f"Downloads for '{asset.title}' are temporarily paused by the creator."
+            },
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
     if asset.is_upcoming:
         ea_status = get_cached_early_access_status(asset, request)
         now = timezone.now()
@@ -3081,11 +3131,20 @@ def create_download_response(request, asset):
     ).exclude(status=Order.Status.BLOCKED).exists()
 
     allowed = (
-        asset.is_free
+        is_staff
+        or (asset.is_free and not asset.distribution_stopped)
         or user_has_special_access(request.user, asset)
         or has_paid_order
     )
     if not allowed:
+        if asset.distribution_stopped and asset.is_free:
+            return Response(
+                {
+                    "detail": asset.distribution_stopped_message
+                    or f"Distribution for '{asset.title}' is temporarily paused by the creator."
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
         return Response({"detail": "Purchase required before downloading this asset."}, status=status.HTTP_403_FORBIDDEN)
 
     update_price = getattr(asset, "update_price", None) or Decimal("0.00")
@@ -3288,9 +3347,17 @@ def record_addon_download(request, addon):
 @throttle_classes([DownloadRateThrottle])
 def addon_download_by_id(request, pk):
     addon = get_object_or_404(AssetFeatureAddon, pk=pk, is_active=True)
+    is_staff = bool(request.user.is_staff or getattr(request.user, "is_superuser", False))
+    if addon.asset.distribution_stopped and addon.asset.distribution_stop_downloads and not is_staff:
+        return Response(
+            {
+                "detail": addon.asset.distribution_stopped_message
+                or f"Downloads for '{addon.asset.title}' are temporarily paused by the creator."
+            },
+            status=status.HTTP_403_FORBIDDEN,
+        )
     allowed = (
-        request.user.is_staff
-        or getattr(request.user, "is_superuser", False)
+        is_staff
         or user_has_special_access(request.user, addon.asset)
         or UserAssetAddonUnlock.objects.filter(user=request.user, addon=addon).exists()
     )
@@ -3400,7 +3467,9 @@ def admin_stats(request):
 @api_view(["GET"])
 @permission_classes([permissions.AllowAny])
 def site_settings(request):
-    data = SiteSettingSerializer(SiteSetting.load()).data
+    site = SiteSetting.load()
+    base_data = SiteSettingSerializer(site).data
+    data = get_resolved_site_settings_dict(site, base_data)
     if not (request.user and request.user.is_authenticated and request.user.is_staff):
         data.pop("maintenance_bypass_token", None)
     return Response(data)
@@ -3928,5 +3997,44 @@ def special_access_link_claim(request, token):
         },
         status=status.HTTP_200_OK,
     )
+
+
+class AdminFestivalScheduleViewSet(viewsets.ModelViewSet):
+    queryset = FestivalSchedule.objects.prefetch_related("asset_prices__asset").all()
+    serializer_class = FestivalScheduleSerializer
+    permission_classes = [permissions.IsAdminUser]
+
+    def perform_create(self, serializer):
+        schedule = serializer.save()
+        log_admin_activity(
+            self.request,
+            "Festival schedule created",
+            "FestivalSchedule",
+            schedule.id,
+            f"Created festival schedule '{schedule.name}' ({schedule.starts_at} to {schedule.ends_at})",
+        )
+
+    def perform_update(self, serializer):
+        schedule = serializer.save()
+        log_admin_activity(
+            self.request,
+            "Festival schedule updated",
+            "FestivalSchedule",
+            schedule.id,
+            f"Updated festival schedule '{schedule.name}' ({schedule.starts_at} to {schedule.ends_at})",
+        )
+
+    def perform_destroy(self, instance):
+        name = instance.name
+        sid = instance.id
+        instance.delete()
+        log_admin_activity(
+            self.request,
+            "Festival schedule deleted",
+            "FestivalSchedule",
+            sid,
+            f"Deleted festival schedule '{name}'",
+        )
+
 
 

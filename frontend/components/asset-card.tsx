@@ -55,12 +55,16 @@ export function AssetCard({
           <div className="absolute right-3 top-3 z-10 flex items-center gap-1.5">
             <span
               className={`rounded-full px-2.5 py-1 text-xs font-bold tracking-wide shadow-md backdrop-blur-md ${
-                asset.prebooking_enabled && asset.is_upcoming
+                asset.distribution_stopped
+                  ? "border border-rose-300/30 bg-gradient-to-r from-rose-600 to-red-700 text-white font-extrabold"
+                  : asset.prebooking_enabled && asset.is_upcoming
                   ? "bg-gradient-to-r from-cyan-500 to-teal-500 text-white font-black animate-pulse"
                   : asset.is_upcoming
                   ? "bg-gradient-to-r from-amber-400 to-amber-500 text-black font-black"
                   : showDeal
                   ? "animate-deal-pulse bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-extrabold"
+                  : asset.festival_offer_active
+                  ? "bg-gradient-to-r from-fuchsia-600 to-rose-600 text-white font-extrabold shadow-glow"
                   : asset.is_free
                   ? "bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-extrabold"
                   : asset.discount_percent
@@ -68,7 +72,9 @@ export function AssetCard({
                   : "border border-white/20 bg-rail-red text-white"
               }`}
             >
-              {asset.prebooking_enabled && asset.is_upcoming
+              {asset.distribution_stopped
+                ? asset.distribution_stopped_reason || "Distribution Stopped"
+                : asset.prebooking_enabled && asset.is_upcoming
                 ? asset.prebooking_badge || "PRE-BOOKING"
                 : asset.is_upcoming
                 ? asset.coming_soon_badge || "COMING SOON"
@@ -76,6 +82,10 @@ export function AssetCard({
                 ? asset.deal_title || "DEAL OPEN"
                 : asset.is_free
                 ? "FREE"
+                : asset.festival_offer_active
+                ? asset.discount_percent
+                  ? `🎉 ${asset.discount_percent}% OFF`
+                  : asset.festival_badge || "FESTIVAL OFFER"
                 : asset.discount_percent
                 ? `${asset.discount_percent}% OFF`
                 : `₹${asset.price}`}
@@ -134,7 +144,14 @@ export function AssetCard({
       <div className="border-t border-white/[0.08] bg-black/25 px-4 py-3">
         <div className="mb-2 flex items-center justify-between">
           <div className="text-sm">
-            {asset.is_upcoming ? (
+            {asset.distribution_stopped ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-md border border-rose-500/40 bg-rose-500/15 px-2 py-0.5 text-xs font-bold text-rose-200">
+                  Purchases Paused
+                </span>
+                {!asset.is_free ? <span className="text-xs text-slate-500 line-through">₹{asset.price}</span> : null}
+              </div>
+            ) : asset.is_upcoming ? (
               <span className="text-xs font-semibold text-rail-amber">
                 {asset.coming_soon_status_text || "Release: TBA"}
               </span>

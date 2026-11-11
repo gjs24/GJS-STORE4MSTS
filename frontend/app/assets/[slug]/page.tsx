@@ -13,7 +13,7 @@ import { API_URL, Asset, fallbackAssets } from "@/lib/api";
 
 async function getAsset(slug: string): Promise<Asset> {
   try {
-    const res = await fetch(`${API_URL}/assets/${slug}/`, { next: { revalidate: 60 } });
+    const res = await fetch(`${API_URL}/assets/${slug}/`, { cache: "no-store" });
     if (!res.ok) throw new Error("not found");
     return res.json();
   } catch {
@@ -68,9 +68,22 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ sl
           <div className="mt-4 text-xl">
             <PriceDisplay asset={asset} />
             {!asset.is_free ? <p className="mt-1 text-sm text-slate-400">Currency: Indian Rupees (INR ₹)</p> : null}
-            {showDeal && Number(asset.savings_amount || 0) > 0 ? (
-              <p className="mt-1 text-sm text-emerald-300">{asset.deal_title || "Launch Offer"} - You save ₹{asset.savings_amount}</p>
-            ) : null}
+            {asset.distribution_stopped ? (
+              <p className="mt-1 text-sm font-medium text-rose-300">
+                {asset.distribution_stopped_reason || "Distribution Stopped"} — New purchases are currently paused.
+              </p>
+            ) : (
+              <>
+                {asset.festival_offer_active && Number(asset.savings_amount || 0) > 0 ? (
+                  <p className="mt-1 text-sm font-semibold text-fuchsia-300">
+                    🎉 {asset.festival_badge || "Festival Offer"} — You save ₹{asset.savings_amount} ({asset.festival_discount_percent || asset.discount_percent}% OFF)
+                  </p>
+                ) : null}
+                {showDeal && Number(asset.savings_amount || 0) > 0 ? (
+                  <p className="mt-1 text-sm text-emerald-300">{asset.deal_title || "Launch Offer"} - You save ₹{asset.savings_amount}</p>
+                ) : null}
+              </>
+            )}
           </div>
           {/* Clean Short Description */}
           <p className="mt-4 text-base text-slate-300 leading-relaxed font-normal">
@@ -266,7 +279,56 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ sl
               />
             </div>
           ) : null}
-          {showDeal ? (
+          {asset.distribution_stopped ? (
+            <div className="mt-6 rounded-lg border border-rose-500/40 bg-rose-950/30 p-5 space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded bg-rose-500/25 border border-rose-400/40 px-2.5 py-1 text-xs font-black uppercase tracking-wide text-rose-200">
+                  🛑 {asset.distribution_stopped_reason || "Distribution Stopped"}
+                </span>
+              </div>
+              <h2 className="text-xl font-bold text-white">New Purchases Temporarily Stopped</h2>
+              <p className="text-sm leading-relaxed text-rose-100/90">
+                {asset.distribution_stopped_message ||
+                  "Distribution and new purchases for this product are temporarily paused by GJS Production."}
+              </p>
+              {!asset.distribution_stop_downloads ? (
+                <p className="text-xs text-slate-300">
+                  Existing customers who already own this product can still download it from their account or below.
+                </p>
+              ) : (
+                <p className="text-xs text-rose-200">
+                  Downloads are also temporarily paused while this notice is active.
+                </p>
+              )}
+            </div>
+          ) : null}
+          {asset.festival_offer_active && !asset.distribution_stopped ? (
+            <div className="mt-6 rounded-lg border border-fuchsia-400/35 bg-gradient-to-br from-fuchsia-950/35 via-purple-950/25 to-slate-900/60 p-5 space-y-4">
+              <div>
+                <p className="inline-flex items-center gap-1.5 rounded bg-fuchsia-500/20 border border-fuchsia-400/30 px-2.5 py-1 text-xs font-black uppercase tracking-wide text-fuchsia-200">
+                  🎉 {asset.festival_badge || "Festival Special Offer"}
+                </p>
+                <h2 className="mt-2 text-2xl font-black text-white">
+                  {Number(asset.price) === 0 && !asset.is_free
+                    ? "Special ₹0.00 Festival Offer Unlocked!"
+                    : `Festival Price: ₹${asset.price}${asset.regular_price && Number(asset.regular_price) > Number(asset.price) ? ` (Regular ₹${asset.regular_price})` : ""}`}
+                </h2>
+                <p className="mt-2 text-sm leading-6 text-slate-200">
+                  Limited-time scheduled festival pricing is active now{asset.festival_discount_percent ? ` — save ${asset.festival_discount_percent}%` : ""}!
+                </p>
+              </div>
+              {asset.festival_ends_at ? (
+                <CountdownTimer
+                  endDate={asset.festival_ends_at}
+                  endLabel="Festival Offer Ends In"
+                  completedLabel="Festival Offer Ended"
+                  theme="purple"
+                  icon="sparkles"
+                />
+              ) : null}
+            </div>
+          ) : null}
+          {showDeal && !asset.distribution_stopped ? (
             <div className="mt-6 rounded-lg border border-emerald-400/30 bg-emerald-400/10 p-5 space-y-4">
               <div>
                 <p className="text-sm font-black uppercase tracking-wide text-emerald-300">{asset.deal_badge || "Limited Time"}</p>

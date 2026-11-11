@@ -174,6 +174,33 @@ class Asset(models.Model):
         null=True,
         help_text="Timestamp when this paid update was activated. Orders placed after this date get the update automatically.",
     )
+    distribution_stopped = models.BooleanField(
+        default=False,
+        help_text="Stop new purchases and distribution for this product while keeping its catalog page visible.",
+    )
+    distribution_stopped_reason = models.CharField(
+        max_length=120,
+        blank=True,
+        default="Distribution Stopped",
+        help_text="Short status badge shown on cards and the product page when distribution is stopped.",
+    )
+    distribution_stopped_message = models.TextField(
+        blank=True,
+        default="New purchases for this product are temporarily paused by the creator.",
+        help_text="Detailed customer notice shown on the product page when distribution is stopped.",
+    )
+    distribution_stop_downloads = models.BooleanField(
+        default=False,
+        help_text="Also pause downloads for existing owners while distribution is stopped.",
+    )
+    festival_price = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        blank=True,
+        null=True,
+        validators=[MinValueValidator(Decimal("0.00"))],
+        help_text="Optional pre-defined festival selling price (INR) when a festival offer is active.",
+    )
     download_count = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -573,6 +600,61 @@ class DownloadLog(models.Model):
         ordering = ["-downloaded_at"]
 
 
+class FestivalSchedule(models.Model):
+    name = models.CharField(max_length=160)
+    is_active = models.BooleanField(default=True)
+    starts_at = models.DateTimeField()
+    ends_at = models.DateTimeField()
+    priority = models.PositiveSmallIntegerField(
+        default=10,
+        help_text="Higher priority wins when multiple schedules overlap.",
+    )
+    theme_type = models.CharField(max_length=40, default="diwali")
+    title = models.CharField(max_length=200, blank=True, default="")
+    subtitle = models.CharField(max_length=320, blank=True, default="")
+    badge = models.CharField(max_length=80, blank=True, default="FESTIVAL SPECIAL")
+    button_text = models.CharField(max_length=80, blank=True, default="Explore Store")
+    button_url = models.CharField(max_length=240, blank=True, default="/store")
+    effect = models.CharField(max_length=40, default="none")
+    banner_image = models.URLField(blank=True, default="")
+    discount_percent = models.PositiveSmallIntegerField(
+        default=0,
+        validators=[MinValueValidator(0), MaxValueValidator(95)],
+    )
+    apply_discount_to_prices = models.BooleanField(default=True)
+    announcement_bar = models.BooleanField(default=True)
+    popup_card = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-priority", "starts_at", "-created_at"]
+
+    def __str__(self):
+        return f"{self.name} ({self.starts_at:%Y-%m-%d %H:%M} - {self.ends_at:%Y-%m-%d %H:%M})"
+
+
+class FestivalAssetPrice(models.Model):
+    festival = models.ForeignKey(FestivalSchedule, related_name="asset_prices", on_delete=models.CASCADE)
+    asset = models.ForeignKey(Asset, related_name="festival_prices", on_delete=models.CASCADE)
+    festival_price = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        blank=True,
+        null=True,
+        validators=[MinValueValidator(Decimal("0.00"))],
+    )
+    is_included = models.BooleanField(default=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ["festival", "asset"]
+        ordering = ["asset__title"]
+
+    def __str__(self):
+        return f"{self.festival.name} -> {self.asset.title} ({self.festival_price})"
+
+
 class Review(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="reviews", on_delete=models.CASCADE)
     asset = models.ForeignKey(Asset, related_name="reviews", on_delete=models.CASCADE)
@@ -722,6 +804,13 @@ class SiteSetting(models.Model):
     festival_discount_percent = models.PositiveSmallIntegerField(default=0)
     festival_announcement_bar = models.BooleanField(default=True)
     festival_popup_card = models.BooleanField(default=False)
+    festival_schedule_enabled = models.BooleanField(default=False)
+    festival_starts_at = models.DateTimeField(blank=True, null=True)
+    festival_ends_at = models.DateTimeField(blank=True, null=True)
+    festival_apply_discount_to_prices = models.BooleanField(
+        default=True,
+        help_text="Apply the active festival discount percentage or pre-defined festival prices to product selling prices and checkout orders.",
+    )
     # Special Access Announcement Email (Common Template)
     special_access_email_subject = models.CharField(
         max_length=200,
