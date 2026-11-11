@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useMemo, useState, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, Expand, Play, TrainFront, X } from "lucide-react";
 import type { Asset } from "@/lib/api";
 
@@ -26,6 +27,11 @@ function getYouTubeEmbedUrl(url: string) {
 export function ProductGallery({ asset }: { asset: Asset }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Collect all gallery items (thumbnail, gallery images, video URLs)
   const items: GalleryItem[] = useMemo(() => {
@@ -97,6 +103,14 @@ export function ProductGallery({ asset }: { asset: Asset }) {
   }, [asset]);
 
   const activeItem = items[activeIndex] || items[0];
+  const imageEntries = useMemo(
+    () =>
+      items
+        .map((item, index) => ({ item, index }))
+        .filter(({ item }) => item.type === "image"),
+    [items]
+  );
+  const activeImagePos = imageEntries.findIndex(({ index }) => index === activeIndex);
 
   const handlePrev = useCallback(() => {
     setActiveIndex((prev) => (prev > 0 ? prev - 1 : items.length - 1));
@@ -106,19 +120,39 @@ export function ProductGallery({ asset }: { asset: Asset }) {
     setActiveIndex((prev) => (prev < items.length - 1 ? prev + 1 : 0));
   }, [items.length]);
 
-  // Keyboard navigation for Lightbox
+  const handleLightboxPrev = useCallback(() => {
+    if (imageEntries.length === 0) return;
+    const pos = imageEntries.findIndex(({ index }) => index === activeIndex);
+    const prevEntry = pos > 0 ? imageEntries[pos - 1] : imageEntries[imageEntries.length - 1];
+    if (prevEntry) setActiveIndex(prevEntry.index);
+  }, [activeIndex, imageEntries]);
+
+  const handleLightboxNext = useCallback(() => {
+    if (imageEntries.length === 0) return;
+    const pos = imageEntries.findIndex(({ index }) => index === activeIndex);
+    const nextEntry = pos >= 0 && pos < imageEntries.length - 1 ? imageEntries[pos + 1] : imageEntries[0];
+    if (nextEntry) setActiveIndex(nextEntry.index);
+  }, [activeIndex, imageEntries]);
+
+  // Keyboard navigation & scroll lock for Lightbox
   useEffect(() => {
-    if (!lightboxOpen) return;
+    if (!lightboxOpen || activeItem?.type === "video") return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
 
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") setLightboxOpen(false);
-      if (e.key === "ArrowLeft") handlePrev();
-      if (e.key === "ArrowRight") handleNext();
+      if (e.key === "ArrowLeft") handleLightboxPrev();
+      if (e.key === "ArrowRight") handleLightboxNext();
     }
 
     window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [lightboxOpen, handlePrev, handleNext]);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [lightboxOpen, activeItem?.type, handleLightboxPrev, handleLightboxNext]);
 
   if (items.length === 0) {
     return (
@@ -292,105 +326,110 @@ export function ProductGallery({ asset }: { asset: Asset }) {
         </div>
       ) : null}
 
-      {/* Fullscreen Lightbox Modal */}
-      {lightboxOpen && !isVideo ? (
-        <div
-          role="dialog"
-          aria-modal="true"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-xl p-4 sm:p-8 animate-in fade-in duration-200"
-          onClick={() => setLightboxOpen(false)}
-        >
-          {/* Top Bar Controls */}
-          <div
-            className="absolute top-4 left-4 right-4 flex items-center justify-between z-10"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center gap-3">
-              <span className="rounded-lg bg-white/10 border border-white/15 px-3 py-1.5 text-xs font-mono text-white backdrop-blur-md">
-                {activeIndex + 1} / {items.length}
-              </span>
-              <p className="text-sm font-semibold text-slate-200 hidden sm:block truncate max-w-md">
-                {activeItem.title}
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setLightboxOpen(false)}
-              className="flex items-center justify-center h-10 w-10 rounded-full border border-white/20 bg-white/10 text-white transition hover:bg-rail-red hover:border-rail-red hover:scale-110"
-              aria-label="Close fullscreen preview"
-            >
-              <X size={20} />
-            </button>
-          </div>
-
-          {/* Centered Large Image */}
-          <div
-            className="relative max-h-[82vh] max-w-[92vw] aspect-video w-full flex items-center justify-center"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <Image
-              src={activeItem.url}
-              alt={activeItem.title}
-              fill
-              priority
-              sizes="100vw"
-              className="object-contain rounded-lg shadow-2xl"
-            />
-          </div>
-
-          {/* Lightbox Navigation Arrows */}
-          {items.length > 1 ? (
-            <>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handlePrev();
-                }}
-                className="absolute left-4 sm:left-8 top-1/2 -translate-y-1/2 flex items-center justify-center h-12 w-12 rounded-full border border-white/20 bg-black/60 text-white transition hover:bg-white hover:text-black hover:scale-110 shadow-lg"
-                aria-label="Previous image"
-              >
-                <ChevronLeft size={28} />
-              </button>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleNext();
-                }}
-                className="absolute right-4 sm:right-8 top-1/2 -translate-y-1/2 flex items-center justify-center h-12 w-12 rounded-full border border-white/20 bg-black/60 text-white transition hover:bg-white hover:text-black hover:scale-110 shadow-lg"
-                aria-label="Next image"
-              >
-                <ChevronRight size={28} />
-              </button>
-            </>
-          ) : null}
-
-          {/* Bottom Thumbnails inside Lightbox */}
-          {items.length > 1 ? (
+      {/* Fullscreen Lightbox Modal (portaled to body to stay locked to viewport) */}
+      {mounted && lightboxOpen && !isVideo
+        ? createPortal(
             <div
-              className="absolute bottom-4 left-1/2 -translate-x-1/2 flex max-w-[90vw] items-center gap-2 overflow-x-auto p-2 rounded-xl bg-black/70 border border-white/15 backdrop-blur-md"
-              onClick={(e) => e.stopPropagation()}
+              role="dialog"
+              aria-modal="true"
+              aria-label={activeItem.title}
+              className="fixed inset-0 z-[9999] flex h-dvh w-screen flex-col justify-between gap-2 bg-black/95 p-3 backdrop-blur-xl sm:gap-3 sm:p-5"
+              onClick={() => setLightboxOpen(false)}
             >
-              {items.map((item, idx) => (
+              {/* Top Bar Controls */}
+              <div
+                className="flex w-full shrink-0 items-center justify-between gap-3"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="shrink-0 rounded-lg border border-white/15 bg-white/10 px-3 py-1.5 font-mono text-xs text-white backdrop-blur-md">
+                    {activeImagePos >= 0 ? activeImagePos + 1 : 1} / {imageEntries.length || items.length}
+                  </span>
+                  <p className="hidden max-w-xl truncate text-sm font-semibold text-slate-200 sm:block">
+                    {activeItem.title}
+                  </p>
+                </div>
+
                 <button
-                  key={item.id}
                   type="button"
-                  onClick={() => setActiveIndex(idx)}
-                  className={`relative flex-shrink-0 aspect-video w-16 sm:w-20 overflow-hidden rounded-md border transition ${
-                    idx === activeIndex
-                      ? "border-rail-amber ring-2 ring-rail-amber/70 scale-105"
-                      : "border-white/10 opacity-60 hover:opacity-100"
-                  }`}
+                  onClick={() => setLightboxOpen(false)}
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white transition hover:scale-110 hover:border-rail-red hover:bg-rail-red"
+                  aria-label="Close fullscreen preview"
                 >
-                  <Image src={item.url} alt={item.title} fill sizes="80px" className="object-cover" />
+                  <X size={20} />
                 </button>
-              ))}
-            </div>
-          ) : null}
-        </div>
-      ) : null}
+              </div>
+
+              {/* Centered Full-Height Stage */}
+              <div className="relative flex min-h-0 w-full flex-1 items-center justify-center">
+                <div
+                  className="relative h-full w-full max-w-[96vw]"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <Image
+                    src={activeItem.url}
+                    alt={activeItem.title}
+                    fill
+                    priority
+                    sizes="100vw"
+                    className="object-contain drop-shadow-2xl"
+                  />
+                </div>
+
+                {imageEntries.length > 1 ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleLightboxPrev();
+                      }}
+                      className="absolute left-1 top-1/2 z-20 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-black/65 text-white shadow-lg transition hover:scale-110 hover:bg-white hover:text-black sm:left-4 sm:h-12 sm:w-12"
+                      aria-label="Previous image"
+                    >
+                      <ChevronLeft size={28} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleLightboxNext();
+                      }}
+                      className="absolute right-1 top-1/2 z-20 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-black/65 text-white shadow-lg transition hover:scale-110 hover:bg-white hover:text-black sm:right-4 sm:h-12 sm:w-12"
+                      aria-label="Next image"
+                    >
+                      <ChevronRight size={28} />
+                    </button>
+                  </>
+                ) : null}
+              </div>
+
+              {/* Bottom Thumbnails inside Lightbox */}
+              {imageEntries.length > 1 ? (
+                <div
+                  className="mx-auto flex max-w-[94vw] shrink-0 items-center gap-2 overflow-x-auto rounded-xl border border-white/15 bg-black/75 p-2 backdrop-blur-md"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {imageEntries.map(({ item, index }) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => setActiveIndex(index)}
+                      className={`relative aspect-video w-16 flex-shrink-0 overflow-hidden rounded-md border transition sm:w-20 ${
+                        index === activeIndex
+                          ? "scale-105 border-rail-amber ring-2 ring-rail-amber/70"
+                          : "border-white/10 opacity-60 hover:opacity-100"
+                      }`}
+                    >
+                      <Image src={item.url} alt={item.title} fill sizes="80px" className="object-cover" />
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>,
+            document.body
+          )
+        : null}
     </div>
   );
 }
