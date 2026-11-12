@@ -3410,7 +3410,7 @@ def grant_google_drive_access(file_id, email):
             logger.exception("Google Drive API access grant failed")
             status_code = str(getattr(exc, "status_code", "") or getattr(exc.resp, "status", ""))
             if status_code == "404":
-                return "", "Google Drive file was not found. Check the file ID and share the file with the service account email."
+                return "", "Google Drive file was not found."
             if status_code == "403":
                 return "", "Google Drive permission denied. Enable Drive API and share the restricted file with the service account email as Editor."
             return "", "Google Drive access could not be granted. Check Drive API, service account, and file sharing."
