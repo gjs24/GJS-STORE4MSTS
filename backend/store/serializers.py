@@ -71,6 +71,14 @@ class UserSpecialAccessSerializer(serializers.ModelSerializer):
             return []
 
 
+class PublicUserSerializer(serializers.ModelSerializer):
+    """Minimal user identity safe for public storefront payloads (no PII)."""
+
+    class Meta:
+        model = User
+        fields = ["id", "username"]
+
+
 class UserSerializer(serializers.ModelSerializer):
     date_joined = serializers.DateTimeField(read_only=True)
     paid_orders_count = serializers.IntegerField(read_only=True, default=0)
@@ -300,6 +308,12 @@ class ReviewSerializer(serializers.ModelSerializer):
         if obj.replied_by:
             return obj.replied_by.get_full_name() or obj.replied_by.username
         return None
+
+
+class PublicReviewSerializer(ReviewSerializer):
+    """Public review serializer stripping reviewer PII (email, phone, account flags)."""
+
+    user = PublicUserSerializer(read_only=True)
 
 
 class AssetListSerializer(serializers.ModelSerializer):
@@ -618,6 +632,55 @@ class AssetListSerializer(serializers.ModelSerializer):
         }
 
 
+def can_user_download_asset(request, asset):
+    """Return True if the request's authenticated user is eligible to download this asset."""
+    user = getattr(request, "user", None) if request else None
+    if not user or not user.is_authenticated:
+        return False
+    is_staff = bool(getattr(user, "is_staff", False) or getattr(user, "is_superuser", False))
+    # Explicit BLOCKED order immediately revokes download access.
+    if Order.objects.filter(user=user, asset=asset, status=Order.Status.BLOCKED).exists():
+        return False
+
+    if asset.distribution_stopped and asset.distribution_stop_downloads and not is_staff:
+        return False
+
+    update_price = asset.update_price or Decimal("0.00")
+    if asset.has_paid_update and update_price > Decimal("0.00"):
+        _has_access, requires_update = asset.check_user_update_access(user)
+        if requires_update:
+            return False
+
+    if asset.is_free and (not asset.distribution_stopped or is_staff):
+        return True
+    from .special_access import user_has_special_access
+    if user_has_special_access(user, asset):
+        return True
+
+    has_paid_order = Order.objects.filter(
+        user=user,
+        asset=asset,
+        status__in=[Order.Status.PAID, Order.Status.APPROVED],
+    ).exclude(status=Order.Status.BLOCKED).exists()
+
+    if not has_paid_order:
+        return False
+
+    if asset.is_upcoming:
+        now = timezone.now()
+        downloads_ready = (
+            asset.prebooking_downloads_unlocked
+            or (asset.prebooking_download_unlock_at and now >= asset.prebooking_download_unlock_at)
+            or (asset.release_date and now >= asset.release_date)
+        )
+        ea_status = get_cached_early_access_status(asset, request)
+        if ea_status["can_access_early"]:
+            downloads_ready = True
+        return downloads_ready
+
+    return True
+
+
 class AssetDetailSerializer(AssetListSerializer):
     images = AssetImageSerializer(many=True, read_only=True)
     reviews = serializers.SerializerMethodField()
@@ -635,9 +698,6 @@ class AssetDetailSerializer(AssetListSerializer):
             "changelog",
             "manual_url",
             "manual_content",
-            "external_download_url",
-            "private_download_key",
-            "google_drive_file_id",
             "images",
             "reviews",
             "updates",
@@ -661,56 +721,10 @@ class AssetDetailSerializer(AssetListSerializer):
 
     def get_reviews(self, obj):
         approved = obj.reviews.filter(is_approved=True).select_related("user", "replied_by")
-        return ReviewSerializer(approved, many=True, context=self.context).data
+        return PublicReviewSerializer(approved, many=True, context=self.context).data
 
     def get_can_download(self, obj):
-        request = self.context.get("request")
-        user = getattr(request, "user", None) if request else None
-        if not user or not user.is_authenticated:
-            return False
-        is_staff = bool(getattr(user, "is_staff", False) or getattr(user, "is_superuser", False))
-        # If user has an explicit BLOCKED order for this asset, immediately revoke access
-        if Order.objects.filter(user=user, asset=obj, status=Order.Status.BLOCKED).exists():
-            return False
-
-        if obj.distribution_stopped and obj.distribution_stop_downloads and not is_staff:
-            return False
-
-        # If asset has an active paid update, check if user needs to pay update first
-        update_price = obj.update_price or Decimal("0.00")
-        if obj.has_paid_update and update_price > Decimal("0.00"):
-            has_access, requires_update = obj.check_user_update_access(user)
-            if requires_update:
-                return False
-
-        if obj.is_free and (not obj.distribution_stopped or is_staff):
-            return True
-        from .special_access import user_has_special_access
-        if user_has_special_access(user, obj):
-            return True
-
-        has_paid_order = Order.objects.filter(
-            user=user,
-            asset=obj,
-            status__in=[Order.Status.PAID, Order.Status.APPROVED],
-        ).exclude(status=Order.Status.BLOCKED).exists()
-
-        if not has_paid_order:
-            return False
-
-        if obj.is_upcoming:
-            now = timezone.now()
-            downloads_ready = (
-                obj.prebooking_downloads_unlocked
-                or (obj.prebooking_download_unlock_at and now >= obj.prebooking_download_unlock_at)
-                or (obj.release_date and now >= obj.release_date)
-            )
-            ea_status = get_cached_early_access_status(obj, request)
-            if ea_status["can_access_early"]:
-                downloads_ready = True
-            return downloads_ready
-
-        return True
+        return can_user_download_asset(self.context.get("request"), obj)
 
 
 class AssetWriteSerializer(serializers.ModelSerializer):
@@ -1141,13 +1155,7 @@ class WishlistSerializer(serializers.ModelSerializer):
         read_only_fields = ["created_at"]
 
     def get_download_enabled(self, obj):
-        request = self.context.get("request")
-        user = request.user if request and request.user.is_authenticated else None
-        if not user:
-            return False
-        if obj.asset.is_free:
-            return True
-        return Order.objects.filter(user=user, asset=obj.asset, status=Order.Status.PAID).exists()
+        return can_user_download_asset(self.context.get("request"), obj.asset)
 
 
 class NotifyRequestSerializer(serializers.ModelSerializer):

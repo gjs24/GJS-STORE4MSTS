@@ -75,10 +75,6 @@ export type Asset = {
   gallery_image_urls?: string;
   media_gallery_urls?: string;
   has_file?: boolean;
-  download_file?: string | null;
-  external_download_url?: string;
-  private_download_key?: string;
-  google_drive_file_id?: string;
   has_paid_update?: boolean;
   update_price?: string;
   paid_update_version?: string;

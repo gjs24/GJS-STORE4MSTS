@@ -11,6 +11,10 @@ import type { DownloadLog } from "@/lib/store-api";
 
 type EditableAsset = Asset & {
   category: Category | number;
+  download_file?: string | null;
+  external_download_url?: string;
+  private_download_key?: string;
+  google_drive_file_id?: string;
 };
 
 function categoryId(category: Category | number) {

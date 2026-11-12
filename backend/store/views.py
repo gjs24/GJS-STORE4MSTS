@@ -77,6 +77,7 @@ from .serializers import (
     OrderSerializer,
     AdminOrderSerializer,
     PaymentVerifySerializer,
+    PublicReviewSerializer,
     RegisterSerializer,
     ReviewSerializer,
     SendOTPSerializer,
@@ -2247,7 +2248,7 @@ class ReviewCreateView(generics.CreateAPIView):
                 "is_approved": True,
             },
         )
-        return Response(ReviewSerializer(review, context={"request": request}).data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+        return Response(PublicReviewSerializer(review, context={"request": request}).data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
 
 
 class WishlistView(generics.ListCreateAPIView):
