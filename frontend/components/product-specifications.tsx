@@ -25,15 +25,26 @@ interface ProductSpecificationsProps {
   asset: Asset;
 }
 
+function isSafeHttpUrl(url?: string | null): boolean {
+  if (!url) return false;
+  try {
+    const parsed = new URL(url.trim());
+    return parsed.protocol === "https:" || parsed.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
+
 function getYouTubeEmbedUrl(url: string) {
   try {
     const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
     const match = url.match(regExp);
-    return match && match[2].length === 11
-      ? `https://www.youtube-nocookie.com/embed/${match[2]}?rel=0`
-      : url;
+    if (match && match[2].length === 11) {
+      return `https://www.youtube-nocookie.com/embed/${match[2]}?rel=0`;
+    }
+    return isSafeHttpUrl(url) ? url.trim() : "";
   } catch {
-    return url;
+    return "";
   }
 }
 
@@ -45,8 +56,9 @@ export function ProductSpecifications({ asset }: ProductSpecificationsProps) {
     (asset.changelog && asset.changelog.trim()) ||
     (asset.updates && asset.updates.length > 0)
   );
-  const hasVideo = Boolean(asset.preview_video_url && asset.preview_video_url.trim());
-  const hasManualUrl = Boolean(asset.manual_url && asset.manual_url.trim());
+  const safeVideoUrl = asset.preview_video_url ? getYouTubeEmbedUrl(asset.preview_video_url) : "";
+  const hasVideo = Boolean(safeVideoUrl);
+  const hasManualUrl = isSafeHttpUrl(asset.manual_url);
   const hasManualContent = Boolean(asset.manual_content && asset.manual_content.trim());
 
   // Determine available tabs
@@ -460,7 +472,7 @@ export function ProductSpecifications({ asset }: ProductSpecificationsProps) {
 
             <div className="aspect-video w-full max-w-4xl rounded-2xl overflow-hidden border border-white/10 bg-black shadow-2xl">
               <iframe
-                src={getYouTubeEmbedUrl(asset.preview_video_url!)}
+                src={safeVideoUrl}
                 title={`${asset.title} Preview Trailer`}
                 className="w-full h-full"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"

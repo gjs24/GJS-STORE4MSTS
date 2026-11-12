@@ -82,10 +82,18 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 SECURE_SSL_REDIRECT = env.bool("SECURE_SSL_REDIRECT", default=not DEBUG)
 SESSION_COOKIE_SECURE = env.bool("SESSION_COOKIE_SECURE", default=not DEBUG)
 CSRF_COOKIE_SECURE = env.bool("CSRF_COOKIE_SECURE", default=not DEBUG)
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = "Lax"
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = "DENY"
+SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
+SECURE_CROSS_ORIGIN_OPENER_POLICY = "same-origin-allow-popups"
 SECURE_HSTS_SECONDS = env.int("SECURE_HSTS_SECONDS", default=31536000 if not DEBUG else 0)
 SECURE_HSTS_INCLUDE_SUBDOMAINS = env.bool("SECURE_HSTS_INCLUDE_SUBDOMAINS", default=not DEBUG)
 SECURE_HSTS_PRELOAD = env.bool("SECURE_HSTS_PRELOAD", default=False)
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+DATA_UPLOAD_MAX_MEMORY_SIZE = env.int("DATA_UPLOAD_MAX_MEMORY_SIZE", default=10 * 1024 * 1024)
+FILE_UPLOAD_MAX_MEMORY_SIZE = env.int("FILE_UPLOAD_MAX_MEMORY_SIZE", default=10 * 1024 * 1024)
 
 CORS_ALLOWED_ORIGINS = env.list(
     "CORS_ALLOWED_ORIGINS",
@@ -105,6 +113,14 @@ CORS_EXPOSE_HEADERS = ["Content-Disposition"]
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": ("rest_framework_simplejwt.authentication.JWTAuthentication",),
     "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticatedOrReadOnly",),
+    "DEFAULT_RENDERER_CLASSES": (
+        ("rest_framework.renderers.JSONRenderer",)
+        if not DEBUG
+        else (
+            "rest_framework.renderers.JSONRenderer",
+            "rest_framework.renderers.BrowsableAPIRenderer",
+        )
+    ),
     "DEFAULT_THROTTLE_CLASSES": [
         "rest_framework.throttling.UserRateThrottle",
         "rest_framework.throttling.AnonRateThrottle",
@@ -113,13 +129,19 @@ REST_FRAMEWORK = {
         "user": env("DRF_USER_THROTTLE_RATE", default="5000/day"),
         "anon": env("DRF_ANON_THROTTLE_RATE", default="1000/hour"),
         "downloads": env("DRF_DOWNLOAD_THROTTLE_RATE", default="20/hour"),
+        "auth": env("DRF_AUTH_THROTTLE_RATE", default="30/hour"),
+        "otp": env("DRF_OTP_THROTTLE_RATE", default="20/hour"),
+        "security": env("DRF_SECURITY_THROTTLE_RATE", default="20/hour"),
+        "payment": env("DRF_PAYMENT_THROTTLE_RATE", default="40/hour"),
     },
 }
 
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+    "ALGORITHM": "HS256",
     "SIGNING_KEY": env("JWT_SECRET_KEY", default=SECRET_KEY),
+    "UPDATE_LAST_LOGIN": True,
 }
 
 GOOGLE_OAUTH_CLIENT_ID = env("GOOGLE_OAUTH_CLIENT_ID", default="319900561605-7j15m1bm7s3gm3fcbnoiibmgqi9jv9dv.apps.googleusercontent.com")

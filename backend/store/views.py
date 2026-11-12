@@ -9,13 +9,16 @@ import os
 import random
 import re
 from pathlib import PurePath
+from urllib.parse import urlparse
 from rest_framework.pagination import PageNumberPagination
 
 import requests
 from django.conf import settings
 from django.contrib.auth.models import User
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.mail import EmailMultiAlternatives
-from django.http import FileResponse, HttpResponse
+from django.http import FileResponse, Http404, HttpResponse
 from django.db import models, transaction
 from django.db.models import Avg, Count, Q, Sum
 from django.db.models.deletion import ProtectedError
@@ -34,7 +37,13 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 
 from rest_framework.exceptions import PermissionDenied
 
-from .throttles import DownloadRateThrottle
+from .throttles import (
+    AuthRateThrottle,
+    DownloadRateThrottle,
+    OTPRateThrottle,
+    PaymentRateThrottle,
+    StrictSecurityThrottle,
+)
 
 from .early_access import get_cached_early_access_status
 from .festival import get_resolved_site_settings_dict
@@ -127,10 +136,34 @@ def cashfree_order_missing_error(error):
     return any(marker in message for marker in CASHFREE_ORDER_MISSING_MARKERS)
 
 
+def _is_trusted_return_url(candidate, request=None):
+    if not candidate or not isinstance(candidate, str):
+        return False
+    url = candidate.strip()
+    if url.startswith("/") and not url.startswith("//") and not url.startswith("/\\"):
+        return True
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        return False
+    allowed_hosts = {
+        urlparse(origin).netloc.lower()
+        for origin in getattr(settings, "CORS_ALLOWED_ORIGINS", [])
+        if origin
+    }
+    frontend_url = getattr(settings, "FRONTEND_URL", "")
+    if frontend_url:
+        allowed_hosts.add(urlparse(frontend_url).netloc.lower())
+    if request:
+        req_host = request.get_host()
+        if req_host:
+            allowed_hosts.add(req_host.lower())
+    return parsed.netloc.lower() in allowed_hosts
+
+
 def cashfree_return_url(order, request=None):
     if request and getattr(request, "data", None):
         custom_return = request.data.get("return_url")
-        if custom_return and isinstance(custom_return, str) and custom_return.startswith(("http://", "https://", "/")):
+        if _is_trusted_return_url(custom_return, request=request):
             separator = "&" if "?" in custom_return else "?"
             return f"{custom_return}{separator}order_id={order.id}"
 
@@ -320,6 +353,16 @@ def sync_cashfree_order(order):
     payment.save(update_fields=["provider_payment_id", "status", "raw_response"])
 
     if order_status == "PAID":
+        if order.status in [Order.Status.BLOCKED, Order.Status.REFUNDED, Order.Status.REJECTED]:
+            return True, ""
+        raw_amount = data.get("order_amount")
+        if raw_amount is not None:
+            try:
+                if Decimal(str(raw_amount)) < order.amount:
+                    logger.warning("Cashfree paid amount %s < expected %s for order %s", raw_amount, order.amount, order.id)
+                    return False, "Paid amount does not match order amount."
+            except Exception:
+                return False, "Invalid Cashfree amount."
         order.status = Order.Status.PAID
         order.download_enabled = True
         order.save(update_fields=["status", "download_enabled"])
@@ -486,6 +529,17 @@ def sync_razorpay_order(order):
     payment.status = status_val or payment.status
     payment.save(update_fields=["raw_response", "status"])
     if status_val == "paid":
+        if order.status in [Order.Status.BLOCKED, Order.Status.REFUNDED, Order.Status.REJECTED]:
+            return True, ""
+        amount_paid = data.get("amount_paid")
+        if amount_paid is not None:
+            expected_paise = int(order.amount * Decimal("100"))
+            try:
+                if int(amount_paid) < expected_paise:
+                    logger.warning("Razorpay paid amount %s < expected %s for order %s", amount_paid, expected_paise, order.id)
+                    return False, "Paid amount does not match order amount."
+            except (TypeError, ValueError):
+                return False, "Invalid Razorpay amount."
         order.status = Order.Status.PAID
         order.download_enabled = True
         order.save(update_fields=["status", "download_enabled"])
@@ -606,10 +660,12 @@ def sync_order_download_access(order):
 class RegisterView(generics.CreateAPIView):
     serializer_class = RegisterSerializer
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [AuthRateThrottle]
 
 
 class LoginView(TokenObtainPairView):
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [AuthRateThrottle]
 
     def post(self, request, *args, **kwargs):
         response = super().post(request, *args, **kwargs)
@@ -633,6 +689,7 @@ def unique_google_username(email):
 
 class GoogleLoginView(APIView):
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [AuthRateThrottle]
 
     def post(self, request):
         if not settings.GOOGLE_OAUTH_CLIENT_ID:
@@ -661,6 +718,11 @@ class GoogleLoginView(APIView):
             return Response({"detail": "Google email is not verified."}, status=status.HTTP_400_BAD_REQUEST)
 
         user = User.objects.filter(email__iexact=email).first()
+        if user and not user.is_active:
+            return Response(
+                {"detail": "This account has been deactivated. Please contact support."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         if not user:
             user = User(
                 username=unique_google_username(email),
@@ -1051,6 +1113,7 @@ def send_special_access_email(user, special_access, custom_subject=None, custom_
 
 class SendOTPView(APIView):
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [OTPRateThrottle]
 
     def post(self, request):
         serializer = SendOTPSerializer(data=request.data)
@@ -1067,6 +1130,9 @@ class SendOTPView(APIView):
 
         email = serializer.validated_data["email"].lower().strip()
         purpose = serializer.validated_data.get("purpose", "login")
+
+        if purpose == "profile_edit" and not (request.user and request.user.is_authenticated):
+            return Response({"detail": "Authentication is required to verify profile changes."}, status=status.HTTP_401_UNAUTHORIZED)
 
         try:
             if purpose == "login":
@@ -1089,12 +1155,11 @@ class SendOTPView(APIView):
                     )
             elif purpose == "profile_edit":
                 existing = User.objects.filter(email__iexact=email).first()
-                if request.user.is_authenticated:
-                    if existing and existing.id != request.user.id:
-                        return Response(
-                            {"detail": "This email address is already in use by another account."},
-                            status=status.HTTP_400_BAD_REQUEST,
-                        )
+                if existing and existing.id != request.user.id:
+                    return Response(
+                        {"detail": "This email address is already in use by another account."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
 
             recent_otp = EmailOTP.objects.filter(
                 email__iexact=email,
@@ -1120,9 +1185,7 @@ class SendOTPView(APIView):
         except Exception as db_exc:
             logger.exception("Database error while processing OTP for %s: %s", email, db_exc)
             return Response(
-                {
-                    "detail": f"Database error: {db_exc}. Ensure database migrations are run on the server ('python manage.py migrate')."
-                },
+                {"detail": "Verification service is temporarily unavailable. Please try again later."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
@@ -1130,9 +1193,7 @@ class SendOTPView(APIView):
         if not sent:
             logger.error("Email sending failed for %s: %s", email, err)
             return Response(
-                {
-                    "detail": f"Failed to send email: {err}. Please check your EMAIL_HOST_USER and EMAIL_HOST_PASSWORD in Render environment variables."
-                },
+                {"detail": "Failed to send verification email. Please try again later or contact support."},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
@@ -1145,8 +1206,62 @@ class SendOTPView(APIView):
         )
 
 
+def _verify_and_consume_otp(emails, purpose, otp_code):
+    """Atomically verify a 6-digit EmailOTP with constant-time comparison and attempt lock."""
+    with transaction.atomic():
+        otp_record = (
+            EmailOTP.objects.select_for_update()
+            .filter(email__in=emails, purpose=purpose, is_used=False)
+            .order_by("-created_at")
+            .first()
+        )
+        if not otp_record:
+            # Also try case-insensitive match when passed single lowercase email
+            otp_record = (
+                EmailOTP.objects.select_for_update()
+                .filter(email__iexact=emails[0], purpose=purpose, is_used=False)
+                .order_by("-created_at")
+                .first()
+                if emails
+                else None
+            )
+        if not otp_record:
+            return None, Response(
+                {"detail": "No active verification code found. Please request a new code."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not otp_record.is_valid():
+            if otp_record.attempts >= 5:
+                otp_record.is_used = True
+                otp_record.save(update_fields=["is_used"])
+                return None, Response(
+                    {"detail": "Too many failed attempts. Please request a new verification code."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            return None, Response(
+                {"detail": "Verification code has expired. Please request a new code."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not hmac.compare_digest(str(otp_record.otp_code), str(otp_code)):
+            otp_record.attempts += 1
+            update_fields = ["attempts"]
+            if otp_record.attempts >= 5:
+                otp_record.is_used = True
+                update_fields.append("is_used")
+            otp_record.save(update_fields=update_fields)
+            remaining = max(0, 5 - otp_record.attempts)
+            return None, Response(
+                {"detail": f"Incorrect verification code. {remaining} attempt(s) remaining."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        otp_record.is_used = True
+        otp_record.save(update_fields=["is_used"])
+        return otp_record, None
+
+
 class VerifyOTPView(APIView):
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [OTPRateThrottle]
 
     def post(self, request):
         serializer = VerifyOTPSerializer(data=request.data)
@@ -1158,48 +1273,15 @@ class VerifyOTPView(APIView):
         purpose = serializer.validated_data.get("purpose", "login")
 
         try:
-            otp_record = EmailOTP.objects.filter(
-                email__iexact=email,
-                purpose=purpose,
-                is_used=False,
-            ).order_by("-created_at").first()
+            otp_record, error_response = _verify_and_consume_otp([email], purpose, otp_code)
         except Exception as db_exc:
             logger.exception("Database error in VerifyOTPView for %s: %s", email, db_exc)
             return Response(
-                {
-                    "detail": f"Database error: {db_exc}. Ensure database migrations are run on the server ('python manage.py migrate')."
-                },
+                {"detail": "Verification service is temporarily unavailable. Please try again later."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
-
-        if not otp_record:
-            return Response(
-                {"detail": "No active verification code found. Please request a new code."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if not otp_record.is_valid():
-            if otp_record.attempts >= 5:
-                return Response(
-                    {"detail": "Too many failed attempts. Please request a new verification code."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-            return Response(
-                {"detail": "Verification code has expired. Please request a new code."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if otp_record.otp_code != otp_code:
-            otp_record.attempts += 1
-            otp_record.save(update_fields=["attempts"])
-            remaining = max(0, 5 - otp_record.attempts)
-            return Response(
-                {"detail": f"Incorrect verification code. {remaining} attempt(s) remaining."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        otp_record.is_used = True
-        otp_record.save(update_fields=["is_used"])
+        if error_response:
+            return error_response
 
         if purpose == "login":
             user = User.objects.filter(email__iexact=email).first()
@@ -1208,11 +1290,27 @@ class VerifyOTPView(APIView):
                     {"detail": "Account not found."},
                     status=status.HTTP_404_NOT_FOUND,
                 )
+            if not user.is_active:
+                return Response(
+                    {"detail": "This account has been deactivated. Please contact support."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
         elif purpose == "signup":
+            if User.objects.filter(email__iexact=email).exists():
+                return Response(
+                    {"detail": "An account with this email address already exists. Please login instead."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             username = serializer.validated_data.get("username", "").strip()
             password = serializer.validated_data.get("password", "").strip()
             first_name = serializer.validated_data.get("first_name", "").strip()
             last_name = serializer.validated_data.get("last_name", "").strip()
+
+            if password:
+                try:
+                    validate_password(password)
+                except DjangoValidationError as exc:
+                    return Response({"detail": " ".join(exc.messages)}, status=status.HTTP_400_BAD_REQUEST)
 
             if not username:
                 base = re.sub(r"[^a-zA-Z0-9_]", "_", email.split("@")[0]).strip("_") or "user"
@@ -1257,17 +1355,21 @@ class VerifyOTPView(APIView):
                     {"detail": "A new password is required."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-            if len(password) < 8:
-                return Response(
-                    {"detail": "Password must be at least 8 characters long."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
             user = User.objects.filter(email__iexact=email).first()
             if not user:
                 return Response(
                     {"detail": "No account found with this email address."},
                     status=status.HTTP_404_NOT_FOUND,
                 )
+            if not user.is_active:
+                return Response(
+                    {"detail": "This account has been deactivated. Please contact support."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+            try:
+                validate_password(password, user=user)
+            except DjangoValidationError as exc:
+                return Response({"detail": " ".join(exc.messages)}, status=status.HTTP_400_BAD_REQUEST)
             user.set_password(password)
             user.save()
         else:
@@ -1303,50 +1405,30 @@ def current_user(request):
                 )
 
         # Require OTP authentication
-        if not otp_code or len(otp_code) != 6:
+        if not otp_code or not re.fullmatch(r"\d{6}", otp_code):
             return Response(
                 {"detail": "Please enter the 6-digit email verification code to save profile changes."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         possible_emails = [e for e in [new_email, (request.user.email or "").lower()] if e]
-        otp_record = EmailOTP.objects.filter(
-            email__in=possible_emails,
-            purpose="profile_edit",
-            is_used=False,
-        ).order_by("-created_at").first()
-
-        if not otp_record or not otp_record.is_valid():
-            return Response(
-                {"detail": "Verification code has expired or was not found. Please request a new code."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if otp_record.otp_code != otp_code:
-            otp_record.attempts += 1
-            otp_record.save(update_fields=["attempts"])
-            remaining = max(0, 5 - otp_record.attempts)
-            return Response(
-                {"detail": f"Incorrect verification code. {remaining} attempt(s) remaining."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        otp_record.is_used = True
-        otp_record.save(update_fields=["is_used"])
+        otp_record, error_response = _verify_and_consume_otp(possible_emails, "profile_edit", otp_code)
+        if error_response:
+            return error_response
 
         request.user.first_name = new_first_name
         request.user.last_name = new_last_name
         if new_email:
             request.user.email = new_email
         request.user.save(update_fields=["first_name", "last_name", "email"])
-    if "phone_number" in request.data:
-        new_phone = str(request.data.get("phone_number", "")).strip()
-        digits = re.sub(r"\D", "", new_phone)
-        clean_phone = digits[-10:] if len(digits) >= 10 else digits
-        profile, _ = UserProfile.objects.get_or_create(user=request.user)
-        profile.phone_number = clean_phone
-        profile.save(update_fields=["phone_number"])
-        request.user.profile = profile
+        if "phone_number" in request.data:
+            new_phone = str(request.data.get("phone_number", "")).strip()
+            digits = re.sub(r"\D", "", new_phone)
+            clean_phone = digits[-10:] if len(digits) >= 10 else digits
+            profile, _ = UserProfile.objects.get_or_create(user=request.user)
+            profile.phone_number = clean_phone
+            profile.save(update_fields=["phone_number"])
+            request.user.profile = profile
 
     return Response(UserSerializer(request.user, context={"request": request}).data)
 
@@ -1445,14 +1527,19 @@ class AssetViewSet(viewsets.ModelViewSet):
 class OrderCreateView(generics.CreateAPIView):
     serializer_class = OrderSerializer
     permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [PaymentRateThrottle]
 
     def create(self, request, *args, **kwargs):
         try:
             return self._create_impl(request, *args, **kwargs)
+        except Http404:
+            return Response({"detail": "Selected product was not found."}, status=status.HTTP_404_NOT_FOUND)
+        except serializers.ValidationError as exc:
+            return Response(exc.detail, status=status.HTTP_400_BAD_REQUEST)
         except Exception as exc:
             logger.exception("Order creation failed: %s", exc)
             return Response(
-                {"detail": f"Order could not be created: {str(exc)}"},
+                {"detail": "Order could not be created. Please verify your selection and try again."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -1945,10 +2032,7 @@ class OrderCreateView(generics.CreateAPIView):
     def perform_create(self, serializer):
         asset = serializer.validated_data.get("asset")
         if not asset:
-            order = serializer.save(user=self.request.user)
-            order.provider_order_id = f"GJS-{order.id:06d}"
-            order.save(update_fields=["provider_order_id"])
-            return
+            raise serializers.ValidationError({"detail": "A valid published asset is required."})
 
         is_bundle = bool(self.request.data.get("is_bundle"))
         ea_status = get_cached_early_access_status(asset, self.request)
@@ -2028,9 +2112,16 @@ class BoardTemplateViewSet(viewsets.ModelViewSet):
         image = request.FILES.get("image") or request.FILES.get("file")
         if not image:
             return Response({"detail": "No image file provided."}, status=status.HTTP_400_BAD_REQUEST)
+        if image.size and image.size > 10 * 1024 * 1024:
+            return Response({"detail": "Image exceeds maximum allowed size of 10MB."}, status=status.HTTP_400_BAD_REQUEST)
         from django.core.files.storage import default_storage
         import uuid
-        ext = image.name.split(".")[-1] if "." in image.name else "png"
+        ext = image.name.rsplit(".", 1)[-1].lower() if "." in image.name else "png"
+        if ext not in {"png", "jpg", "jpeg", "webp", "gif"}:
+            return Response(
+                {"detail": "Unsupported image format. Allowed types: png, jpg, jpeg, webp, gif."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         filename = f"board_bg_{uuid.uuid4().hex[:10]}.{ext}"
         saved_path = default_storage.save(f"assets/board_templates/{filename}", image)
         url = default_storage.url(saved_path)
@@ -2053,8 +2144,8 @@ class UserCustomBoardViewSet(viewsets.ModelViewSet):
         serializer.save(user=self.request.user)
 
     def perform_update(self, serializer):
-        template = serializer.instance.template
-        if not template.can_user_customize(self.request.user):
+        target_template = serializer.validated_data.get("template", serializer.instance.template)
+        if not target_template.can_user_customize(self.request.user):
             raise PermissionDenied("You must unlock this board template before saving custom configurations.")
         serializer.save()
 
@@ -2062,6 +2153,7 @@ class UserCustomBoardViewSet(viewsets.ModelViewSet):
 class PaymentVerifyView(generics.GenericAPIView):
     serializer_class = PaymentVerifySerializer
     permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [PaymentRateThrottle]
 
     def post(self, request):
         serializer = self.get_serializer(data=request.data)
@@ -2075,17 +2167,23 @@ class PaymentVerifyView(generics.GenericAPIView):
         if not order:
             return Response({"detail": "Order not found."}, status=status.HTTP_404_NOT_FOUND)
 
+        if order.status in [Order.Status.REJECTED, Order.Status.BLOCKED, Order.Status.REFUNDED]:
+            return Response({"detail": "This order cannot be verified. Please contact support or create a new order."}, status=status.HTTP_400_BAD_REQUEST)
         if order.status == Order.Status.PAID:
             sync_order_download_access(order)
             return Response(OrderSerializer(order, context={"request": request}).data)
-        if order.status == Order.Status.REJECTED:
-            return Response({"detail": "This order was rejected. Please create a new order if you paid again."}, status=status.HTTP_400_BAD_REQUEST)
         payment = getattr(order, "payment", None)
         razorpay_payment_id = serializer.validated_data.get("razorpay_payment_id", "").strip()
         razorpay_order_id = serializer.validated_data.get("razorpay_order_id", "").strip()
         razorpay_signature = serializer.validated_data.get("razorpay_signature", "").strip()
 
         if razorpay_payment_id and razorpay_signature:
+            if Payment.objects.filter(
+                provider=Payment.Provider.RAZORPAY,
+                provider_payment_id=razorpay_payment_id,
+            ).exclude(order=order).exists():
+                return Response({"detail": "This payment ID has already been applied to another order."}, status=status.HTTP_400_BAD_REQUEST)
+
             r_order_id = razorpay_order_id
             if not r_order_id and payment and payment.provider == Payment.Provider.RAZORPAY:
                 r_order_id = payment.raw_response.get("id") or payment.provider_payment_id
@@ -2101,7 +2199,13 @@ class PaymentVerifyView(generics.GenericAPIView):
                         timeout=15,
                     )
                     p_data = p_res.json()
-                    if p_data.get("status") in ["captured", "authorized"]:
+                    expected_paise = int(order.amount * Decimal("100"))
+                    if (
+                        p_data.get("status") in ["captured", "authorized"]
+                        and p_data.get("order_id") == r_order_id
+                        and p_data.get("currency", "INR") == order.currency
+                        and int(p_data.get("amount") or 0) >= expected_paise
+                    ):
                         is_valid = True
                 except Exception:
                     pass
@@ -3349,6 +3453,16 @@ def record_addon_download(request, addon):
 def addon_download_by_id(request, pk):
     addon = get_object_or_404(AssetFeatureAddon, pk=pk, is_active=True)
     is_staff = bool(request.user.is_staff or getattr(request.user, "is_superuser", False))
+    if not is_staff:
+        blocked_order = Order.objects.filter(user=request.user, asset=addon.asset, status=Order.Status.BLOCKED).first()
+        if blocked_order:
+            reason_msg = f": {blocked_order.block_reason}" if blocked_order.block_reason else ""
+            return Response(
+                {
+                    "detail": f"Your download access to '{addon.asset.title}' has been revoked/blocked by the store administrator{reason_msg}."
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
     if addon.asset.distribution_stopped and addon.asset.distribution_stop_downloads and not is_staff:
         return Response(
             {
@@ -3508,11 +3622,12 @@ def community_stats(request):
 
 @api_view(["POST"])
 @permission_classes([permissions.AllowAny])
+@throttle_classes([StrictSecurityThrottle])
 def verify_maintenance_bypass(request):
     token = str(request.data.get("token") or "").strip()
     setting = SiteSetting.load()
     expected = (setting.maintenance_bypass_token or "").strip()
-    if expected and token == expected:
+    if expected and token and hmac.compare_digest(token, expected):
         return Response({"valid": True})
     return Response({"valid": False, "detail": "Invalid or expired bypass key."}, status=status.HTTP_403_FORBIDDEN)
 
@@ -3558,11 +3673,32 @@ def admin_settings(request):
     )
 
 
+def _verify_cashfree_webhook_signature(request):
+    secret = (getattr(settings, "CASHFREE_CLIENT_SECRET", "") or "").strip()
+    if not secret:
+        return False, "Cashfree webhook secret is not configured."
+    signature = (request.headers.get("x-webhook-signature") or "").strip()
+    timestamp = (request.headers.get("x-webhook-timestamp") or "").strip()
+    if not signature or not timestamp:
+        return False, "Missing Cashfree webhook signature headers."
+    signed_payload = timestamp.encode("utf-8") + request.body
+    computed = base64.b64encode(hmac.new(secret.encode("utf-8"), signed_payload, hashlib.sha256).digest()).decode("utf-8")
+    if not hmac.compare_digest(computed, signature):
+        return False, "Invalid Cashfree webhook signature."
+    return True, ""
+
+
 @csrf_exempt
 @api_view(["POST"])
 @permission_classes([permissions.AllowAny])
 def cashfree_webhook(request):
     try:
+        if getattr(settings, "CASHFREE_CLIENT_SECRET", ""):
+            valid_sig, sig_err = _verify_cashfree_webhook_signature(request)
+            if not valid_sig:
+                logger.warning("Cashfree webhook rejected: %s", sig_err)
+                return Response({"status": "error", "detail": sig_err}, status=status.HTTP_400_BAD_REQUEST)
+
         data = request.data
         cf_order_id = ""
         if isinstance(data, dict):
@@ -3581,9 +3717,9 @@ def cashfree_webhook(request):
 
         synced, error = sync_cashfree_order(order)
         return Response({"status": "processed", "order_id": order.id, "synced": synced, "order_status": order.status}, status=status.HTTP_200_OK)
-    except Exception as exc:
+    except Exception:
         logger.exception("Cashfree webhook processing failed")
-        return Response({"status": "error", "detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"status": "error", "detail": "Webhook processing failed."}, status=status.HTTP_400_BAD_REQUEST)
 
 
 @csrf_exempt
@@ -3591,13 +3727,18 @@ def cashfree_webhook(request):
 @permission_classes([permissions.AllowAny])
 def razorpay_webhook(request):
     try:
-        webhook_secret = getattr(settings, "RAZORPAY_WEBHOOK_SECRET", "")
-        signature = request.headers.get("X-Razorpay-Signature", "")
-        if webhook_secret and signature:
+        webhook_secret = (getattr(settings, "RAZORPAY_WEBHOOK_SECRET", "") or "").strip()
+        signature = (request.headers.get("X-Razorpay-Signature") or "").strip()
+        if webhook_secret:
+            if not signature:
+                logger.warning("Razorpay webhook missing X-Razorpay-Signature header.")
+                return Response({"status": "error", "detail": "Missing webhook signature"}, status=status.HTTP_400_BAD_REQUEST)
             computed = hmac.new(webhook_secret.encode("utf-8"), request.body, hashlib.sha256).hexdigest()
             if not hmac.compare_digest(computed, signature):
                 logger.warning("Razorpay webhook signature verification failed.")
                 return Response({"status": "error", "detail": "Invalid webhook signature"}, status=status.HTTP_400_BAD_REQUEST)
+        elif not razorpay_is_configured():
+            return Response({"status": "error", "detail": "Razorpay webhook authentication is not configured."}, status=status.HTTP_403_FORBIDDEN)
 
         data = request.data
         event = data.get("event", "")
@@ -3622,7 +3763,29 @@ def razorpay_webhook(request):
         if not order:
             return Response({"status": "ignored", "detail": f"Order {rzp_order_id} not found"}, status=status.HTTP_200_OK)
 
+        # If RAZORPAY_WEBHOOK_SECRET wasn't set, never trust raw webhook JSON: confirm directly with Razorpay API.
+        if not webhook_secret:
+            synced, _error = sync_razorpay_order(order)
+            return Response({"status": "processed", "order_id": order.id, "synced": synced, "order_status": order.status}, status=status.HTTP_200_OK)
+
+        if order.status in [Order.Status.BLOCKED, Order.Status.REFUNDED, Order.Status.REJECTED]:
+            return Response({"status": "ignored", "order_id": order.id, "order_status": order.status}, status=status.HTTP_200_OK)
+
         if event in ["payment.captured", "order.paid"]:
+            if rzp_payment_id and Payment.objects.filter(provider=Payment.Provider.RAZORPAY, provider_payment_id=rzp_payment_id).exclude(order=order).exists():
+                logger.warning("Razorpay webhook attempted reuse of payment_id %s on order %s", rzp_payment_id, order.id)
+                return Response({"status": "error", "detail": "Duplicate payment reference."}, status=status.HTTP_400_BAD_REQUEST)
+
+            raw_amt = payment_data.get("amount") or order_data.get("amount_paid")
+            if raw_amt is not None:
+                expected_paise = int(order.amount * Decimal("100"))
+                if int(raw_amt) < expected_paise:
+                    logger.warning("Razorpay webhook amount %s < expected %s for order %s", raw_amt, expected_paise, order.id)
+                    return Response({"status": "error", "detail": "Paid amount mismatch."}, status=status.HTTP_400_BAD_REQUEST)
+            currency = payment_data.get("currency") or order_data.get("currency")
+            if currency and currency != order.currency:
+                return Response({"status": "error", "detail": "Currency mismatch."}, status=status.HTTP_400_BAD_REQUEST)
+
             order.status = Order.Status.PAID
             order.download_enabled = True
             order.payment_submitted_at = timezone.now()
@@ -3649,9 +3812,9 @@ def razorpay_webhook(request):
             return Response({"status": "processed", "order_id": order.id, "order_status": order.status}, status=status.HTTP_200_OK)
 
         return Response({"status": "ignored", "event": event}, status=status.HTTP_200_OK)
-    except Exception as exc:
-        logger.exception("Razorpay webhook processing failed: %s", exc)
-        return Response({"status": "error", "detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    except Exception:
+        logger.exception("Razorpay webhook processing failed")
+        return Response({"status": "error", "detail": "Webhook processing failed."}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class AdminSpecialAccessLinkViewSet(viewsets.ModelViewSet):
@@ -3810,6 +3973,7 @@ class AdminSpecialAccessRequestViewSet(viewsets.ReadOnlyModelViewSet):
 
 @api_view(["GET"])
 @permission_classes([permissions.AllowAny])
+@throttle_classes([StrictSecurityThrottle])
 def special_access_link_detail(request, token):
     link = SpecialAccessInviteLink.objects.prefetch_related(
         "granted_assets", "granted_board_templates"
@@ -3869,89 +4033,113 @@ def special_access_link_detail(request, token):
 
 @api_view(["POST"])
 @permission_classes([permissions.IsAuthenticated])
+@throttle_classes([StrictSecurityThrottle])
 def special_access_link_claim(request, token):
-    link = SpecialAccessInviteLink.objects.prefetch_related(
-        "granted_assets", "granted_board_templates"
-    ).filter(token=token).first()
-    if not link:
-        return Response(
-            {"detail": "This Special Access invite link was not found."},
-            status=status.HTTP_404_NOT_FOUND,
+    with transaction.atomic():
+        link = (
+            SpecialAccessInviteLink.objects.select_for_update()
+            .prefetch_related("granted_assets", "granted_board_templates")
+            .filter(token=token)
+            .first()
         )
+        if not link:
+            return Response(
+                {"detail": "This Special Access invite link was not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
-    existing = SpecialAccessClaimRequest.objects.filter(invite_link=link, user=request.user).first()
-    if existing and existing.status == SpecialAccessClaimRequest.Status.APPROVED:
-        return Response(
-            {
-                "status": "APPROVED",
-                "detail": "🎉 You have already claimed and unlocked VIP Special Access from this link!",
-                "my_request": {
-                    "id": existing.id,
-                    "status": existing.status,
-                    "user_note": existing.user_note,
-                    "created_at": existing.created_at,
-                    "reviewed_at": existing.reviewed_at,
+        existing = SpecialAccessClaimRequest.objects.filter(invite_link=link, user=request.user).first()
+        if existing and existing.status == SpecialAccessClaimRequest.Status.APPROVED:
+            return Response(
+                {
+                    "status": "APPROVED",
+                    "detail": "🎉 You have already claimed and unlocked VIP Special Access from this link!",
+                    "my_request": {
+                        "id": existing.id,
+                        "status": existing.status,
+                        "user_note": existing.user_note,
+                        "created_at": existing.created_at,
+                        "reviewed_at": existing.reviewed_at,
+                    },
                 },
-            },
-            status=status.HTTP_200_OK,
-        )
+                status=status.HTTP_200_OK,
+            )
 
-    if not link.is_active:
-        return Response(
-            {"detail": "This Special Access link has been deactivated by the administrator."},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-    if link.is_expired():
-        return Response(
-            {"detail": "This Special Access link has expired."},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-    if link.is_exhausted():
-        return Response(
-            {"detail": "This Special Access link has reached its maximum number of claims."},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
+        if not link.is_active:
+            return Response(
+                {"detail": "This Special Access link has been deactivated by the administrator."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if link.is_expired():
+            return Response(
+                {"detail": "This Special Access link has expired."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if link.is_exhausted():
+            return Response(
+                {"detail": "This Special Access link has reached its maximum number of claims."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
-    user_note = str(request.data.get("user_note") or "").strip()[:300]
+        user_note = str(request.data.get("user_note") or "").strip()[:300]
 
-    if link.mode == SpecialAccessInviteLink.Mode.AUTO_GRANT:
-        special_access, _ = UserSpecialAccess.objects.get_or_create(user=request.user)
-        if link.is_all_access_free:
-            special_access.is_all_access_free = True
-        if link.access_expires_at:
-            special_access.expires_at = link.access_expires_at
-        if not special_access.admin_note:
-            special_access.admin_note = f"Auto-claimed via invite link: {link.title}"
-        special_access.save()
+        if link.mode == SpecialAccessInviteLink.Mode.AUTO_GRANT:
+            special_access, _ = UserSpecialAccess.objects.get_or_create(user=request.user)
+            if link.is_all_access_free:
+                special_access.is_all_access_free = True
+            if link.access_expires_at:
+                special_access.expires_at = link.access_expires_at
+            if not special_access.admin_note:
+                special_access.admin_note = f"Auto-claimed via invite link: {link.title}"
+            special_access.save()
 
-        for asset_item in link.granted_assets.all():
-            special_access.granted_assets.add(asset_item)
-        for board_item in link.granted_board_templates.all():
-            special_access.granted_board_templates.add(board_item)
+            for asset_item in link.granted_assets.all():
+                special_access.granted_assets.add(asset_item)
+            for board_item in link.granted_board_templates.all():
+                special_access.granted_board_templates.add(board_item)
 
-        claim_req, _ = SpecialAccessClaimRequest.objects.update_or_create(
-            invite_link=link,
-            user=request.user,
-            defaults={
-                "user_note": user_note,
-                "status": SpecialAccessClaimRequest.Status.APPROVED,
-                "reviewed_at": timezone.now(),
-            },
-        )
-        link.uses_count = (link.uses_count or 0) + 1
-        link.save(update_fields=["uses_count"])
+            claim_req, _ = SpecialAccessClaimRequest.objects.update_or_create(
+                invite_link=link,
+                user=request.user,
+                defaults={
+                    "user_note": user_note,
+                    "status": SpecialAccessClaimRequest.Status.APPROVED,
+                    "reviewed_at": timezone.now(),
+                },
+            )
+            link.uses_count = (link.uses_count or 0) + 1
+            link.save(update_fields=["uses_count"])
 
-        if request.user.email:
+            log_admin_activity(
+                request,
+                "Special access claimed via link",
+                "User",
+                request.user.id,
+                f"User {request.user.username} auto-claimed special access via link '{link.title}'",
+            )
+            claimed_auto = True
+        else:
+            claim_req, _ = SpecialAccessClaimRequest.objects.update_or_create(
+                invite_link=link,
+                user=request.user,
+                defaults={
+                    "user_note": user_note,
+                    "status": SpecialAccessClaimRequest.Status.PENDING,
+                },
+            )
+            log_admin_activity(
+                request,
+                "Special access requested via link",
+                "User",
+                request.user.id,
+                f"User {request.user.username} requested special access via link '{link.title}'",
+            )
+            claimed_auto = False
+            special_access = None
+
+    if claimed_auto:
+        if request.user.email and special_access:
             send_special_access_email(request.user, special_access)
-
-        log_admin_activity(
-            request,
-            "Special access claimed via link",
-            "User",
-            request.user.id,
-            f"User {request.user.username} auto-claimed special access via link '{link.title}'",
-        )
-
         return Response(
             {
                 "status": "APPROVED",
@@ -3966,23 +4154,6 @@ def special_access_link_claim(request, token):
             },
             status=status.HTTP_200_OK,
         )
-
-    claim_req, _ = SpecialAccessClaimRequest.objects.update_or_create(
-        invite_link=link,
-        user=request.user,
-        defaults={
-            "user_note": user_note,
-            "status": SpecialAccessClaimRequest.Status.PENDING,
-        },
-    )
-
-    log_admin_activity(
-        request,
-        "Special access requested via link",
-        "User",
-        request.user.id,
-        f"User {request.user.username} requested special access via link '{link.title}'",
-    )
 
     return Response(
         {

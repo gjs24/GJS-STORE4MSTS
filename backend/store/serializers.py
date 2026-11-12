@@ -2,10 +2,11 @@ from decimal import Decimal
 import re
 from urllib.parse import quote
 from django.contrib.auth.models import User
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.conf import settings
 from django.db.models import Avg, Q
 from django.utils import timezone
-from urllib.parse import quote
 from rest_framework import serializers
 
 from .early_access import get_cached_early_access_status
@@ -171,11 +172,27 @@ class UserSerializer(serializers.ModelSerializer):
 
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=8)
+    email = serializers.EmailField(required=True)
     phone_number = serializers.CharField(required=False, allow_blank=True, max_length=20)
 
     class Meta:
         model = User
         fields = ["id", "username", "email", "password", "phone_number", "first_name", "last_name"]
+
+    def validate_email(self, value):
+        norm_email = (value or "").strip().lower()
+        if not norm_email:
+            raise serializers.ValidationError("A valid email address is required.")
+        if User.objects.filter(email__iexact=norm_email).exists():
+            raise serializers.ValidationError("An account with this email address already exists.")
+        return norm_email
+
+    def validate_password(self, value):
+        try:
+            validate_password(value)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(list(exc.messages))
+        return value
 
     def create(self, validated_data):
         password = validated_data.pop("password")
@@ -192,15 +209,18 @@ class RegisterSerializer(serializers.ModelSerializer):
         return user
 
 
+OTP_PURPOSE_CHOICES = ("login", "signup", "reset", "profile_edit")
+
+
 class SendOTPSerializer(serializers.Serializer):
     email = serializers.EmailField()
-    purpose = serializers.CharField(max_length=32, required=False, default="login")
+    purpose = serializers.ChoiceField(choices=OTP_PURPOSE_CHOICES, required=False, default="login")
 
 
 class VerifyOTPSerializer(serializers.Serializer):
     email = serializers.EmailField()
-    otp = serializers.CharField(max_length=6, min_length=6)
-    purpose = serializers.CharField(max_length=32, required=False, default="login")
+    otp = serializers.RegexField(r"^\d{6}$", max_length=6, min_length=6)
+    purpose = serializers.ChoiceField(choices=OTP_PURPOSE_CHOICES, required=False, default="login")
     username = serializers.CharField(max_length=150, required=False, allow_blank=True)
     password = serializers.CharField(min_length=8, required=False, allow_blank=True, write_only=True)
     phone_number = serializers.CharField(max_length=20, required=False, allow_blank=True)
@@ -930,6 +950,15 @@ class UserCustomBoardSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["id", "user", "saved_at", "created_at"]
 
+    def validate_preview_image_url(self, value):
+        url = (value or "").strip()
+        if not url:
+            return ""
+        lower = url.lower()
+        if lower.startswith(("https://", "http://", "data:image/")) or (lower.startswith("/") and not lower.startswith("//")):
+            return url
+        raise serializers.ValidationError("Unsupported preview image URL scheme.")
+
 
 class OrderSerializer(serializers.ModelSerializer):
     asset = AssetListSerializer(read_only=True)
@@ -983,7 +1012,7 @@ class OrderSerializer(serializers.ModelSerializer):
             "cashfree_mode",
             "created_at",
         ]
-        read_only_fields = ["amount", "status", "provider_order_id", "utr", "payer_name", "payment_submitted_at", "download_enabled", "manual_payment", "payment_session_id", "payment_provider", "razorpay_order_id", "razorpay_key_id", "cashfree_mode", "created_at"]
+        read_only_fields = ["amount", "currency", "status", "provider_order_id", "utr", "payer_name", "payment_submitted_at", "download_enabled", "manual_payment", "payment_session_id", "payment_provider", "razorpay_order_id", "razorpay_key_id", "cashfree_mode", "created_at"]
 
     def get_download_enabled(self, obj):
         if obj.status == Order.Status.BLOCKED or not obj.download_enabled:
